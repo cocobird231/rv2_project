@@ -1,4 +1,4 @@
-# R1 Control Signal Transport 程式設計規劃書(草稿 v0.1.0)
+# R1 Control Signal Transport 程式設計規劃書(草稿 v0.2.0)
 
 > 狀態:初版草稿,供討論。未決事項集中在第 11 章。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
@@ -9,6 +9,7 @@
 | 版本 | 摘要 |
 |---|---|
 | v0.1.0 | 初版:設計概念、主架構、7 類別章節、整合測試規劃;經一輪 adversarial review 修正 |
+| v0.2.0 | 依 my_note.md:UNKNOWN 改名 INITIAL(查無 entry 語意改以 `std::optional` 表達);新增 §4.6 tinyFSM 評估(結論:不採用,維持自製 CAS 狀態機) |
 
 ---
 
@@ -32,7 +33,7 @@
 |---|---|---|
 | 使用者建構 Source/Sink | 可直接 `new`(測試中大量使用) | **禁止**;建構子 private,只有 Manager(經 Factory)可建 |
 | 使用者持有物件 | `getSource()` 回 `shared_ptr`(→ 殭屍/UAF 風險) | 回 `SourceHandle`/`SinkHandle`(內部 `weak_ptr`) |
-| 狀態機 | 5 態(UNKNOWN/ACTIVE/LOW_FREQ/TIMEOUT/DISCONNECTED),轉移散落各處、relaxed atomics、可被覆寫 | **4 態**(移除 LOW_FREQ);集中於 `LivenessState` 類,CAS 轉移表,DISCONNECTED 真終態 |
+| 狀態機 | 5 態(UNKNOWN/ACTIVE/LOW_FREQ/TIMEOUT/DISCONNECTED),轉移散落各處、relaxed atomics、可被覆寫 | **4 態**(INITIAL/ACTIVE/TIMEOUT/DISCONNECTED;移除 LOW_FREQ、UNKNOWN 改名 INITIAL);集中於 `LivenessState` 類,CAS 轉移表,DISCONNECTED 真終態 |
 | Keep-alive | 每個 channel 一條 `_keep_alive` topic + 每個 Sink 一個 timer | **Manager-link heartbeat**:每個 Manager 一條 heartbeat topic,對每個遠端 Manager 訂閱一次(§2.5) |
 | 註冊協定 | 單向一次性;TOCTOU、無 rollback、無 unregister | **兩階段(佔位 → 確認)** + 失敗 rollback + 顯式 `unregisterSource()` |
 | ControlSignalInfo | 12 欄位、9 條驗證規則 | **8 欄位、5 條規則**(§3) |
@@ -141,12 +142,12 @@ graph TB
 
 ```mermaid
 stateDiagram-v2
-    [*] --> UNKNOWN : 建立
-    UNKNOWN --> ACTIVE : reportActivity()
-    UNKNOWN --> TIMEOUT : checkTimeout()(建構起算)
+    [*] --> INITIAL : 建立
+    INITIAL --> ACTIVE : reportActivity()
+    INITIAL --> TIMEOUT : checkTimeout()(建構起算)
     ACTIVE --> TIMEOUT : checkTimeout()
     TIMEOUT --> ACTIVE : reportActivity()
-    UNKNOWN --> DISCONNECTED : disconnect()
+    INITIAL --> DISCONNECTED : disconnect()
     ACTIVE --> DISCONNECTED : disconnect()
     TIMEOUT --> DISCONNECTED : disconnect()
     DISCONNECTED --> [*] : 終態(無出邊)
@@ -154,6 +155,10 @@ stateDiagram-v2
 
 - 移除 LOW_FREQ:rv2 中它由 `timeout_ns/2` 寫死推導、不影響任何決策,只增加狀態機複雜度。
   頻率監控若有需求,由上層以 `lastActivityNs()` 自行判讀(§4 提供查詢)。
+- UNKNOWN 改名 **INITIAL**(v0.2.0):物件建構後、首次活動前的狀態,我們**確知**其意義,
+  「UNKNOWN」名不符實。rv2 另有雙重語意問題——`getSourceState()` 查無 entry 也回 UNKNOWN,
+  與初始態混淆;r1 拆開:enum 用 INITIAL,查詢 API 以 `std::optional`(nullopt = 查無)表達(§8.2)。
+  轉移語意不變:INITIAL 完整繼承原 UNKNOWN 的三條出邊。
 
 ### 2.4 註冊協定(兩階段 + rollback)
 
@@ -300,7 +305,7 @@ Manager-link heartbeat 取代 rv2 的 per-channel keep-alive:
 ```cpp
 namespace r1 {
 
-enum class ControlSignalState : uint8_t { UNKNOWN, ACTIVE, TIMEOUT, DISCONNECTED };
+enum class ControlSignalState : uint8_t { INITIAL, ACTIVE, TIMEOUT, DISCONNECTED };
 
 class LivenessState
 {
@@ -310,7 +315,7 @@ public:
     /// 收訊 / 心跳 / 成功 response。DISCONNECTED 時拒絕並回 false。
     bool reportActivity(int64_t nowNs);
 
-    /// 被動逾時檢查;必要時執行 {UNKNOWN,ACTIVE}→TIMEOUT。回傳檢查後狀態。
+    /// 被動逾時檢查;必要時執行 {INITIAL,ACTIVE}→TIMEOUT。回傳檢查後狀態。
     ControlSignalState checkTimeout(int64_t nowNs, int64_t timeoutNs);
 
     /// 終態;冪等。回傳是否由本次呼叫完成轉移。
@@ -329,7 +334,7 @@ private:
 
 ### 4.4 行為細節
 
-- `checkTimeout()`:snapshot(state, epoch)→ 若 state ∈ {UNKNOWN, ACTIVE} 且
+- `checkTimeout()`:snapshot(state, epoch)→ 若 state ∈ {INITIAL, ACTIVE} 且
   `now - lastActivity > timeout` → CAS(expect 同 epoch)寫入 TIMEOUT。
   期間若 `reportActivity()` 已插隊(epoch+1),CAS 失敗 → 重讀 → 判定不成立 → 保持 ACTIVE。
 - `reportActivity()`:任何非 DISCONNECTED 態 → ACTIVE(epoch+1)。
@@ -341,7 +346,7 @@ private:
 - **框架**:gtest,純邏輯 + 假時鐘(手動遞增的 int64)。並發測試用 `std::thread`。
 - 流程:
   1. **轉移表窮舉**:4 態 × 3 操作全組合,驗證合法轉移與拒絕(含 DISCONNECTED 終態性)。
-  2. **逾時語意**:UNKNOWN 自建構起算逾時;ACTIVE 依 lastActivity;邊界 `elapsed == timeout` 不觸發。
+  2. **逾時語意**:INITIAL 自建構起算逾時;ACTIVE 依 lastActivity;邊界 `elapsed == timeout` 不觸發。
   3. **stale-TIMEOUT 回歸測試**(對應 rv2 稽核發現):執行緒 A 進入 checkTimeout 且已完成
     snapshot(以 hook / 兩步 API 或高頻壓力重現),執行緒 B reportActivity → 斷言最終態 ACTIVE。
     壓力版:1 writer 高頻 reportActivity + N checker 高頻 checkTimeout(短 timeout),
@@ -351,14 +356,31 @@ private:
 
 | 案例 | 內容 | 預期 |
 |---|---|---|
-| L1 | 初始 | UNKNOWN |
+| L1 | 初始 | INITIAL |
 | L2 | reportActivity | → ACTIVE, true |
 | L3 | checkTimeout(elapsed > t) | ACTIVE → TIMEOUT |
 | L4 | TIMEOUT 後 reportActivity | → ACTIVE |
 | L5 | disconnect 後 reportActivity / checkTimeout | false / DISCONNECTED |
-| L6 | UNKNOWN + elapsed > t | → TIMEOUT |
+| L6 | INITIAL + elapsed > t | → TIMEOUT |
 | L7 | 併發 stale-TIMEOUT 壓力 | 無 ACTIVE 被舊判定覆寫 |
 | L8 | 併發 disconnect 壓力 | 終態不可逆 |
+
+### 4.6 替代方案評估:tinyFSM(v0.2.0,依 my_note.md)
+
+評估對象:[digint/tinyfsm](https://github.com/digint/tinyfsm) — header-only、C++11 template、
+零動態配置、無 RTTI/例外依賴,MIT 授權;最新版 0.3.3,其後長期無 release。
+
+| 面向 | 評估 |
+|---|---|
+| Thread-safety | **無內建同步**。`LivenessState` 的核心需求正是多執行緒併發轉移(使用者執行緒 `checkTimeout` vs executor 執行緒 `reportActivity`);採 tinyfsm 仍須自行外包 mutex 或 atomic 層——並發正確性問題原封不動回到我們手上,library 未解決本設計最難的部分 |
+| 實例模型 | tinyfsm 狀態為**每個 FSM 類型的 static instance**(單例導向);r1 每個 Source/Sink 需獨立 FSM 實例,需 workaround,與設計錯配 |
+| 表達力 | epoch/CAS 防 stale-TIMEOUT 語意(帶版本的比較交換轉移)無法以 tinyfsm 的事件 dispatch 模型表達 |
+| 規模 | 本狀態機僅 4 態 × 3 操作;引入外部依賴的結構開銷大於收益 |
+| 維護 | 0.3.3 後長期停更,依賴風險 |
+
+**結論:不採用**。維持 §4.2 自製 CAS 狀態機。但採納 tinyfsm 的精神——轉移表集中宣告
+(constexpr 轉移表)+ 單元測試窮舉全組合(§4.5 流程 1),確保「context safety」訴求
+以可驗證方式落實。若未來狀態數成長(>8 態)再重啟評估。
 
 ---
 
@@ -445,7 +467,7 @@ public:
 
 | 案例 | 內容 | 預期 |
 |---|---|---|
-| S1 | topic 模式初始 | `getState() == UNKNOWN`;`send() == OK` |
+| S1 | topic 模式初始 | `getState() == INITIAL`;`send() == OK` |
 | S2 | service 模式 send 成功 | `OK`;state → ACTIVE(reportActivity) |
 | S3 | service 模式 server 回 REJECT | `REJECTED`;state 仍 ACTIVE(有 response 即活動) |
 | S4 | service 模式無 server | `TIMEOUT`;state → TIMEOUT;耗時 ≈ `timeout_ns`(驗證無 50ms fallback) |
@@ -527,7 +549,7 @@ public:
 
 | 案例 | 內容 | 預期 |
 |---|---|---|
-| K1 | 初始 | UNKNOWN;`read() == false`,out 為預設值 |
+| K1 | 初始 | INITIAL;`read() == false`,out 為預設值 |
 | K2 | 收first訊息 | ACTIVE;read true + 內容正確 |
 | K3 | 停止發送 elapsed > timeout | TIMEOUT;read false(內容仍為最後值) |
 | K4 | TIMEOUT 後恢復發送 | → ACTIVE |
@@ -621,10 +643,11 @@ public:
     RegisterResult registerSource(const InfoT& info, int64_t timeoutMs = 5000);
     bool unregisterSource(const SourceHandle& h, int64_t timeoutMs = 5000);
 
-    SourceHandle getSource(const std::string& controllerName) const;
+    SourceHandle getSource(const std::string& controllerName) const;   // 查無 → 空 handle(valid()==false)
     SinkHandle   getSink(const std::string& controllerName) const;
-    ControlSignalState getSourceState(const std::string& controllerName) const;
-    ControlSignalState getSinkState(const std::string& controllerName) const;
+    // 查無 entry → std::nullopt(取代 rv2「查無回 UNKNOWN」的雙重語意)
+    std::optional<ControlSignalState> getSourceState(const std::string& controllerName) const;
+    std::optional<ControlSignalState> getSinkState(const std::string& controllerName) const;
     std::vector<InfoT> getSourceInfoList() const;
     std::vector<InfoT> getSinkInfoList() const;
 
@@ -678,7 +701,7 @@ struct ManagerOptions {
 - **_onManage(REGISTER)**:validate → 過濾 → `sinkMtx_` 查重 + emplace PENDING →
   放鎖建 Sink → 持鎖轉正(re-check:entry 仍存在且 `phase == PENDING` 才轉正;
   已被 TTL 回收 → 銷毀剛建的 Sink、回 error)→ 套用 typed callback → 回 SUCCESS。
-  Sink PENDING 起 TTL:掃描 timer 發現 PENDING 超過 `pendingTtlMs` 且 liveness 仍 UNKNOWN → 回收。
+  Sink PENDING 起 TTL:掃描 timer 發現 PENDING 超過 `pendingTtlMs` 且 liveness 仍 INITIAL → 回收。
   轉正與 TTL 回收**皆在 `sinkMtx_` 下檢查 `phase`**,互斥無競態;
   且 `pendingTtlMs`(預設 10s)≫ service 處理時間(ms 級),正常路徑不會被誤收。
 - **_onManage(UNREGISTER)**:比對 controller_name(+ 來源 manager 名)→ shutdown + erase。
