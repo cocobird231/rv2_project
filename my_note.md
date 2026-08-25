@@ -2,6 +2,8 @@
 
 ## Changes or Suggestions for R1 CST (Control Signal Transport)
 
+For all components, follow the RAII design rule.
+
 ### Source and Sink FSM
 1. Evaluate using tinyFSM for context safe and more stability.
 2. Evaluate source and sink FSM delete UNKNOWN state and add INITIAL state
@@ -10,7 +12,8 @@
 ### Timeout and Disconnect Design for Sink
 1. Each sink's status checked by CSM's heartbeat.
 2. Each sink's callback first go into a tiny function to record self data rate, then call custom callback function.
-3. CSM publish self status while heartbeat, status includes managed Sources/Sinks etc.. Design the CSM status message type.
+3. For Sink custom callback function, let CSM support different message type supports different custom callback functions that sets with `csm->registerCallback("message_type", CallbackFunction)`
+4. CSM publish self status while heartbeat, status includes managed Sources/Sinks etc.. Design the CSM status message type.
 
 ## Request for New Design flow
 1. For draft, use git control for drafting. Add commitment for every modification, and given a draft version, e.g. v0.1.0 for the very first version.
