@@ -1,4 +1,4 @@
-# R1 Control Signal Transport 程式設計規劃書(草稿 v0.3.0)
+# R1 Control Signal Transport 程式設計規劃書(草稿 v0.4.0)
 
 > 狀態:初版草稿,供討論。未決事項集中在第 11 章。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
@@ -11,6 +11,7 @@
 | v0.1.0 | 初版:設計概念、主架構、7 類別章節、整合測試規劃;經一輪 adversarial review 修正 |
 | v0.2.0 | 依 my_note.md:UNKNOWN 改名 INITIAL(查無 entry 語意改以 `std::optional` 表達);新增 §4.6 tinyFSM 評估(結論:不採用,維持自製 CAS 狀態機) |
 | v0.3.0 | 依 my_note.md(RAII、Sink timeout/disconnect 設計):RAII 總則(§1.5);DISCONNECTED 改為可重連休眠態,新增 → INITIAL 轉移(§2.3/§4);heartbeat 升級為雙向 **ManagerStatus** 狀態發布、Manager 單一 timer(§2.5);Sink 內建 data-rate 統計、收訊先記錄再 dispatch(§6);callback API 改為 `registerCallback`(字串鍵 + template 雙層,§8);整合場景與未決事項更新 |
+| v0.4.0 | 依 my_note.md(並發原則、Source/Sink/CSM design detail):並發原則 §1.6(atomic 優先、shared_mutex 讀寫分離);**Source 對稱 rate 統計**(send 記錄呼叫時間/次數);rate **記錄(hot path)與計算(CSM tick 驅動之非公開 `_calcRate()`,friend)分離**,per-entity 狀態快取;Sink 新增 **`waitForMessage()`** 阻塞等待 API(condition variable + 序號);`ControlSignalManage.srv` 增 **NOTIFY_ABNORMAL** op,異常狀態邊緣觸發主動通報對向 CSM |
 
 ---
 
@@ -39,7 +40,9 @@
 | 狀態機 | 5 態(UNKNOWN/ACTIVE/LOW_FREQ/TIMEOUT/DISCONNECTED),轉移散落各處、relaxed atomics、可被覆寫 | **4 態**(INITIAL/ACTIVE/TIMEOUT/DISCONNECTED;移除 LOW_FREQ、UNKNOWN 改名 INITIAL);集中於 `LivenessState` 類,CAS 轉移表;DISCONNECTED 為**休眠態**,重連 → INITIAL(v0.3.0,§2.3) |
 | 斷線後 entry | DISCONNECTED 即 erase(不穩定連線反覆 add/remove) | entry **保留**於 DISCONNECTED,重連自動復原;僅顯式 unregister / 解構移除(§2.5) |
 | Keep-alive | 每個 channel 一條 `_keep_alive` topic + 每個 Sink 一個 timer | **雙向 ManagerStatus 發布**:每個 Manager 一條 `<name>/status` topic(含管理清單與各 entry 狀態),互為 link liveness 依據(§2.5) |
-| 頻率監控 | `send_freq_hz` 宣告值 + LOW_FREQ 推導(從未驅動決策) | Sink **實測 data rate**:收訊路徑先記錄再 dispatch,`dataRateHz()` 查詢 + 隨 status 發布(§6) |
+| 頻率監控 | `send_freq_hz` 宣告值 + LOW_FREQ 推導(從未驅動決策) | **Source/Sink 對稱實測 rate**(v0.4.0):hot path 只記錄(時間+次數),計算集中於 CSM tick 呼叫的非公開 `_calcRate()`;隨 status 發布(§5/§6) |
+| 讀取模式 | `read()` 輪詢 | `read()` 輪詢 + **`waitForMessage()` 阻塞等待**(condition variable,§6) |
+| 異常傳遞 | 無(各側獨立判定,對向不知情) | **NOTIFY_ABNORMAL**:狀態轉 TIMEOUT/DISCONNECTED 時邊緣觸發,主動通報對向 CSM(§2.4/§8) |
 | Sink callback API | `setSinkMsgCallback<msgT>(cb)`(type_index 鍵) | `registerCallback` 雙層:template 型別安全版 + 字串鍵型別抹除版;鍵統一為 type 字串(§8) |
 | RAII | shutdown 語意混雜、解構不保證釋放順序 | 全元件 RAII(§1.5):解構即完整釋放;Manager 解構自動 best-effort 反註冊 |
 | 註冊協定 | 單向一次性;TOCTOU、無 rollback、無 unregister | **兩階段(佔位 → 確認)** + 失敗 rollback + 顯式 `unregisterSource()` |
@@ -95,6 +98,22 @@ ControlSignalManager ──(唯一擁有 shared_ptr)──► Source / Sink 實�
 - 不依賴使用者呼叫任何 cleanup API:忘記 unregister、直接讓 Manager 出 scope,
   也不留下 dangling rclcpp entities 或遠端孤兒(best-effort 通知 + 遠端 TTL/休眠兜底)。
 
+### 1.6 並發原則(v0.4.0,my_note 總則)
+
+所有 flag 與並發變數依「最輕量足夠」原則選工具,由輕至重:
+
+| 工具 | 適用 | 本設計應用點 |
+|---|---|---|
+| `std::atomic`(單變數) | 獨立 flag、計數器、快取值 | `shutdown_` flag、rate bucket 計數、cached `rateHz_`(atomic\<float\>)、訊息序號 `msgSeq_` |
+| CAS 複合字(§4.2) | 多欄位一致轉移 | `LivenessState` 的 state+epoch |
+| `std::shared_mutex` | **讀多寫少**共享結構 | CSM `sources_`/`sinks_` map(讀:狀態查詢、status tick、getXxx;寫:register/unregister)、黑白名單、`typedCbs_` callback 表 |
+| `std::mutex` + condition variable | 寫頻繁 / 需等待語意 | Sink `msgMtx_`(每訊息寫)+ `msgCv_`(`waitForMessage`,§6) |
+
+- 規則:atomic 能表達就不用鎖;讀路徑遠多於寫路徑才用 `shared_mutex`
+  (`std::shared_lock` 讀 / `std::unique_lock` 寫),否則普通 mutex 更省;
+  持鎖區塊最小化,callback 一律鎖外呼叫(承襲 rv2 驗證過的模式)。
+- 每個成員變數在類別章節中標注其保護手段;無標注 = 建構後唯讀。
+
 ---
 
 ## 2. 程式主架構
@@ -130,7 +149,7 @@ test/r1/
 rv2_interfaces/msg/r1/ControlSignalInfo.msg
 rv2_interfaces/msg/r1/ManagerStatus.msg          # 狀態發布兼 link heartbeat(§2.5.1)
 rv2_interfaces/msg/r1/EntryStatus.msg
-rv2_interfaces/srv/r1/ControlSignalManage.srv    # op = REGISTER | UNREGISTER
+rv2_interfaces/srv/r1/ControlSignalManage.srv    # op = REGISTER | UNREGISTER | NOTIFY_ABNORMAL(v0.4.0)
 rv2_interfaces/srv/r1/ControlSignalInfoReq.srv
 ```
 
@@ -265,7 +284,7 @@ string channel_name
 string type                 # factory 型別鍵
 string mode                 # topic / service
 int8   state                # 0=INITIAL 1=ACTIVE 2=TIMEOUT 3=DISCONNECTED(常數)
-float32 data_rate_hz        # Sink:實測收訊速率(§6);Source:0
+float32 data_rate_hz        # 實測速率:Sink = 收訊率(§6);Source = send 呼叫率(§5,v0.4.0)
 int8   priority
 ```
 
@@ -274,6 +293,15 @@ int8   priority
 - 頻寬:entry 數大時可調升 `statusIntervalMs`(Manager 參數);訊息內容為
   輕量 metadata,200ms × 數十 entries 規模無虞。
 - `control_signal_info_req` service 保留(pull 式完整 Info 查詢;status 為 push 式輕量摘要)。
+- **狀態計算與快取**(v0.4.0,my_note Heartbeat #1):status tick 對每個 entity 呼叫其
+  非公開 `_calcRate()`(friend,§5/§6)——計算實測 rate、執行逾時檢查、回傳
+  `{state, rateHz}`;結果**per-entity 快取**於 CSM(組裝 ManagerStatus 直接取用,
+  亦供異常邊緣偵測比對前次狀態)。
+- **異常主動通報**(v0.4.0,my_note Heartbeat #2):tick 中偵測到 entity 狀態
+  **轉入** TIMEOUT 或 DISCONNECTED(邊緣觸發,對比前次快取;level 不重發)→
+  收集本 tick 異常清單 → 以 `ControlSignalManage(NOTIFY_ABNORMAL)` **async best-effort**
+  發往對向 CSM(Source → 其 target;Sink → 其來源 manager),不阻塞 tick、不等回應。
+  接收方:log + 比對本地 entry 注入加速判定 + 觸發使用者 `setAbnormalCallback`(§8)。
 
 ### 2.6 執行緒模型
 
@@ -475,6 +503,12 @@ private:
 ```cpp
 namespace r1 {
 
+/// _calcRate() 回傳的輕量快照(v0.4.0);CSM per-entity 快取此值
+struct EntityStatus {
+    ControlSignalState state;
+    float              rateHz;
+};
+
 class BaseControlSignalSource
 {
 public:
@@ -512,8 +546,19 @@ private:
     LivenessState                 liveness_;
     std::atomic<bool>             shutdown_{false};
 
+    // send 呼叫記錄(v0.4.0,hot path 只記錄):1 秒雙 bucket,純 atomic
+    std::atomic<uint32_t>         rateBuckets_[2];
+    std::atomic<int64_t>          rateWindowStartNs_;
+    std::atomic<float>            cachedRateHz_{0.f};   // _calcRate() 結果快取
+
+    /// 非公開(my_note Source #2):由 CSM status tick 呼叫(friend)。
+    /// 以記錄資料計算實測 send 率 → 更新 cachedRateHz_ →
+    /// 執行 liveness checkTimeout → 回傳 {state, rateHz}。
+    EntityStatus _calcRate(int64_t nowNs);
+
 public:
     SendResult send(const msgT& msg);
+    float sendRateHz() const;                       // 讀 cachedRateHz_,不觸發計算
     ControlSignalState getState() const override;   // link 狀態由 Manager 餵入:見下
     ...
 };
@@ -523,8 +568,9 @@ public:
 
 ### 5.3 行為細節
 
-- **send(topic)**:`shutdown_` 檢查 → publish → `OK`。狀態不變(無 send-side 回饋;
-  liveness 由 Manager link 供給)。
+- **send(共通前置,v0.4.0,my_note Source #1)**:`shutdown_` 檢查 → **記錄呼叫時間
+  與次數**(bucket 原子遞增,同 Sink 之 §6 樣式)→ 進入模式分支。
+- **send(topic)**:publish → `OK`。狀態不變(無 send-side 回饋;liveness 由 Manager link 供給)。
 - **send(service)**:`service_is_ready()` → `async_send_request` → 等待 ≤ `timeout_ns`
   (**無 50ms 隱藏 fallback**;`timeout_ns` 必填,直接使用)。
   ready → `liveness_.reportActivity()`,依 response 回 `OK`/`REJECTED`;
@@ -535,6 +581,11 @@ public:
   `liveness_.reportActivity()` / `checkTimeout()`。Source 保持零 timer、零訂閱。
 - **DISCONNECTED(休眠)下的 send**:回 `SendResult::DISCONNECTED`,拒絕發送;
   transport **保留**(v0.3.0:斷線不再 shutdown,等待 link 恢復觸發重連 → INITIAL)。
+- **`_calcRate()`**(v0.4.0,非公開,`friend class ControlSignalManager` 專用):
+  CSM status tick 每週期呼叫一次。輪替 bucket 計算上一完整窗 send 率 →
+  store `cachedRateHz_` → `liveness_.checkTimeout()` → 回傳 `{state, rateHz}`
+  (`EntityStatus` 輕量 struct)。公開 `sendRateHz()` 僅讀快取——
+  **記錄(每次 send,O(1) atomic)與計算(每 tick 一次)分離**,hot path 零除法零鎖。
 - **shutdown()**:僅於 unregister / 解構呼叫。置 flag → 重置 `transport_` → 之後 send 回 `NO_TRANSPORT`。
 - lambda(service 模式無)一律不存在 → Source 無捕獲 `this` 的 callback。
 
@@ -556,6 +607,8 @@ public:
 | S7 | Manager 注入 link timeout | state → TIMEOUT;再注入 activity → ACTIVE |
 | S8 | disconnect 後 send | `DISCONNECTED`(transport 保留但拒送) |
 | S9 | **重連**:disconnect 後注入 link activity | state → INITIAL;再注入 → ACTIVE;send 恢復 `OK` |
+| S10 | **send rate**:20 Hz send 2 秒後呼叫 `_calcRate()`(測試經 friend 通道) | 回傳 rateHz ∈ [18, 22];`sendRateHz()` 讀到同值;停止 1 窗後歸 0 |
+| S11 | rate 並發:高頻 send + 週期 `_calcRate()` + 高頻 `sendRateHz()` | 無 race(TSan);快取值單調收斂 |
 
 ---
 
@@ -602,12 +655,23 @@ private:
     mutable std::mutex           cbMtx_;       // 僅護 msgCb_
     MsgCb                        msgCb_;
     std::atomic<bool>            shutdown_{false};
-    // data-rate 滑動窗(v0.3.0):雙 bucket,1 秒輪替,純 atomic
+    // data-rate 記錄(v0.3.0 起;hot path 只遞增):雙 bucket,1 秒輪替,純 atomic
     std::atomic<uint32_t>        rateBuckets_[2];
     std::atomic<int64_t>         rateWindowStartNs_;
+    std::atomic<float>           cachedRateHz_{0.f};  // _calcRate() 結果快取(v0.4.0)
+    // waitForMessage(v0.4.0):序號 + condition variable(msgMtx_ 為其鎖)
+    std::atomic<uint64_t>        msgSeq_{0};
+    mutable std::condition_variable msgCv_;
+
+    /// 非公開(my_note Sink #3):CSM status tick 呼叫(friend)。
+    /// 計算收訊率 → cachedRateHz_ → checkTimeout → 回傳 {state, rateHz}。
+    EntityStatus _calcRate(int64_t nowNs);
 public:
     bool read(msgT& out) const;
-    float dataRateHz() const;                  // 上一完整窗實測收訊率
+    /// 阻塞等待「呼叫之後」的下一筆訊息(my_note Sink #2)。
+    /// timeoutNs 0 = 無限等;收到 → true + out;逾時 / shutdown → false。
+    bool waitForMessage(msgT& out, int64_t timeoutNs = 0) const;
+    float dataRateHz() const;                  // 讀 cachedRateHz_,不觸發計算
     void setMsgCallback(MsgCb cb);
     ...
 };
@@ -619,17 +683,24 @@ public:
 
 - **收訊路徑 `_store()`**(v0.3.0 固定順序,my_note Sink #2):lambda 捕獲 `weak_ptr`,
   lock 失敗即 return。成功後:
-  1. **`_recordRate()`(前置小函數)**:更新 data-rate 統計(見下),永遠第一步。
-  2. `msgMtx_` 下寫 `latestMsg_`。
+  1. **`_recordRate()`(前置小函數)**:記錄時間與次數(bucket 原子遞增),永遠第一步。
+  2. `msgMtx_` 下寫 `latestMsg_`,`msgSeq_`+1 → **`msgCv_.notify_all()`**(喚醒 waitForMessage)。
   3. `liveness_.reportActivity()` —— 一般態 → ACTIVE;**DISCONNECTED → INITIAL(重連)**,
      訊息照存(資料真實有效);轉移結果記入 log(重連事件可觀測)。
   4. cbMtx_ 下 copy callback → **無鎖呼叫** callback(承襲 rv2 正確做法)。
   rv2 的「DISCONNECTED 復活」bug 在 r1 不再是 bug:復活是**經由狀態機合法轉移**的
   受控行為(→ INITIAL,非直跳 ACTIVE),語意集中於 `LivenessState`。
-- **data-rate 統計**(my_note Sink #2,取代 rv2 宣告式 `send_freq_hz` 與 LOW_FREQ):
-  固定 1 秒雙 bucket 滑動窗:`_recordRate()` 對當前 bucket 原子遞增,跨窗時輪替;
-  `float dataRateHz() const` 回上一完整窗計數(0 = 無資料)。
-  純 atomic、O(1)、無鎖;實測值隨 ManagerStatus 發布(§2.5.1 `data_rate_hz`)。
+- **rate 記錄與計算分離**(v0.4.0,my_note Sink #1/#3):hot path 只做 O(1) 原子遞增;
+  計算集中在非公開 **`_calcRate()`**,由 CSM status tick 每週期呼叫一次(friend):
+  輪替 bucket 算上一完整窗收訊率 → store `cachedRateHz_` → `checkTimeout()` →
+  回傳 `{state, rateHz}` 供 CSM 快取與發布(§2.5.1)。公開 `dataRateHz()` 僅讀快取。
+- **`waitForMessage(out, timeoutNs)`**(v0.4.0,my_note Sink #2):
+  進入時 snapshot `seq0 = msgSeq_` → `std::unique_lock<std::mutex> lk(msgMtx_)` →
+  `msgCv_.wait[_for](lk, pred)`,pred = `msgSeq_ > seq0 || shutdown_`。
+  以**序號**為條件:免疫 spurious wakeup、無 lost-wakeup(notify 在持鎖遞增 seq 之後)。
+  滿足且非 shutdown → copy `latestMsg_` 回 true;逾時或 shutdown → false。
+  `shutdown()` 置 flag 後 `notify_all()`,等待者即刻退出(RAII:解構前 shutdown 保證無滯留等待者)。
+  ⚠ 阻塞呼叫:禁止在任何 ROS callback 內使用(同 `registerSource` 規則,§2.6)。
 - **read()**:`checkTimeout()` → msgMtx_ 下 copy → 僅 ACTIVE 回 true。
   首訊息視窗安全性由「ACTIVE 只在 `latestMsg_` 寫入後設定」保證(rv2 已證明,保留同序)。
 - **service 模式**:server callback `_store(req->data)` 後回 `SRV_RES_SUCCESS`;
@@ -652,8 +723,11 @@ public:
 | K8 | **重連**:disconnect 後收訊 | 狀態 → INITIAL、訊息已存(read 仍 false)、callback 觸發;續發 → ACTIVE、read true |
 | K9 | shutdown 後上游持續發送 | 無 callback、無狀態變化(subscription 已釋放) |
 | K10 | weak-capture UAF 回歸:高頻收訊中 Manager 移除 Sink | 無 crash(ASan/TSan job) |
-| K11 | **data rate**:以 20 Hz 發送 2 秒 | `dataRateHz()` ∈ [18, 22];停止 1 個窗後回 0 |
-| K12 | rate 統計並發:高頻收訊 + 高頻 `dataRateHz()` | 無 race(TSan);數值單調合理 |
+| K11 | **data rate**:20 Hz 發送 2 秒後呼 `_calcRate()`(friend 通道) | 回傳 ∈ [18, 22];`dataRateHz()` 同值;停止 1 窗後歸 0 |
+| K12 | rate 並發:高頻收訊 + 週期 `_calcRate()` + 高頻 `dataRateHz()` | 無 race(TSan) |
+| K13 | **waitForMessage**:等待中發送一筆 | 即刻返回 true、內容正確;逾時版在無訊息時 ≈ timeoutNs 返回 false |
+| K14 | waitForMessage 喚醒語意:等待前已存在的舊訊息 | 不觸發(只等「呼叫後」新訊息);並發多等待者全部喚醒 |
+| K15 | waitForMessage + shutdown | 等待者即刻返回 false;無 deadlock、無 UAF(ASan) |
 
 ---
 
@@ -751,6 +825,13 @@ public:
     std::vector<InfoT> getSourceInfoList() const;
     std::vector<InfoT> getSinkInfoList() const;
 
+    // ── 異常通報(v0.4.0,my_note Heartbeat #2)──
+    // 文件縮寫:using EntryStatusT = rv2_interfaces::msg::r1::EntryStatus;
+    // 收到對向 CSM 的 NOTIFY_ABNORMAL 時觸發;entries 為對方視角的異常清單。
+    using AbnormalCb = std::function<void(const std::string& fromManager,
+                                          const std::vector<EntryStatusT>& entries)>;
+    void setAbnormalCallback(AbnormalCb cb);   // nullptr 清除
+
     // ── Sink callback 註冊(v0.3.0,my_note Sink #3)──
     // 鍵 = factory 型別字串("joy"/"twist"/...);每型別一個 callback,後者覆蓋。
     // 型別安全版(推薦):msgT 經 Factory typeKey 反查出字串鍵。
@@ -771,10 +852,12 @@ private:
     struct SourceEntry {                    // map value;PENDING 佔位即一個 entry
         enum class Phase { PENDING, ACTIVE } phase;
         std::shared_ptr<BaseControlSignalSource> source;   // PENDING 時為 nullptr
-        std::string channelName;            // 佔位期間供雙鍵查重
-        int64_t     pendingSinceNs;
+        std::string  channelName;           // 佔位期間供雙鍵查重
+        int64_t      pendingSinceNs;
+        EntityStatus lastStatus;            // v0.4.0:上一 tick _calcRate() 快取
+        ControlSignalState lastNotifiedState;  // 異常邊緣觸發之比對基準
     };
-    struct SinkEntry { /* 同型,含 PENDING TTL 起點 */ };
+    struct SinkEntry { /* 同型,含 PENDING TTL 起點 + lastStatus/lastNotifiedState */ };
 
     struct LinkMonitor {                    // 每個 target manager 一個
         rclcpp::Subscription<...>::SharedPtr sub;
@@ -782,9 +865,10 @@ private:
         std::set<std::string> controllers;  // 掛在此 link 上的 Source 主鍵
     };
 
-    mutable std::mutex sourceMtx_;  std::map<std::string, SourceEntry> sources_;
-    mutable std::mutex sinkMtx_;    std::map<std::string, SinkEntry>   sinks_;
-    mutable std::mutex linkMtx_;    std::map<std::string, LinkMonitor> links_;
+    // v0.4.0(§1.6):map 讀多寫少 → shared_mutex(讀 shared_lock / 寫 unique_lock)
+    mutable std::shared_mutex sourceMtx_;  std::map<std::string, SourceEntry> sources_;
+    mutable std::shared_mutex sinkMtx_;    std::map<std::string, SinkEntry>   sinks_;
+    mutable std::shared_mutex linkMtx_;    std::map<std::string, LinkMonitor> links_;
     // cbMtx_ / typedCbs_、filterMtx_ / 黑白名單:承襲 rv2
     rclcpp::CallbackGroup::SharedPtr mgmtGroup_;   // Reentrant;服務/client/timers 屬之
 };
@@ -810,15 +894,25 @@ struct ManagerOptions {
   轉正與 TTL 回收**皆在 `sinkMtx_` 下檢查 `phase`**,互斥無競態;
   且 `pendingTtlMs`(預設 10s)≫ service 處理時間(ms 級),正常路徑不會被誤收。
 - **_onManage(UNREGISTER)**:比對 controller_name(+ 來源 manager 名)→ shutdown + erase。
-- **status tick**(mgmtGroup 單一 timer,週期 `statusIntervalMs`,v0.3.0):
-  1. 發布 ManagerStatus(鎖內 snapshot 組訊息,鎖外 publish)。
-  2. link 掃描:每個 link `checkTimeout`;TIMEOUT → 對其 controllers 批次注入
+- **status tick**(mgmtGroup 單一 timer,週期 `statusIntervalMs`,v0.4.0 改訂順序):
+  1. link 掃描:每個 link `checkTimeout`;TIMEOUT → 對其 controllers 批次注入
      Source(及來源側 Sink)TIMEOUT;activity 由 status 訂閱 callback 即時注入,
      link 恢復 → 批次 `reportActivity()`(DISCONNECTED entries 藉此重連 → INITIAL)。
-  3. Source/Sink 掃描:TIMEOUT 起算持續 > `disconnect_timeout_ns` → `disconnect()`
+  2. **狀態計算**(shared_lock 巡覽):對每個 ACTIVE-phase entity 呼叫 `_calcRate(now)`
+     (friend;內含 checkTimeout)→ 寫回 `entry.lastStatus` 快取
+     (寫欄位為 tick 專屬,單寫者,shared_lock 下安全)。
+  3. auto-disconnect 判定:TIMEOUT 持續 > `disconnect_timeout_ns` → `disconnect()`
      (**轉休眠;不 shutdown、不 erase**,transport 保留以偵測重連,v0.3.0)。
-  4. PENDING TTL 回收。
-  5. log 於鎖內 snapshot。
+  4. **異常邊緣偵測**(my_note Heartbeat #2):`lastStatus.state` 對比
+     `lastNotifiedState`,**轉入** TIMEOUT / DISCONNECTED → 收入異常清單並更新基準;
+     恢復 ACTIVE 亦更新基準(下次異常再觸發)。
+  5. 發布 ManagerStatus(直接取 `lastStatus` 快取組訊息,鎖外 publish)。
+  6. **NOTIFY_ABNORMAL 發送**:異常清單按對向 manager 分組,`async_send_request`
+     best-effort 發出(不等回應、不重試;鎖外)。
+  7. PENDING TTL 回收;log 以快取 snapshot。
+- **_onManage(NOTIFY_ABNORMAL)**(v0.4.0):log 對方異常清單 → 比對本地對應 entries,
+  對存在者立即 `checkTimeout()`(加速本地判定收斂)→ 觸發 `setAbnormalCallback`
+  使用者回呼(無鎖呼叫)→ 回 SUCCESS(內容僅確認收到)。
 - **移除路徑**(僅 unregister / 解構):`entity->shutdown()` → erase(先 shutdown 再 erase)。
 - **LinkMonitor 生命週期**:Source 註冊轉正時 `links_[target].controllers.insert(ctrl)`
   (無 entry 則建立訂閱);Source 移除(unregister / auto-disconnect / 解構)時
@@ -844,7 +938,9 @@ struct ManagerOptions {
 | M8 | link heartbeat 停止 | 該 target 全部 Source → TIMEOUT;恢復 → ACTIVE |
 | M9 | auto-disconnect(v0.3.0 休眠語意) | TIMEOUT 持續 > disconnect_timeout → 兩側各自轉 DISCONNECTED;entry 保留、Handle 仍 valid、state 查詢回 DISCONNECTED |
 | M15 | **重連復原**:M9 後恢復資料/link | 兩側 DISCONNECTED → INITIAL → ACTIVE;無 add/remove、無重新註冊 |
-| M16 | ManagerStatus 內容 | 訊息含全部 entries、state 值正確、sink `data_rate_hz` ≈ 實際發送率;週期 ≈ `statusIntervalMs` |
+| M16 | ManagerStatus 內容 | 訊息含全部 entries、state 值正確、source/sink `data_rate_hz` ≈ 實際速率(取自 `lastStatus` 快取);週期 ≈ `statusIntervalMs` |
+| M17 | **NOTIFY_ABNORMAL 邊緣觸發**:斷流至 TIMEOUT | 對向恰收到一次 NOTIFY(非每 tick);`setAbnormalCallback` 觸發、清單含該 entry;恢復 ACTIVE 後再次斷流 → 再觸發一次 |
+| M18 | NOTIFY 目標不可達 | tick 不阻塞、不重試;本地狀態流程不受影響 |
 | M10 | Handle 在移除後操作 | error code,無 crash、無殭屍(shutdown 已停 heartbeat/sub) |
 | M11 | 黑白名單:雙向、enable/disable、空白名單=全擋 | 承襲 rv2 案例組 |
 | M12 | registerCallback:template 版與字串版、先註冊後建 Sink / 先建後註冊、覆蓋與 unregister | 兩序皆觸發;未註冊 type 回 false |
@@ -884,6 +980,9 @@ class SinkHandle
 public:
     bool valid() const;
     template<typename msgT> bool read(msgT& out) const;
+    /// 轉發 Sink::waitForMessage(v0.4.0);handle 失效 → 立即 false。
+    /// ⚠ 阻塞:禁止在 ROS callback 內呼叫。
+    template<typename msgT> bool waitForMessage(msgT& out, int64_t timeoutNs = 0) const;
     ControlSignalState state() const;
     std::optional<msg::r1::ControlSignalInfo> info() const;
     // callback 註冊統一走 Manager::registerCallback(型別層級);Handle 不提供,避免生命週期糾纏
@@ -931,6 +1030,8 @@ public:
 | I5 link 故障 | HeartbeatFaultNode 暫停 B 的 status 發布 | A 側該 target 全部 Source TIMEOUT;B 側對應 Sink 亦 TIMEOUT(雙向);恢復後 ACTIVE |
 | I6 target 重啟 | kill B node → 重啟 B(空 Manager)| A 偵測 link 斷 → Source TIMEOUT → DISCONNECTED(休眠);B 已無 entry → A 需 unregister + 重新註冊;驗證 A 側顯式 re-register 流程 |
 | I11 status 對帳 | 訂閱兩側 `<name>/status`,對照 InfoReq 與實際狀態 | entries/state/rate 一致;斷線期間 DISCONNECTED 可見 |
+| I12 異常通報鏈 | A 端停止發送 → B 側 Sink TIMEOUT | B 對 A 發 NOTIFY_ABNORMAL 恰一次;A 的 `setAbnormalCallback` 收到、清單正確;恢復後再斷 → 再一次 |
+| I13 waitForMessage 端到端 | 使用者執行緒 `handle.waitForMessage(out, 1s)`,期間 A 發送 | 即時返回;斷流時 ≈ 1s 逾時 false;unregister 中斷等待 false |
 | I7 註冊風暴 | 兩個 node 並發向同 target 註冊 100 組(部分同名) | 唯一性不變量成立;成功數 = 唯一名數;無殘留 PENDING |
 | I8 response 丟失 | MockManagerNode:接受但不回覆 | A 逾時 error;B(真 Manager 版場景)Sink TTL 回收 |
 | I9 惡意/錯誤 payload | MockSourceNode 以錯誤型別發往 channel | Sink 不 crash;型別安全(DDS 層擋掉或 read 型別檢查) |
@@ -963,7 +1064,9 @@ public:
 4. **status 對帳(reconciliation)**:整合場景 I6 暴露缺口——target 重啟後
    A 側 entry 休眠等待重連,但 B 已無對應 Sink,永遠不會自動復原。
    方案:A 收到 B 的 ManagerStatus 時比對自身 Source 清單,發現 B 缺對應 Sink
-   → 自動 re-REGISTER(或標記需人工處理)。v0.3.0 未含,傾向納入 v0.4。
+   → 自動 re-REGISTER(或標記需人工處理)。
+   v0.4.0 的 NOTIFY_ABNORMAL(§8.3)已建立「對向溝通」基礎設施,
+   對帳可沿用同一 service op 模式;自動 re-REGISTER 決策仍未決。
 5. **DISCONNECTED 休眠 entry 的 GC**:休眠 entry 常駐是 v0.3.0 特性,但永久休眠
    (對向已 unregister / 更名)是否需要可選 purge timeout?(0 = 永不,預設)
 6. **`registerSource` 之 async 版本**:提供 future/callback 版避免阻塞需求?
