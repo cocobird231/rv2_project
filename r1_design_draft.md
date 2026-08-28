@@ -1,4 +1,4 @@
-# R1 Control Signal Transport 程式設計規劃書(草稿 v0.5.1)
+# R1 Control Signal Transport 程式設計規劃書(草稿 v0.5.2)
 
 > 狀態:初版草稿,供討論。未決事項集中在第 11 章。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
@@ -12,8 +12,21 @@
 | v0.2.0 | 依 my_note.md:UNKNOWN 改名 INITIAL(查無 entry 語意改以 `std::optional` 表達);新增 §4.6 tinyFSM 評估(結論:不採用,維持自製 CAS 狀態機) |
 | v0.3.0 | 依 my_note.md(RAII、Sink timeout/disconnect 設計):RAII 總則(§1.5);DISCONNECTED 改為可重連休眠態,新增 → INITIAL 轉移(§2.3/§4);heartbeat 升級為雙向 **ManagerStatus** 狀態發布、Manager 單一 timer(§2.5);Sink 內建 data-rate 統計、收訊先記錄再 dispatch(§6);callback API 改為 `registerCallback`(字串鍵 + template 雙層,§8);整合場景與未決事項更新 |
 | v0.4.0 | 依 my_note.md(並發原則、Source/Sink/CSM design detail):並發原則 §1.6(atomic 優先、shared_mutex 讀寫分離);**Source 對稱 rate 統計**(send 記錄呼叫時間/次數);rate **記錄(hot path)與計算(CSM tick 驅動之非公開 `_calcRate()`,friend)分離**,per-entity 狀態快取;Sink 新增 **`waitForMessage()`** 阻塞等待 API(condition variable + 序號);`ControlSignalManage.srv` 增 **NOTIFY_ABNORMAL** op,異常狀態邊緣觸發主動通報對向 CSM |
+| v0.5.2 | 新增 §0.1 術語定義;「殭屍」「風暴」等慣用詞恢復使用(依定義先行原則,見 §0.1);內容與設計無變更 |
 | v0.5.1 | 依 my_note.md 文件撰寫準則:全文文風修訂——移除口語與比喻用語(改以標準技術術語敘述)、消除過度精簡的語句、統一測試場景命名;內容與設計無變更 |
 | v0.5.0 | 依 my_note.md(FSM #4/#5、timeout 機制、CSM Master):**timeout 改雙獨立閾值**(同一 elapsed 比 `timeout_ns` 與 `disconnect_timeout_ns`,皆可 0 = 停用;四種 FSM 變體圖 §2.3.1);**per-state 轉移 callback**(entity 層 + CSM 註冊 API);rolling window **大小可配置**(N-bucket 環形);`getStatus()` 整合查詢;**CSM Master 集中式通知架構**(新 §9)取代 v0.3.0 互訂 status link 與 v0.4.0 點對點 NOTIFY_ABNORMAL——CSM 向 master 註冊 + heartbeat,master 訂閱各 CSM status、以 controller_name 配對 Source-Sink、one-shot 通知 `/<csm_name>/get_notifications` |
+
+### 0.1 術語定義
+
+以下慣用詞在本文件中具有明確的技術意義;首次閱讀請先參照本節,後文直接使用不再逐次說明。
+
+| 術語 | 本文件中的定義 |
+|---|---|
+| **殭屍(zombie)** | 已自管理容器(CSM 的 `sources_`/`sinks_` map)移除,但因外部仍持有引用而繼續運作(發送心跳、接收訊息、觸發 callback)的 Source/Sink 物件。rv2 稽核中的「殭屍 Sink」即此類;r1 以 Handle(`weak_ptr`)設計消除此問題 |
+| **風暴(storm)** | 單一事件在短時間內觸發大量重複請求或通知的現象。本文件的具體情境:**註冊風暴**(多執行緒並發發出註冊請求)、**通知風暴**(master 或 CSM 於重啟/狀態跳變時重複發送大量變化通知) |
+| **孤兒(orphan)** | 分散式註冊部分失敗後,單側殘留、無配對對象的 entry(例如 target CSM 已建 Sink,但 source 側因逾時未建 Source) |
+| **休眠(dormant)** | DISCONNECTED 狀態的別稱:entry 保留於管理容器中、transport 保留、等待重連,不參與上層仲裁 |
+| **degraded mode** | CSM 與 master 失聯期間的運作模式:本地逾時判定照常,僅失去跨 CSM 的狀態通知 |
 
 ---
 
@@ -38,7 +51,7 @@
 | 面向 | rv2 | r1 |
 |---|---|---|
 | 使用者建構 Source/Sink | 可直接 `new`(測試中大量使用) | **禁止**;建構子 private,只有 Manager(經 Factory)可建 |
-| 使用者持有物件 | `getSource()` 回傳 `shared_ptr`(物件殘留與 use-after-free 風險) | 回傳 `SourceHandle`/`SinkHandle`(內部 `weak_ptr`) |
+| 使用者持有物件 | `getSource()` 回傳 `shared_ptr`(殭屍物件與 use-after-free 風險,§0.1) | 回傳 `SourceHandle`/`SinkHandle`(內部 `weak_ptr`) |
 | 狀態機 | 5 態(UNKNOWN/ACTIVE/LOW_FREQ/TIMEOUT/DISCONNECTED),轉移散落各處、relaxed atomics、可被覆寫 | **4 態**(INITIAL/ACTIVE/TIMEOUT/DISCONNECTED;移除 LOW_FREQ、UNKNOWN 改名 INITIAL);集中於 `LivenessState` 類,CAS 轉移表;DISCONNECTED 為**休眠態**,重連 → INITIAL(v0.3.0,§2.3) |
 | 斷線後 entry | DISCONNECTED 即 erase(不穩定連線反覆 add/remove) | entry **保留**於 DISCONNECTED,重連自動復原;僅顯式 unregister / 解構移除(§2.5) |
 | Keep-alive | 每個 channel 一條 `_keep_alive` topic + 每個 Sink 一個 timer | **雙向 ManagerStatus 發布**:每個 Manager 一條 `<name>/status` topic(含管理清單與各 entry 狀態),互為 link liveness 依據(§2.5) |
@@ -66,7 +79,7 @@
 | relaxed ordering 可見性(🟡) | `LivenessState` 內統一 acq/rel;外界只透過其 API 存取 |
 | DISCONNECTED 非真終態(🟡) | 轉移表強制:DISCONNECTED 無出邊;`reportActivity()` 對 DISCONNECTED 回 false |
 | 分散式註冊非原子、孤兒 Sink 永久佔位(🟡) | rollback:本地失敗時發 best-effort UNREGISTER;Sink 側 PENDING 有 TTL,未收到首筆資料/確認逾時自動回收 |
-| Sink 自 map 移除後仍持續發送心跳(🟡) | 使用者無法持有 `shared_ptr`;Manager 移除時立即 `shutdown()`(釋放 rclcpp entities),heartbeat 與 subscription 隨之停止 |
+| 殭屍 Sink:自 map 移除後仍持續發送心跳(🟡) | 使用者無法持有 `shared_ptr`;Manager 移除時立即 `shutdown()`(釋放 rclcpp entities),heartbeat 與 subscription 隨之停止 |
 | 同 node callback 內呼叫 `send()`/`registerSource()` 必然 false-timeout(🟡) | Manager 服務/client 用專屬 Reentrant group;`registerSource` 文件化為「禁止在任何 callback 內呼叫」+ debug assert |
 | debug log 無鎖讀 map(🟡 UB) | log 在鎖內取 snapshot |
 | `_onReg` 之尚未觸發的 TOCTOU(⚪) | 同兩階段插入,結構性消除 |
@@ -1071,7 +1084,7 @@ struct ManagerOptions {
 | M1 | 正常註冊 | 本地 Source + 遠端 Sink;Handle 有效 |
 | M2 | 重複 controller / 重複 channel(本地) | error,無遠端呼叫(觀察遠端無 Sink) |
 | M3 | 跨 manager 重複(A1 已註冊,A2 同 controller → 同 target) | 遠端拒絕;A2 無殘留 PENDING |
-| M4 | **並發註冊壓力**:16 執行緒同 controller 不同 target | 恰一成功;無覆蓋(rv2 TOCTOU 回歸) |
+| M4 | **註冊風暴**:16 執行緒同 controller 不同 target | 恰一成功;無覆蓋(rv2 TOCTOU 回歸) |
 | M5 | target 不存在 → 逾時 | error;PENDING 已清;之後同名可重註冊 |
 | M6 | 遠端接受但 response 丟失(mock 攔截) | 本地 error + UNREGISTER 送出;遠端 Sink 經 TTL 回收(孤兒回歸) |
 | M7 | unregisterSource | 兩側移除;Handle 失效;同名可重註冊 |
@@ -1082,7 +1095,7 @@ struct ManagerOptions {
 | M17 | **master heartbeat**:mock master 有回應/無回應 | 有:tick 正常;無:degraded log 一次、本地判定不受影響;回線後 heartbeat 恢復 + re-register 確認 |
 | M18 | **per-state callback**:registerSourceStateCallback(TIMEOUT)/registerSinkStateCallback(ACTIVE) | 全部同類 entities 轉移各觸發一次;old/new 正確;覆蓋與 nullptr 清除語意 |
 | M19 | **雙閾值休眠**(取代 TIMEOUT-持續邏輯):elapsed 一次越過兩閾值 | entity 直接 DISCONNECTED;CSM 無 per-entry 計時殘留;status 反映 |
-| M10 | Handle 在移除後操作 | error code,無 crash、無殘留活動(shutdown 已停止 heartbeat 與 subscription) |
+| M10 | Handle 在移除後操作 | error code,無 crash、無殭屍活動(shutdown 已停止 heartbeat 與 subscription) |
 | M11 | 黑白名單:雙向、enable/disable、空白名單=全擋 | 承襲 rv2 案例組 |
 | M12 | registerCallback:template 版與字串版、先註冊後建 Sink / 先建後註冊、覆蓋與 unregister | 兩序皆觸發;未註冊 type 回 false |
 | M13 | InfoReq 服務 | 列表正確、含 PENDING 排除策略(僅列 ACTIVE) |
@@ -1157,7 +1170,7 @@ struct MasterOptions {
 - Master 自身重啟:CSM 持續週期性呼叫 heartbeat(service 未 ready 時 CSM 進入
   degraded mode);master 回線後收到 heartbeat 與 re-register,重建 record;
   第一輪 status 訊息重建 entries 快取,並以該輪為比對基準,不觸發變化通知,
-  避免重啟後產生大量重複通知。
+  避免重啟引發通知風暴(§0.1)。
 
 ### 9.4 單元測試方法與流程
 
@@ -1171,7 +1184,7 @@ struct MasterOptions {
 | CM4 | one-shot:同狀態重複 status | 不重發;恢復 ACTIVE → 再發一次 |
 | CM5 | CSM 失聯:A heartbeat 停 | A 的 entries 生成 DISCONNECTED 變化,B 收通知;A record 保留 |
 | CM6 | A 恢復 heartbeat + status | 通知恢復;冷啟動基準不誤發 |
-| CM7 | master 重啟模擬(重建 CsmMaster) | re-register 後首輪 status 不觸發大量變化通知 |
+| CM7 | master 重啟模擬(重建 CsmMaster) | re-register 後首輪 status 不觸發通知風暴 |
 | CM8 | 未配對 entry(只有 Source 無 Sink) | 僅通知歸屬 CSM 自身側;無 crash |
 | CM9 | 通知目標 service 不可達 | async 失敗 log;tick 不阻塞 |
 
@@ -1222,7 +1235,7 @@ public:
 - 所有操作先 `lock()`;失敗回「失效語意」(state → DISCONNECTED、send → DISCONNECTED、read → false)。
 - `send<msgT>` 於 debug build 以 `msgType()` 驗證型別,不符 assert;release 回錯誤碼。
 - Handle 不延長物件生命週期(weak_ptr),Manager erase 後即失效,
-  物件殘留問題因此不會發生。
+  殭屍物件問題(§0.1)因此不會發生。
 
 ### 10.4 單元測試方法與流程
 
@@ -1261,9 +1274,9 @@ public:
 | I6 target 重啟 | kill B node → 重啟 B(空 Manager)| master 失聯→回線流程;B 已無 entry → A 需 unregister + 重新註冊;驗證 A 側顯式 re-register 流程 |
 | I11 status 對帳 | 訂閱兩側 `<name>/status`,對照 InfoReq 與實際狀態 | entries/state/rate 一致;斷線期間 DISCONNECTED 可見 |
 | I12 **master 通報鏈**(v0.5.0) | A 停止發送 → B 側 Sink TIMEOUT → master 偵測變化 | master 對 A、B 各推 get_notifications 恰一次;A 的 `setNotificationCallback` 收到、清單正確;恢復後再斷 → 再一次 |
-| I14 **master 失聯 degraded**(v0.5.0) | kill master;A、B 之間資料傳輸持續 | 兩側本地判定不受影響;degraded log;master 回線後 heartbeat 與通知恢復,無大量誤發通知 |
+| I14 **master 失聯 degraded**(v0.5.0) | kill master;A、B 之間資料傳輸持續 | 兩側本地判定不受影響;degraded log;master 回線後 heartbeat 與通知恢復,無通知風暴 |
 | I13 waitForMessage 端到端 | 使用者執行緒 `handle.waitForMessage(out, 1s)`,期間 A 發送 | 即時返回;斷流時 ≈ 1s 逾時 false;unregister 中斷等待 false |
-| I7 並發註冊壓力 | 兩個 node 並發向同 target 註冊 100 組(部分同名) | 唯一性不變量成立;成功數 = 唯一名數;無殘留 PENDING |
+| I7 註冊風暴 | 兩個 node 並發向同 target 註冊 100 組(部分同名) | 唯一性不變量成立;成功數 = 唯一名數;無殘留 PENDING |
 | I8 response 丟失 | MockManagerNode:接受但不回覆 | A 逾時 error;B(真 Manager 版場景)Sink TTL 回收 |
 | I9 惡意/錯誤 payload | MockSourceNode 以錯誤型別發往 channel | Sink 不 crash;型別安全(DDS 層擋掉或 read 型別檢查) |
 | I10 壓力 + sanitizer | I1 拉長 × ASan/TSan build | 無 leak / race 報告 |
@@ -1278,7 +1291,7 @@ public:
 | Build | 目標 |
 |---|---|
 | ASan + LSan | H6 / K10 / M10 / I10(UAF 與 leak 回歸) |
-| TSan | LivenessState 全部並發測試、M4 並發註冊壓力 |
+| TSan | LivenessState 全部並發測試、M4 註冊風暴 |
 | UBSan | 全單元測試 |
 
 ---
