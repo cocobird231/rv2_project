@@ -77,3 +77,9 @@ Following are the draft design for the CSM Master service:
 1. For draft, use git control for drafting. Add commitment for every modification, and given a draft version, e.g. v0.1.0 for the very first version.
 2. Please commit this draft for the first version, then start implementing the new design flow.
 3. This note will be updated as the design evolves. So in addition to read this note, please check git diff to see the new changes.
+4. If adding some fixes or documenting changes, use the minor version number.
+
+## Document Writing Guidelines
+1. 使用正規的專業術語來敘述，避免使用形容詞、譬喻和口語化。
+2. 可以盡量詳細的敘述，不要過於精簡，這會讓閱讀很吃力。
+3. 語句要通順，並使用plugins來修飾文筆，讓文章看起來像是人寫的。
