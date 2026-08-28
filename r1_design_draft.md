@@ -1,4 +1,4 @@
-# R1 Control Signal Transport 程式設計規劃書(草稿 v0.5.0)
+# R1 Control Signal Transport 程式設計規劃書(草稿 v0.5.1)
 
 > 狀態:初版草稿,供討論。未決事項集中在第 11 章。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
@@ -12,6 +12,7 @@
 | v0.2.0 | 依 my_note.md:UNKNOWN 改名 INITIAL(查無 entry 語意改以 `std::optional` 表達);新增 §4.6 tinyFSM 評估(結論:不採用,維持自製 CAS 狀態機) |
 | v0.3.0 | 依 my_note.md(RAII、Sink timeout/disconnect 設計):RAII 總則(§1.5);DISCONNECTED 改為可重連休眠態,新增 → INITIAL 轉移(§2.3/§4);heartbeat 升級為雙向 **ManagerStatus** 狀態發布、Manager 單一 timer(§2.5);Sink 內建 data-rate 統計、收訊先記錄再 dispatch(§6);callback API 改為 `registerCallback`(字串鍵 + template 雙層,§8);整合場景與未決事項更新 |
 | v0.4.0 | 依 my_note.md(並發原則、Source/Sink/CSM design detail):並發原則 §1.6(atomic 優先、shared_mutex 讀寫分離);**Source 對稱 rate 統計**(send 記錄呼叫時間/次數);rate **記錄(hot path)與計算(CSM tick 驅動之非公開 `_calcRate()`,friend)分離**,per-entity 狀態快取;Sink 新增 **`waitForMessage()`** 阻塞等待 API(condition variable + 序號);`ControlSignalManage.srv` 增 **NOTIFY_ABNORMAL** op,異常狀態邊緣觸發主動通報對向 CSM |
+| v0.5.1 | 依 my_note.md 文件撰寫準則:全文文風修訂——移除口語與比喻用語(改以標準技術術語敘述)、消除過度精簡的語句、統一測試場景命名;內容與設計無變更 |
 | v0.5.0 | 依 my_note.md(FSM #4/#5、timeout 機制、CSM Master):**timeout 改雙獨立閾值**(同一 elapsed 比 `timeout_ns` 與 `disconnect_timeout_ns`,皆可 0 = 停用;四種 FSM 變體圖 §2.3.1);**per-state 轉移 callback**(entity 層 + CSM 註冊 API);rolling window **大小可配置**(N-bucket 環形);`getStatus()` 整合查詢;**CSM Master 集中式通知架構**(新 §9)取代 v0.3.0 互訂 status link 與 v0.4.0 點對點 NOTIFY_ABNORMAL——CSM 向 master 註冊 + heartbeat,master 訂閱各 CSM status、以 controller_name 配對 Source-Sink、one-shot 通知 `/<csm_name>/get_notifications` |
 
 ---
@@ -26,7 +27,7 @@
 2. **Manager 全權管理** — 使用者「不能」直接建構 Source/Sink;唯一入口是
    `ControlSignalManager::registerSource(info)`。Manager 驗證後自動向 target
    manager 發出 request,在對方產生對應 Sink。使用者拿到的是 **Handle**(弱引用),
-   不是物件本體,從根本上杜絕錯誤使用與生命週期事故。
+   不是物件本體,從介面層防止錯誤使用與生命週期缺陷。
 3. **並發正確性內建於設計** — rv2 並發稽核(2026-08 audit)確認 20 項問題,
    r1 逐項以架構手段消除,而非事後補丁。
 4. **RAII 貫穿所有元件**(my_note 總則)— 資源(rclcpp entities、狀態、map entries)
@@ -37,7 +38,7 @@
 | 面向 | rv2 | r1 |
 |---|---|---|
 | 使用者建構 Source/Sink | 可直接 `new`(測試中大量使用) | **禁止**;建構子 private,只有 Manager(經 Factory)可建 |
-| 使用者持有物件 | `getSource()` 回 `shared_ptr`(→ 殭屍/UAF 風險) | 回 `SourceHandle`/`SinkHandle`(內部 `weak_ptr`) |
+| 使用者持有物件 | `getSource()` 回傳 `shared_ptr`(物件殘留與 use-after-free 風險) | 回傳 `SourceHandle`/`SinkHandle`(內部 `weak_ptr`) |
 | 狀態機 | 5 態(UNKNOWN/ACTIVE/LOW_FREQ/TIMEOUT/DISCONNECTED),轉移散落各處、relaxed atomics、可被覆寫 | **4 態**(INITIAL/ACTIVE/TIMEOUT/DISCONNECTED;移除 LOW_FREQ、UNKNOWN 改名 INITIAL);集中於 `LivenessState` 類,CAS 轉移表;DISCONNECTED 為**休眠態**,重連 → INITIAL(v0.3.0,§2.3) |
 | 斷線後 entry | DISCONNECTED 即 erase(不穩定連線反覆 add/remove) | entry **保留**於 DISCONNECTED,重連自動復原;僅顯式 unregister / 解構移除(§2.5) |
 | Keep-alive | 每個 channel 一條 `_keep_alive` topic + 每個 Sink 一個 timer | **雙向 ManagerStatus 發布**:每個 Manager 一條 `<name>/status` topic(含管理清單與各 entry 狀態),互為 link liveness 依據(§2.5) |
@@ -65,10 +66,10 @@
 | relaxed ordering 可見性(🟡) | `LivenessState` 內統一 acq/rel;外界只透過其 API 存取 |
 | DISCONNECTED 非真終態(🟡) | 轉移表強制:DISCONNECTED 無出邊;`reportActivity()` 對 DISCONNECTED 回 false |
 | 分散式註冊非原子、孤兒 Sink 永久佔位(🟡) | rollback:本地失敗時發 best-effort UNREGISTER;Sink 側 PENDING 有 TTL,未收到首筆資料/確認逾時自動回收 |
-| 殭屍 Sink(erase 後仍發心跳)(🟡) | 使用者無法持有 `shared_ptr`;Manager 移除 = 立即 `shutdown()`(釋放 rclcpp entities)→ heartbeat/subscription 停止 |
+| Sink 自 map 移除後仍持續發送心跳(🟡) | 使用者無法持有 `shared_ptr`;Manager 移除時立即 `shutdown()`(釋放 rclcpp entities),heartbeat 與 subscription 隨之停止 |
 | 同 node callback 內呼叫 `send()`/`registerSource()` 必然 false-timeout(🟡) | Manager 服務/client 用專屬 Reentrant group;`registerSource` 文件化為「禁止在任何 callback 內呼叫」+ debug assert |
 | debug log 無鎖讀 map(🟡 UB) | log 在鎖內取 snapshot |
-| `_onReg` 潛伏 TOCTOU(⚪) | 同兩階段插入,結構性消除 |
+| `_onReg` 之尚未觸發的 TOCTOU(⚪) | 同兩階段插入,結構性消除 |
 
 ### 1.4 所有權與生命週期模型
 
@@ -99,7 +100,8 @@ ControlSignalManager ──(唯一擁有 shared_ptr)──► Source / Sink 實�
 
 - 禁止裸 `new`/手動 delete;一律 `std::shared_ptr`/`std::unique_ptr`/值語意。
 - 不依賴使用者呼叫任何 cleanup API:忘記 unregister、直接讓 Manager 出 scope,
-  也不留下 dangling rclcpp entities 或遠端孤兒(best-effort 通知 + 遠端 TTL/休眠兜底)。
+  也不留下 dangling rclcpp entities 或遠端孤兒 entry(best-effort 通知為主,
+  遠端 TTL 與休眠機制為最終保障)。
 
 ### 1.6 並發原則(v0.4.0,my_note 總則)
 
@@ -236,8 +238,8 @@ stateDiagram-v2
 - DISCONNECTED 改為**休眠態**(v0.3.0,my_note FSM #3):不再是無出邊終態。
   重連(收到活動)→ 回 **INITIAL**(本次活動記入 lastActivity;後續活動才轉 ACTIVE,
   讓不穩定連線需「連續」活動才回到 ACTIVE)。entry 不因斷線被移除——
-  不穩定連線在 TIMEOUT/DISCONNECTED/INITIAL 間震盪,map entry 常駐,
-  避免 rv2 的頻繁 add/remove(含跨 CSM 重新註冊)開銷與名額競態。
+  不穩定連線在 TIMEOUT/DISCONNECTED/INITIAL 之間反覆轉換,map entry 常駐,
+  避免 rv2 的頻繁 add/remove(含跨 CSM 重新註冊)開銷與識別鍵競爭。
   移除只發生於顯式 `unregisterSource()` 或 Manager 解構。
   上層仲裁(如 ControlServer)視 DISCONNECTED sink 為不可選——效果等同 rv2 的移除,但可自癒。
 
@@ -327,8 +329,8 @@ sequenceDiagram
 ### 2.5 Liveness 協定(v0.5.0 改版:CSM Master 集中式)
 
 v0.3.0 的「CSM 互訂 status」與 v0.4.0 的「點對點 NOTIFY_ABNORMAL」在多 CSM 拓撲下
-複雜度爆炸(my_note:3 個 CSM 互為 source/target 時,每個 CSM 要同時管多個入站異常
-與多個出站通知)。v0.5.0 改為**集中式**:
+的連線數與通知路徑隨 CSM 數量以 O(N²) 成長(my_note:3 個 CSM 互為 source/target 時,
+每個 CSM 須同時管理多個入站異常與多個出站通知)。v0.5.0 改為**集中式**:
 
 - 每個 CSM 啟動時向 **CSM Master** 註冊(`/csm_master/register`),
   之後每個 status tick 呼叫 `/csm_master/heartbeat`(`std_srvs/Trigger`)——
@@ -397,7 +399,7 @@ int8   priority
   - Manager 的 service servers(manage / info_req / get_notifications)、master clients
     (register / heartbeat)、status timer:放入 Manager 自建的
     **Reentrant group**(建構子建立),與使用者 node 的預設 group 隔離。
-  - Source/Sink 的資料 pub/sub/service:預設 group(維持與使用者 callback 的互斥直覺)。
+  - Source/Sink 的資料 pub/sub/service:預設 group(維持與使用者 callback 相同的互斥行為,符合 rclcpp 預設慣例)。
 - 文件化硬規則 + debug assert:
   - `registerSource()` / `unregisterSource()` **禁止**在任何 ROS callback 內呼叫。
   - service 模式 `send()` 為阻塞呼叫,禁止在 callback 內呼叫。
@@ -478,8 +480,9 @@ int8   priority
      雙向防 ABA。
   3. `reportActivity()`:先 store `lastActivityNs_`(release)再 CAS 狀態;
      `checkTimeout()`:先 load `packed_`(acquire)再 load 時間戳、算 elapsed,
-     成立才以 snapshot 為 expect 做 CAS——若期間 `reportActivity()` 插隊(epoch 已 +1),
-     CAS 失敗 → 重讀重判 → 判定不成立 → 保持 ACTIVE。消除 stale-TIMEOUT 覆寫。
+     成立才以 snapshot 為 expect 執行 CAS。若期間 `reportActivity()` 已先完成轉移
+     (epoch 已遞增),CAS 失敗,重新讀取後判定不成立,狀態保持 ACTIVE。
+     此機制消除 stale-TIMEOUT 覆寫。
 - 時間來源:`steadyNs()` 由呼叫端注入(參數傳入),elapsed 判定因此可注入假時鐘、完全 deterministic;
   交錯順序類測試(誰先誰後)以壓力迴圈 + TSan 覆蓋。
 
@@ -524,16 +527,17 @@ private:
 - `checkTimeout(now, timeoutNs, disconnectNs)`(v0.5.0 雙閾值):snapshot(state, epoch)
   → 計算 `elapsed = now - lastActivity` → 依序判定(0 = 跳過該項):
   1. `disconnectNs > 0 && elapsed > disconnectNs` 且 state ∈ {INITIAL, ACTIVE, TIMEOUT}
-     → CAS 寫入 DISCONNECTED(優先;變體 C 由此直達休眠)。
+     → CAS 寫入 DISCONNECTED(優先判定;變體 C 由此路徑直接進入休眠)。
   2. 否則 `timeoutNs > 0 && elapsed > timeoutNs` 且 state ∈ {INITIAL, ACTIVE}
      → CAS 寫入 TIMEOUT。
-  期間若 `reportActivity()` 已插隊(epoch+1),CAS 失敗 → 重讀 → 判定不成立 → 保持 ACTIVE。
-  雙閾值取代 v0.4.0 前 CSM 的「TIMEOUT 持續計時」——判定完全內聚,CSM 免追蹤起始時間。
+  期間若 `reportActivity()` 已先完成轉移(epoch 遞增),CAS 失敗,重新讀取後判定不成立,
+  狀態保持 ACTIVE。雙閾值取代 v0.4.0 之前由 CSM 執行的「TIMEOUT 持續計時」判定,
+  逾時判定完整內聚於本類,CSM 不需追蹤 TIMEOUT 起始時間。
 - `reportActivity()`:非 DISCONNECTED 態 → ACTIVE(epoch+1);
   **DISCONNECTED → INITIAL**(epoch+1,重連,v0.3.0;本次活動記入 lastActivity)。
-  重連落在 INITIAL 而非 ACTIVE:單發雜訊不足以宣告復活,需後續活動才轉 ACTIVE;
-  無後續 → INITIAL 依 timeout 回落 TIMEOUT →(Manager)DISCONNECTED,
-  不穩定連線全程震盪於狀態機內,entry 常駐、無 add/remove。
+  重連進入 INITIAL 而非 ACTIVE:單一訊息不足以判定連線恢復,需後續活動才轉 ACTIVE;
+  若無後續活動,INITIAL 依逾時規則回到 TIMEOUT 與 DISCONNECTED。
+  不穩定連線的狀態變化全程發生於狀態機內,entry 常駐,不進行 add/remove。
 - `disconnect()`:CAS 至 DISCONNECTED(**休眠態**,非終態);
   `checkTimeout()` 於 DISCONNECTED 不動作;唯一出路為 `reportActivity()`(→ INITIAL)。
   物件移除(unregister / 解構)是 Manager 層行為,與狀態機解耦。
@@ -566,7 +570,7 @@ private:
 | L11 | 併發 reportActivity vs disconnect 壓力 | 終局為兩者之一的合法結果;無非法狀態、epoch 單調遞增 |
 | L12 | **變體 A**:elapsed 越過兩閾值 | 先 TIMEOUT(> timeout)後 DISCONNECTED(> disconnect);單次呼叫越過兩者 → 直接 DISCONNECTED |
 | L13 | **變體 B**(disconnect=0):elapsed 極大 | 停留 TIMEOUT,永不自動 DISCONNECTED |
-| L14 | **變體 C**(timeout=0):elapsed > disconnect | INITIAL/ACTIVE 直達 DISCONNECTED,TIMEOUT 不可達 |
+| L14 | **變體 C**(timeout=0):elapsed > disconnect | INITIAL/ACTIVE 直接轉入 DISCONNECTED,TIMEOUT 不可達 |
 | L15 | **變體 D**(皆 0):elapsed 極大 | 狀態不變;僅 disconnect() 可轉 DISCONNECTED |
 
 ### 4.6 替代方案評估:tinyFSM(v0.2.0,依 my_note.md)
@@ -822,8 +826,9 @@ public:
   3. `liveness_.reportActivity()` —— 一般態 → ACTIVE;**DISCONNECTED → INITIAL(重連)**,
      訊息照存(資料真實有效);轉移結果記入 log(重連事件可觀測)。
   4. cbMtx_ 下 copy callback → **無鎖呼叫** callback(承襲 rv2 正確做法)。
-  rv2 的「DISCONNECTED 復活」bug 在 r1 不再是 bug:復活是**經由狀態機合法轉移**的
-  受控行為(→ INITIAL,非直跳 ACTIVE),語意集中於 `LivenessState`。
+  rv2 稽核所列「DISCONNECTED 狀態被收訊路徑覆寫」問題在 r1 成為受控行為:
+  狀態恢復必須經由狀態機的合法轉移(進入 INITIAL,而非直接轉 ACTIVE),
+  轉移語意集中於 `LivenessState`。
 - **rate 記錄與計算分離**(v0.4.0,my_note Sink #1/#3):hot path 只做 O(1) 原子遞增;
   計算集中在非公開 **`_calcRate()`**,由 CSM status tick 每週期呼叫一次(friend):
   `rate_.calcHz(now)` → store `cachedRateHz_` → `checkTimeout(雙閾值)` →
@@ -1066,7 +1071,7 @@ struct ManagerOptions {
 | M1 | 正常註冊 | 本地 Source + 遠端 Sink;Handle 有效 |
 | M2 | 重複 controller / 重複 channel(本地) | error,無遠端呼叫(觀察遠端無 Sink) |
 | M3 | 跨 manager 重複(A1 已註冊,A2 同 controller → 同 target) | 遠端拒絕;A2 無殘留 PENDING |
-| M4 | **並發註冊風暴**:16 執行緒同 controller 不同 target | 恰一成功;無覆蓋(rv2 TOCTOU 回歸) |
+| M4 | **並發註冊壓力**:16 執行緒同 controller 不同 target | 恰一成功;無覆蓋(rv2 TOCTOU 回歸) |
 | M5 | target 不存在 → 逾時 | error;PENDING 已清;之後同名可重註冊 |
 | M6 | 遠端接受但 response 丟失(mock 攔截) | 本地 error + UNREGISTER 送出;遠端 Sink 經 TTL 回收(孤兒回歸) |
 | M7 | unregisterSource | 兩側移除;Handle 失效;同名可重註冊 |
@@ -1077,7 +1082,7 @@ struct ManagerOptions {
 | M17 | **master heartbeat**:mock master 有回應/無回應 | 有:tick 正常;無:degraded log 一次、本地判定不受影響;回線後 heartbeat 恢復 + re-register 確認 |
 | M18 | **per-state callback**:registerSourceStateCallback(TIMEOUT)/registerSinkStateCallback(ACTIVE) | 全部同類 entities 轉移各觸發一次;old/new 正確;覆蓋與 nullptr 清除語意 |
 | M19 | **雙閾值休眠**(取代 TIMEOUT-持續邏輯):elapsed 一次越過兩閾值 | entity 直接 DISCONNECTED;CSM 無 per-entry 計時殘留;status 反映 |
-| M10 | Handle 在移除後操作 | error code,無 crash、無殭屍(shutdown 已停 heartbeat/sub) |
+| M10 | Handle 在移除後操作 | error code,無 crash、無殘留活動(shutdown 已停止 heartbeat 與 subscription) |
 | M11 | 黑白名單:雙向、enable/disable、空白名單=全擋 | 承襲 rv2 案例組 |
 | M12 | registerCallback:template 版與字串版、先註冊後建 Sink / 先建後註冊、覆蓋與 unregister | 兩序皆觸發;未註冊 type 回 false |
 | M13 | InfoReq 服務 | 列表正確、含 PENDING 排除策略(僅列 ACTIVE) |
@@ -1147,11 +1152,12 @@ struct MasterOptions {
   不等回應、不重試(one-shot);目標失聯 → log。
 - **CSM 失聯**(tick 掃描 heartbeat lastSeen 逾時):
   該 CSM 全部 entries 視為 DISCONNECTED(master 視角)→ 生成變化集通知其配對 CSM
-  → 保留 CsmRecord(休眠;heartbeat 恢復即復原,對齊 entity 休眠哲學)。
+  → 保留 CsmRecord(休眠;heartbeat 恢復即復原,與 entity 的休眠設計原則一致)。
 - **註冊**:黑白名單檢查 → 建 statusSub + notifyCli → 冪等(重複註冊重建訂閱,支援 CSM 重啟)。
-- Master 自身重啟:CSM heartbeat 持續打(client 端 service 未 ready 即 degraded)→
-  master 回線收到 heartbeat / re-register → 重建 record;第一輪 status 重建 entries 快取
-  (冷啟動後首輪視為基準,不觸發變化通知——避免重啟風暴)。
+- Master 自身重啟:CSM 持續週期性呼叫 heartbeat(service 未 ready 時 CSM 進入
+  degraded mode);master 回線後收到 heartbeat 與 re-register,重建 record;
+  第一輪 status 訊息重建 entries 快取,並以該輪為比對基準,不觸發變化通知,
+  避免重啟後產生大量重複通知。
 
 ### 9.4 單元測試方法與流程
 
@@ -1165,7 +1171,7 @@ struct MasterOptions {
 | CM4 | one-shot:同狀態重複 status | 不重發;恢復 ACTIVE → 再發一次 |
 | CM5 | CSM 失聯:A heartbeat 停 | A 的 entries 生成 DISCONNECTED 變化,B 收通知;A record 保留 |
 | CM6 | A 恢復 heartbeat + status | 通知恢復;冷啟動基準不誤發 |
-| CM7 | master 重啟模擬(重建 CsmMaster) | re-register 後首輪 status 不觸發變化風暴 |
+| CM7 | master 重啟模擬(重建 CsmMaster) | re-register 後首輪 status 不觸發大量變化通知 |
 | CM8 | 未配對 entry(只有 Source 無 Sink) | 僅通知歸屬 CSM 自身側;無 crash |
 | CM9 | 通知目標 service 不可達 | async 失敗 log;tick 不阻塞 |
 
@@ -1207,7 +1213,7 @@ public:
     template<typename msgT> bool waitForMessage(msgT& out, int64_t timeoutNs = 0) const;
     ControlSignalState state() const;
     std::optional<msg::r1::ControlSignalInfo> info() const;
-    // callback 註冊統一走 Manager::registerCallback(型別層級);Handle 不提供,避免生命週期糾纏
+    // callback 註冊統一經由 Manager::registerCallback(型別層級);Handle 不提供,避免生命週期耦合
 };
 ```
 
@@ -1215,7 +1221,8 @@ public:
 
 - 所有操作先 `lock()`;失敗回「失效語意」(state → DISCONNECTED、send → DISCONNECTED、read → false)。
 - `send<msgT>` 於 debug build 以 `msgType()` 驗證型別,不符 assert;release 回錯誤碼。
-- Handle 不延長物件生命週期(weak),Manager erase 即失效 —— 殭屍問題根除。
+- Handle 不延長物件生命週期(weak_ptr),Manager erase 後即失效,
+  物件殘留問題因此不會發生。
 
 ### 10.4 單元測試方法與流程
 
@@ -1254,9 +1261,9 @@ public:
 | I6 target 重啟 | kill B node → 重啟 B(空 Manager)| master 失聯→回線流程;B 已無 entry → A 需 unregister + 重新註冊;驗證 A 側顯式 re-register 流程 |
 | I11 status 對帳 | 訂閱兩側 `<name>/status`,對照 InfoReq 與實際狀態 | entries/state/rate 一致;斷線期間 DISCONNECTED 可見 |
 | I12 **master 通報鏈**(v0.5.0) | A 停止發送 → B 側 Sink TIMEOUT → master 偵測變化 | master 對 A、B 各推 get_notifications 恰一次;A 的 `setNotificationCallback` 收到、清單正確;恢復後再斷 → 再一次 |
-| I14 **master 失聯 degraded**(v0.5.0) | kill master;A↔B 資料照跑 | 兩側本地判定不受影響;degraded log;master 回線 → heartbeat/通知恢復、無誤發風暴 |
+| I14 **master 失聯 degraded**(v0.5.0) | kill master;A、B 之間資料傳輸持續 | 兩側本地判定不受影響;degraded log;master 回線後 heartbeat 與通知恢復,無大量誤發通知 |
 | I13 waitForMessage 端到端 | 使用者執行緒 `handle.waitForMessage(out, 1s)`,期間 A 發送 | 即時返回;斷流時 ≈ 1s 逾時 false;unregister 中斷等待 false |
-| I7 註冊風暴 | 兩個 node 並發向同 target 註冊 100 組(部分同名) | 唯一性不變量成立;成功數 = 唯一名數;無殘留 PENDING |
+| I7 並發註冊壓力 | 兩個 node 並發向同 target 註冊 100 組(部分同名) | 唯一性不變量成立;成功數 = 唯一名數;無殘留 PENDING |
 | I8 response 丟失 | MockManagerNode:接受但不回覆 | A 逾時 error;B(真 Manager 版場景)Sink TTL 回收 |
 | I9 惡意/錯誤 payload | MockSourceNode 以錯誤型別發往 channel | Sink 不 crash;型別安全(DDS 層擋掉或 read 型別檢查) |
 | I10 壓力 + sanitizer | I1 拉長 × ASan/TSan build | 無 leak / race 報告 |
@@ -1271,7 +1278,7 @@ public:
 | Build | 目標 |
 |---|---|
 | ASan + LSan | H6 / K10 / M10 / I10(UAF 與 leak 回歸) |
-| TSan | LivenessState 全部並發測試、M4 註冊風暴 |
+| TSan | LivenessState 全部並發測試、M4 並發註冊壓力 |
 | UBSan | 全單元測試 |
 
 ---
@@ -1284,10 +1291,10 @@ public:
 2. **priority 語意**:1–94 頻帶與 e-stop=94 約定是否原樣承襲?`controller_priority_type`
    降為文件約定是否可行(rv2_server_control 目前讀該欄位)?
 3. **msg/srv 放置**:暫置 `rv2_interfaces/msg/r1/` vs 直接新開 `r1_interfaces` package?
-   (migrate 成本 vs 相依糾纏)
+   (migrate 成本與相依耦合的取捨)
 4. **status 對帳(reconciliation)**:I6 缺口——target 重啟後 A 側 entry 休眠,
    但 B 已無對應 Sink,不會自動復原。v0.5.0 起 master 持全域 entries 快取,
-   是「發現配對缺失」的天然位置:master 偵測「Source 存在、配對 Sink 消失」→
+   是偵測配對缺失的適當位置:master 偵測「Source 存在、配對 Sink 消失」→
    通知 A(或代為觸發 re-REGISTER)。機制歸 master 或 CSM、自動或人工,未決。
 8. **rate window 粒度**:`rateWindowNs` 目前為 Manager 全域(ManagerOptions);
    高頻(50Hz joy)與低頻(1Hz)通道並存時是否需 per-entity 配置(Info 欄位)?
