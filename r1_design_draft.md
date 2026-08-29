@@ -1,4 +1,4 @@
-# R1 Control Signal Transport 程式設計規劃書(草稿 v0.6.0)
+# R1 Control Signal Transport 程式設計規劃書(草稿 v0.6.1)
 
 > 狀態:初版草稿,供討論。未決事項集中在第 11 章。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
@@ -8,14 +8,15 @@
 
 | 版本 | 摘要 |
 |---|---|
-| v0.1.0 | 初版:設計概念、主架構、7 類別章節、整合測試規劃;經一輪 adversarial review 修正 |
-| v0.2.0 | 依 my_note.md:UNKNOWN 改名 INITIAL(查無 entry 語意改以 `std::optional` 表達);新增 §4.6 tinyFSM 評估(結論:不採用,維持自製 CAS 狀態機) |
-| v0.3.0 | 依 my_note.md(RAII、Sink timeout/disconnect 設計):RAII 總則(§1.5);DISCONNECTED 改為可重連休眠態,新增 → INITIAL 轉移(§2.3/§4);heartbeat 升級為雙向 **ManagerStatus** 狀態發布、Manager 單一 timer(§2.5);Sink 內建 data-rate 統計、收訊先記錄再 dispatch(§6);callback API 改為 `registerCallback`(字串鍵 + template 雙層,§8);整合場景與未決事項更新 |
-| v0.4.0 | 依 my_note.md(並發原則、Source/Sink/CSM design detail):並發原則 §1.6(atomic 優先、shared_mutex 讀寫分離);**Source 對稱 rate 統計**(send 記錄呼叫時間/次數);rate **記錄(hot path)與計算(CSM tick 驅動之非公開 `_calcRate()`,friend)分離**,per-entity 狀態快取;Sink 新增 **`waitForMessage()`** 阻塞等待 API(condition variable + 序號);`ControlSignalManage.srv` 增 **NOTIFY_ABNORMAL** op,異常狀態邊緣觸發主動通報對向 CSM |
+| v0.6.1 | 修正 mermaid render 失敗:附錄 A 時序圖 Note 文字內 4 處半形分號(mermaid 語句分隔符)改為全形;以 mermaid-cli 驗證全稿 15 個圖均可 render |
 | v0.6.0 | 依 my_note.md 撰寫準則 #4:新增**附錄 A 應用情境**——三種拓撲(1:1、1:N、N:1)× 五種情境(註冊流程、逾時、Source CSM crash、Sink CSM crash、master crash),以 topic / service 模式分章,含時序圖、流程圖與函數呼叫流程。情境分析暴露一項設計缺口並補完:**休眠 entry 重註冊規則**(§8.3、M20)——Source CSM crash 重啟後,同 controller/channel/type 的 REGISTER 沿用休眠 Sink 轉 INITIAL,不需先 unregister |
 | v0.5.2 | 新增 §0.1 術語定義;「殭屍」「風暴」等慣用詞恢復使用(依定義先行原則,見 §0.1);內容與設計無變更 |
 | v0.5.1 | 依 my_note.md 文件撰寫準則:全文文風修訂——移除口語與比喻用語(改以標準技術術語敘述)、消除過度精簡的語句、統一測試場景命名;內容與設計無變更 |
 | v0.5.0 | 依 my_note.md(FSM #4/#5、timeout 機制、CSM Master):**timeout 改雙獨立閾值**(同一 elapsed 比 `timeout_ns` 與 `disconnect_timeout_ns`,皆可 0 = 停用;四種 FSM 變體圖 §2.3.1);**per-state 轉移 callback**(entity 層 + CSM 註冊 API);rolling window **大小可配置**(N-bucket 環形);`getStatus()` 整合查詢;**CSM Master 集中式通知架構**(新 §9)取代 v0.3.0 互訂 status link 與 v0.4.0 點對點 NOTIFY_ABNORMAL——CSM 向 master 註冊 + heartbeat,master 訂閱各 CSM status、以 controller_name 配對 Source-Sink、one-shot 通知 `/<csm_name>/get_notifications` |
+| v0.4.0 | 依 my_note.md(並發原則、Source/Sink/CSM design detail):並發原則 §1.6(atomic 優先、shared_mutex 讀寫分離);**Source 對稱 rate 統計**(send 記錄呼叫時間/次數);rate **記錄(hot path)與計算(CSM tick 驅動之非公開 `_calcRate()`,friend)分離**,per-entity 狀態快取;Sink 新增 **`waitForMessage()`** 阻塞等待 API(condition variable + 序號);`ControlSignalManage.srv` 增 **NOTIFY_ABNORMAL** op,異常狀態邊緣觸發主動通報對向 CSM |
+| v0.3.0 | 依 my_note.md(RAII、Sink timeout/disconnect 設計):RAII 總則(§1.5);DISCONNECTED 改為可重連休眠態,新增 → INITIAL 轉移(§2.3/§4);heartbeat 升級為雙向 **ManagerStatus** 狀態發布、Manager 單一 timer(§2.5);Sink 內建 data-rate 統計、收訊先記錄再 dispatch(§6);callback API 改為 `registerCallback`(字串鍵 + template 雙層,§8);整合場景與未決事項更新 |
+| v0.2.0 | 依 my_note.md:UNKNOWN 改名 INITIAL(查無 entry 語意改以 `std::optional` 表達);新增 §4.6 tinyFSM 評估(結論:不採用,維持自製 CAS 狀態機) |
+| v0.1.0 | 初版:設計概念、主架構、7 類別章節、整合測試規劃;經一輪 adversarial review 修正 |
 
 ### 0.1 術語定義
 
@@ -1490,9 +1491,9 @@ sequenceDiagram
     M->>S: get_notifications(T 側 A、B: DISCONNECTED)
     Note over S: Source A、B 注入 → TIMEOUT → 休眠
 
-    Note over T: 重啟:register(M);manager 為空
+    Note over T: 重啟:register(M)；manager 為空
     T->>M: status(空)
-    Note over M: T 回線;S 側 Source 休眠、<br/>T 側無配對 Sink(配對缺失)
+    Note over M: T 回線；S 側 Source 休眠、<br/>T 側無配對 Sink(配對缺失)
     Note over S: 自動復原不可能——需 App 或對帳機制<br/>unregister + registerSource 重建(§12 #4)
 ```
 
@@ -1509,7 +1510,7 @@ sequenceDiagram
     participant M as Master(crash 後重啟)
 
     Note over M: crash
-    Note over S,T: heartbeat 無回應 → degraded mode(§0.1)<br/>log 一次;tick 與資料傳輸照常
+    Note over S,T: heartbeat 無回應 → degraded mode(§0.1)<br/>log 一次；tick 與資料傳輸照常
     S->>T: data(A)(不經 M,不受影響)
     Note over T: 本地雙閾值判定照常運作
     Note over S: topic Source 失去 master 通知<br/>維持既有狀態(§12 #1 已知取捨)
@@ -1643,7 +1644,7 @@ sequenceDiagram
     Note over Src: future.wait_for(timeout_ns) 逾時
     Note over Src: state → TIMEOUT<br/>remove_pending_request()
     Src-->>App: SendResult::TIMEOUT
-    Note over Src: 後續 tick 依雙閾值可續轉 DISCONNECTED;<br/>Sink 側自身 elapsed 逾時判定同 topic 模式
+    Note over Src: 後續 tick 依雙閾值可續轉 DISCONNECTED；<br/>Sink 側自身 elapsed 逾時判定同 topic 模式
 ```
 
 #### A.2.3 拓撲與 crash 情境(service 模式差異說明)
