@@ -83,3 +83,14 @@ Following are the draft design for the CSM Master service:
 1. 使用正規的專業術語來敘述，避免使用形容詞、譬喻和口語化。
 2. 可以盡量詳細的敘述，不要過於精簡，這會讓閱讀很吃力。
 3. 語句要通順，並使用plugins來修飾文筆，讓文章看起來像是人寫的。
+4. 撰寫多個應用情境並繪製時序圖、流程圖、呼叫函數流程與說明
+   - 一對一CSM，Source端的CSM註冊Source A, B，Target CSM生成Sink A, B, 兩者不同message Type
+   - 一對多CSM，Source端的CSM註冊Source A, B，Target A CSM生成Sink A, Target B CSM生成Sink B
+   - 多對一CSM，Source A CSM註冊Source A，Source B CSM註冊Source B，Target CSM生成Sink A, B
+   - 上述的CSM組合中包含以下應用情境:
+      - Source註冊到Sink生成的完整流程
+      - Source send interval > timeout和disconnect時的系統反應
+      - Source CSM crash時的系統反應
+      - Sink CSM crash時的系統反應
+      - CSM master crash時的系統反應
+   - 分別使用topic模式與service模式進行上述的CSM組合與應用情境描述，並以模式為主要章節區別
