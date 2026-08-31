@@ -73,6 +73,12 @@ Following are the draft design for the CSM Master service:
 5. For registered CSMs, master should subscribe to their status topics, identify the Source-Sink pairs and their belonging CSM, find the state changed pairs and send notification requests for both belonging CSMs. The notification sending strategy should be one shot, so master should record all entities from all CSMs, send notification to related CSMs only if belonging/paired entity state changed. For example, CSM A have a Source, and target CSM B have a paired Sink, whether Source or Sink state changed, both CSM A and CSM B will receive notifications from CSM master.
 
 
+## Project Design Scope
+The priority field in ControlSignalInfo.msg is required, and it will not affect the control signal transport. The ControlSignalInfo.msg should be general for future used, not just for control server or rv2 project. So for the design concept, it should not be restrict to the control server design, or rv2 system. E.g. the priority should not comment as range 1-94 (the control server ). Our design is 0-100, and 0 for invalid and 100 for highest priority.
+For all files, do not writing too much comments, the comment need to be brief and clear. For detial information, please write documents.
+Please review current draft, check if there're some control server or rv2 system related content, if so, please remove it and make it general.
+
+
 ## Request for New Design flow
 1. For draft, use git control for drafting. Add commitment for every modification, and given a draft version, e.g. v0.1.0 for the very first version.
 2. Please commit this draft for the first version, then start implementing the new design flow.
