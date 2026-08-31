@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(草稿 v0.7.0)
+# R1 Control Signal Transport 程式設計規劃書(v1.0.0)
 
-> 狀態:初版草稿,供討論。未決事項集中在第 11 章。
+> 狀態:正式版(v1.0.0)。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:草稿以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.0.0 | **正式版**。最終審查(5 視角 59 項確認發現)修正:v0.5.0 前殘留清除(LinkMonitor、終態 DISCONNECTED、TIMEOUT-持續斷線語意、互訂 status 敘述、per-entity heartbeat 敘述);章節引用與清單編號修正(§12 重排、附錄 11 處 #4→#3);設計補完:`CsmHeartbeat.srv` 取代匿名 Trigger(request 攜帶 csm_name)、休眠重註冊條件擴充(TIMEOUT 適用、加入 mode 比對、本地側完整兩階段語意)、topic Source 於 tick 跳過自身逾時檢查(無自主活動來源)、對側 ACTIVE 通知連續注入兩次達 ACTIVE、§2.5.2 服務欄位定義、驗證規則 6(target_manager_name)、Factory errOut、ManagerTestAccess friend 宣告、MsgCb 別名、測試檔配置補全、測試表重排;§12 新增 #8(使用者層 forced disconnect API) |
 | v0.7.0 | 依 my_note.md(Project Design Scope):**通用化**——`priority` 改為通用欄位 **0–100**(0 = invalid 拒絕註冊、100 = 最高),僅攜帶轉發、不影響傳輸行為,語意由上層消費者定義,移除特定系統之頻帶約定(1–94、e-stop、requester band);新增 §1.1 通用性原則與 §1.7 程式碼註解原則(註解簡短,細節寫文件);全稿去除上層系統專屬敘述;未決事項 #2(priority 語意)裁決結案並重新編號 |
 | v0.6.2 | 附錄 A 全組合完整化:六種「模式 × 拓撲」組合(topic/service × 1:1、1:N、N:1)之五種情境均改為自含完整描述(各含時序圖與說明),移除差異表式帶過;A.2 依組合重分章(A.2.1–A.2.3);設計無變更 |
 | v0.6.1 | 修正 mermaid render 失敗:附錄 A 時序圖 Note 文字內 4 處半形分號(mermaid 語句分隔符)改為全形;以 mermaid-cli 驗證全稿 15 個圖均可 render |
@@ -63,7 +64,7 @@
 | 使用者持有物件 | `getSource()` 回傳 `shared_ptr`(殭屍物件與 use-after-free 風險,§0.1) | 回傳 `SourceHandle`/`SinkHandle`(內部 `weak_ptr`) |
 | 狀態機 | 5 態(UNKNOWN/ACTIVE/LOW_FREQ/TIMEOUT/DISCONNECTED),轉移散落各處、relaxed atomics、可被覆寫 | **4 態**(INITIAL/ACTIVE/TIMEOUT/DISCONNECTED;移除 LOW_FREQ、UNKNOWN 改名 INITIAL);集中於 `LivenessState` 類,CAS 轉移表;DISCONNECTED 為**休眠態**,重連 → INITIAL(v0.3.0,§2.3) |
 | 斷線後 entry | DISCONNECTED 即 erase(不穩定連線反覆 add/remove) | entry **保留**於 DISCONNECTED,重連自動復原;僅顯式 unregister / 解構移除(§2.5) |
-| Keep-alive | 每個 channel 一條 `_keep_alive` topic + 每個 Sink 一個 timer | **雙向 ManagerStatus 發布**:每個 Manager 一條 `<name>/status` topic(含管理清單與各 entry 狀態),互為 link liveness 依據(§2.5) |
+| Keep-alive | 每個 channel 一條 `_keep_alive` topic + 每個 Sink 一個 timer | **ManagerStatus 發布 + CSM Master 集中式**(v0.5.0):每個 Manager 一條 `<name>/status` topic(含管理清單與各 entry 狀態),唯一訂閱者為 CSM Master,CSM 之間互不訂閱;跨 CSM 活性經 master one-shot 通知(§2.5/§9) |
 | 頻率監控 | `send_freq_hz` 宣告值 + LOW_FREQ 推導(從未驅動決策) | **Source/Sink 對稱實測 rate**(v0.4.0):hot path 只記錄(時間+次數),計算集中於 CSM tick 呼叫的非公開 `_calcRate()`;隨 status 發布(§5/§6) |
 | 讀取模式 | `read()` 輪詢 | `read()` 輪詢 + **`waitForMessage()` 阻塞等待**(condition variable,§6) |
 | 異常傳遞 | 無(各側獨立判定,對向不知情) | **CSM Master 集中式**(v0.5.0,§9):master 訂閱各 CSM status、配對 Source-Sink、狀態變化 one-shot 通知雙方 CSM;CSM 之間不互訂、不直發 |
@@ -72,7 +73,7 @@
 | Sink callback API | `setSinkMsgCallback<msgT>(cb)`(type_index 鍵) | `registerCallback` 雙層:template 型別安全版 + 字串鍵型別抹除版;鍵統一為 type 字串(§8) |
 | RAII | shutdown 語意混雜、解構不保證釋放順序 | 全元件 RAII(§1.5):解構即完整釋放;Manager 解構自動 best-effort 反註冊 |
 | 註冊協定 | 單向一次性;TOCTOU、無 rollback、無 unregister | **兩階段(佔位 → 確認)** + 失敗 rollback + 顯式 `unregisterSource()` |
-| ControlSignalInfo | 12 欄位、9 條驗證規則 | **8 欄位、5 條規則**(§3) |
+| ControlSignalInfo | 12 欄位、9 條驗證規則 | **8 欄位、6 條規則**(§3) |
 | callback lambda | 捕獲裸 `this` | 一律捕獲 `weak_ptr`(`enable_shared_from_this`) |
 | Callback group | 全部落在 node 預設 MutuallyExclusive group(未文件化) | 明確策略:Manager 服務使用專屬 Reentrant group;文件化限制(§2.6) |
 | 逾時檢查 | 被動 lazy + 多處觸發 | 被動 lazy 保留,但唯一寫入路徑經 `LivenessState`(§4) |
@@ -84,11 +85,11 @@
 |---|---|
 | `registerSource` TOCTOU、`operator[]` 靜默覆蓋(🔴) | 兩階段註冊:先插入 PENDING 佔位(原子佔用兩個鍵),遠端確認後轉正;任何插入路徑禁止 `operator[]`,一律 `emplace` + 檢查 |
 | 裸 `this` 捕獲 → UAF(🔴) | `enable_shared_from_this` + lambda 捕獲 `weak_ptr`,callback 先 `lock()` 失敗即 return |
-| stale TIMEOUT/LOW_FREQ 蓋掉新 ACTIVE、無法自癒(🟡) | `LivenessState::checkTimeout()` 以 `compare_exchange` 帶 epoch 檢查;活動時間戳與狀態同字打包(§4) |
+| stale TIMEOUT/LOW_FREQ 蓋掉新 ACTIVE、無法自癒(🟡) | `LivenessState::checkTimeout()` 以 `compare_exchange` 帶 epoch 檢查(每次成功轉移 epoch+1,雙向防 ABA);狀態與 epoch 同字打包,活動時間戳為獨立 atomic(§4) |
 | relaxed ordering 可見性(🟡) | `LivenessState` 內統一 acq/rel;外界只透過其 API 存取 |
-| DISCONNECTED 非真終態(🟡) | 轉移表強制:DISCONNECTED 無出邊;`reportActivity()` 對 DISCONNECTED 回 false |
-| 分散式註冊非原子、孤兒 Sink 永久佔位(🟡) | rollback:本地失敗時發 best-effort UNREGISTER;Sink 側 PENDING 有 TTL,未收到首筆資料/確認逾時自動回收 |
-| 殭屍 Sink:自 map 移除後仍持續發送心跳(🟡) | 使用者無法持有 `shared_ptr`;Manager 移除時立即 `shutdown()`(釋放 rclcpp entities),heartbeat 與 subscription 隨之停止 |
+| DISCONNECTED 非真終態(🟡) | 轉移集中於 `LivenessState` CAS 轉移表:DISCONNECTED 為**休眠態**(v0.3.0),唯一出邊為 `reportActivity()` → INITIAL(受控重連);`checkTimeout()` 於 DISCONNECTED 不動作;移除僅於顯式 unregister / 解構(§2.3/§4.4) |
+| 分散式註冊非原子、孤兒 Sink 永久佔位(🟡) | rollback:本地失敗時發 best-effort UNREGISTER;未轉正的 Sink PENDING 有 TTL 逾時回收;response 丟失致遠端已轉正的孤兒 Sink 由雙閾值休眠吸收,可經 UNREGISTER 移除或休眠重註冊沿用(§8.3) |
+| 殭屍 Sink:自 map 移除後仍持續發送心跳(🟡) | 使用者無法持有 `shared_ptr`;Manager 移除時立即 `shutdown()`(釋放 rclcpp entities),transport 隨之停止;r1 亦無 per-entity heartbeat 可殘留(liveness 為 Manager 級 status 發布,§2.5) |
 | 同 node callback 內呼叫 `send()`/`registerSource()` 必然 false-timeout(🟡) | Manager 服務/client 用專屬 Reentrant group;`registerSource` 文件化為「禁止在任何 callback 內呼叫」+ debug assert |
 | debug log 無鎖讀 map(🟡 UB) | log 在鎖內取 snapshot |
 | `_onReg` 之尚未觸發的 TOCTOU(⚪) | 同兩階段插入,結構性消除 |
@@ -116,8 +117,7 @@ ControlSignalManager ──(唯一擁有 shared_ptr)──► Source / Sink 實�
 | 元件 | 建構取得 | 解構釋放 |
 |---|---|---|
 | Source / Sink | rclcpp transport entities、LivenessState | entities 重置(等效 `shutdown()`;`shutdown()` 僅為提前釋放的冪等捷徑,解構為最終保障) |
-| Manager | 服務、status pub、timer、callback group | 依序:timer → 服務 → 對所有 ACTIVE Source 發 **best-effort UNREGISTER**(通知 targets)→ 釋放全部 entries |
-| LinkMonitor | heartbeat 訂閱 | 訂閱釋放(controllers 集合空時即時解構,§8.3) |
+| Manager | 服務、status pub、tick timer、callback group、master 端 clients(register / heartbeat / notify 接收 server,v0.5.0) | 依序:timer → 服務與 clients → 對所有 ACTIVE Source 發 **best-effort UNREGISTER**(通知 targets)→ 釋放全部 entries |
 | Handle | 無資源(weak_ptr + 字串) | 無 |
 
 - 禁止裸 `new`/手動 delete;一律 `std::shared_ptr`/`std::unique_ptr`/值語意。
@@ -175,6 +175,8 @@ test/r1/
     test_factory.cpp
     test_transport.cpp         # Source/Sink(經 Manager 之 friend 測試通道)
     test_manager.cpp           # 跨 CSM 協定
+    test_csm_master.cpp        # CsmMaster(§9.4 CM1–CM9,mock CSM 裸 node)
+    test_handles.cpp           # Handle(§10.4 H1–H6)
 ```
 
 介面定義(暫置 `rv2_interfaces`,migrate 時搬移):
@@ -187,7 +189,9 @@ rv2_interfaces/srv/r1/ControlSignalManage.srv    # op = REGISTER | UNREGISTER(v0
 rv2_interfaces/srv/r1/ControlSignalInfoReq.srv
 rv2_interfaces/srv/r1/CsmRegister.srv            # CSM → master 註冊(v0.5.0)
 rv2_interfaces/srv/r1/CsmNotify.srv              # master → CSM 狀態變化通知(v0.5.0)
-# master heartbeat 用 std_srvs/srv/Trigger,不另定義
+rv2_interfaces/srv/r1/ControlSignalJoy.srv       # service 模式資料通道(隨型別註冊配套,§7)
+rv2_interfaces/srv/r1/ControlSignalTwist.srv
+rv2_interfaces/srv/r1/CsmHeartbeat.srv           # CSM → master 心跳(req 攜帶 csm_name;std_srvs/Trigger 之 request 為空,master 無法識別呼叫者,故自訂)
 ```
 
 新增執行檔(v0.5.0):`csm_master_node`(獨立 node,host `r1::CsmMaster`,§9)。
@@ -219,8 +223,8 @@ graph TB
     subgraph Master["CSM Master 節點(v0.5.0,§9)"]
         CM["r1::CsmMaster"]
     end
-    MA -->|"register + heartbeat(Trigger)"| CM
-    MB -->|"register + heartbeat(Trigger)"| CM
+    MA -->|"register + heartbeat"| CM
+    MB -->|"register + heartbeat"| CM
     MA -->|"status: mgrA/status"| CM
     MB -->|"status: mgrB/status"| CM
     CM -->|"get_notifications(狀態變化 one-shot)"| MA
@@ -263,7 +267,7 @@ stateDiagram-v2
   CSM 不再需要 per-entity 追蹤 TIMEOUT 起始時間,判定全部內聚於 `LivenessState::checkTimeout()`。
   兩閾值皆支援 **`0` = 停用**(§2.3.1 變體);皆啟用時仍要求 `disconnect > timeout`(§3.2)。
 - 「forced disconnect」(my_note Timeout #4):`disconnect()` API 為獨立轉移來源
-  (CSM 管理決策、使用者強制),與閾值機制並存;所有變體皆保留此邊。
+  (CSM 內部管理決策;使用者層 API 尚未開放,見 §12 #8),與閾值機制並存;所有變體皆保留此邊。
 - DISCONNECTED 改為**休眠態**(v0.3.0,my_note FSM #3):不再是無出邊終態。
   重連(收到活動)→ 回 **INITIAL**(本次活動記入 lastActivity;後續活動才轉 ACTIVE,
   讓不穩定連線需「連續」活動才回到 ACTIVE)。entry 不因斷線被移除——
@@ -345,7 +349,7 @@ sequenceDiagram
     alt 遠端拒絕 / 逾時
         Note over MA: 移除 PENDING 佔位
         MA--)MB: ControlSignalManage(UNREGISTER)(best-effort,逾時情境)
-        Note over MB: Sink PENDING TTL 逾期未見資料 → 自動回收
+        Note over MB: 未轉正的 Sink PENDING 逾時回收；<br/>已轉正的孤兒 Sink 由休眠機制吸收(§8.3)
         MA-->>U: error
     end
 ```
@@ -362,7 +366,7 @@ v0.3.0 的「CSM 互訂 status」與 v0.4.0 的「點對點 NOTIFY_ABNORMAL」�
 每個 CSM 須同時管理多個入站異常與多個出站通知)。v0.5.0 改為**集中式**:
 
 - 每個 CSM 啟動時向 **CSM Master** 註冊(`/csm_master/register`),
-  之後每個 status tick 呼叫 `/csm_master/heartbeat`(`std_srvs/Trigger`)——
+  之後每個 status tick 呼叫 `/csm_master/heartbeat`(`srv/r1/CsmHeartbeat`,request 攜帶 csm_name)——
   CSM 藉 response 確認 master 在線;master 藉請求到達確認 CSM 存活。
 - CSM 照常發布 `<name>/status`(§2.5.1);**唯一訂閱者為 master**,CSM 之間互不訂閱。
 - Master 以 `controller_name`(全系統唯一)配對 Source-Sink,任一側狀態變化 →
@@ -371,7 +375,7 @@ v0.3.0 的「CSM 互訂 status」與 v0.4.0 的「點對點 NOTIFY_ABNORMAL」�
 | 對象 | 機制 | 判定 |
 |---|---|---|
 | Sink | **資料驅動**(主):任何收訊 → `reportActivity()`;master 通知(輔) | `checkTimeout()` 雙閾值(§2.3);通知 → 加速判定 / 觀測對側 |
-| Source(topic 模式) | **master 通知**:配對 Sink 異常 / 對向 CSM 失聯 → 注入 | 通知內容映射:對側 TIMEOUT/DISCONNECTED → 本地 `checkTimeout()` 加速;CSM 失聯 → 該 CSM 全部配對 entity 注入 TIMEOUT |
+| Source(topic 模式) | **master 通知**:配對 Sink 異常 / 對向 CSM 失聯 → 注入;自身 elapsed 不參與判定(§5.3,tick 跳過其 checkTimeout) | 通知內容映射:對側 TIMEOUT/DISCONNECTED → 本地 `checkTimeout()` 加速;CSM 失聯 → 該 CSM 全部配對 entity 注入 TIMEOUT |
 | Source(service 模式) | service response(成功 → activity)+ master 通知 | response 逾時記 TIMEOUT;其餘同上 |
 | 兩者 | 自身 elapsed 雙閾值(§2.3) | TIMEOUT / DISCONNECTED(休眠,不移除) |
 | 重連 | 恢復收訊 / master 通知對側復原 | DISCONNECTED → INITIAL → (活動) → ACTIVE |
@@ -418,6 +422,53 @@ int8   priority
 - 異常偵測與通知職責(v0.5.0)**上移至 master**:CSM 只發 status,
   變化比對、配對、one-shot 通知全在 master(§9);CSM 被動接收 `get_notifications`。
 
+#### 2.5.2 服務介面欄位定義(v1.0.0)
+
+`srv/r1/ControlSignalManage.srv`:
+
+```
+int8 op                          # 0 = REGISTER, 1 = UNREGISTER(常數定義於 srv)
+string source_manager_name       # 發起方 Manager 名
+r1/ControlSignalInfo info        # REGISTER:完整描述子;UNREGISTER:僅需 controller_name 有效
+---
+int8 response                    # SUCCESS / REJECTED / ERROR(常數)
+string reason                    # 失敗原因;成功時為空
+```
+
+`srv/r1/ControlSignalInfoReq.srv`:
+
+```
+---
+int8 response
+r1/ControlSignalInfo[] source_list
+r1/ControlSignalInfo[] sink_list
+```
+
+`srv/r1/CsmRegister.srv`:
+
+```
+string csm_name
+---
+int8 response
+string reason
+```
+
+`srv/r1/CsmHeartbeat.srv`:
+
+```
+string csm_name                  # master 以此定位 CsmRecord(Trigger 無法攜帶身分,故自訂)
+---
+bool success                     # 恆 true;response 到達本身即為 master 在線證明
+```
+
+`srv/r1/CsmNotify.srv`:
+
+```
+r1/EntryStatus[] entries         # 狀態變化清單;EntryStatus.manager_name 標示歸屬
+---
+int8 response
+```
+
 ### 2.6 執行緒模型
 
 - 本庫**不建立任何執行緒**(承襲 rv2);一切依附 node executor。
@@ -451,12 +502,12 @@ int8   priority
 | `type` | string | Factory 型別鍵(`"joy"` / `"twist"` / `"string"` / …) |
 | `priority` | int8 | **通用欄位,0–100**:0 = invalid(註冊拒絕),100 = 最高優先,值大者優先。僅攜帶轉發,**不影響傳輸行為**;語意由上層消費者自行定義(v0.7.0,不再綁定特定系統的頻帶約定) |
 | `timeout_ns` | int64 | data-rate timeout 閾值;**0 = 停用**(v0.5.0,§2.3.1)。service 模式亦為 response 等待上限(0 時 service 模式拒絕註冊,見 §3.2 規則 5) |
-| `disconnect_timeout_ns` | int64 | 0 = 永不自動移除;否則須 > `timeout_ns` |
+| `disconnect_timeout_ns` | int64 | disconnect timeout 閾值;**0 = 停用**(永不自動轉入 DISCONNECTED,§2.3.1 變體 B);兩者皆 > 0 時須 > `timeout_ns`(§3.2 規則 5) |
 
 刪除(相對 rv2):`send_freq_hz`(從未驅動狀態機)、`use_keep_alive` / `keep_alive_interval_ns`
 (改為 Manager 參數)、`controller_priority_type`(類別上限屬約定,降為文件層)。
 
-### 3.2 驗證規則(5 條)
+### 3.2 驗證規則(6 條)
 
 `validateControlSignalInfo(info)` → `{bool valid; std::string error;}`
 
@@ -467,6 +518,8 @@ int8   priority
 5. `timeout_ns ≥ 0`、`disconnect_timeout_ns ≥ 0`(0 = 各自停用,§2.3.1);
    兩者皆 > 0 時 `disconnect_timeout_ns > timeout_ns`;
    `mode == service` 時 `timeout_ns > 0`(response 等待上限不可停用)。
+6. `registerSource` 路徑:`target_manager_name` 非空;
+   `_onManage(REGISTER)` 側另驗證其等於本 Manager 名(mis-route 防護)。
 
 ### 3.3 單元測試方法與流程
 
@@ -485,8 +538,9 @@ int8   priority
 | V6 | `priority` ∈ {1, 100} | valid(邊界) |
 | V7 | `timeout_ns = 0`(topic 模式) | valid(停用,v0.5.0);`mode = service` 時 invalid |
 | V8 | `disconnect_timeout_ns = timeout_ns`(皆 > 0) | invalid(須嚴格大於) |
-| V10 | `timeout_ns = 0, disconnect_timeout_ns > 0`(topic) | valid(變體 C) |
 | V9 | `disconnect_timeout_ns = 0` | valid(停用) |
+| V10 | `timeout_ns = 0, disconnect_timeout_ns > 0`(topic) | valid(變體 C) |
+| V11 | `target_manager_name = ""`(registerSource 路徑) | invalid |
 
 ---
 
@@ -575,7 +629,7 @@ private:
 
 - **框架**:gtest,純邏輯 + 假時鐘(手動遞增的 int64)。並發測試用 `std::thread`。
 - 流程:
-  1. **轉移表窮舉**:4 態 × 3 操作全組合,驗證合法轉移與拒絕(含 DISCONNECTED 終態性)。
+  1. **轉移表窮舉**:4 態 × 3 操作全組合,驗證合法轉移與拒絕(含 DISCONNECTED 休眠語意:checkTimeout() 不動作,唯一出路為 reportActivity() → INITIAL)。
   2. **逾時語意**:INITIAL 自建構起算逾時;ACTIVE 依 lastActivity;邊界 `elapsed == timeout` 不觸發。
   3. **stale-TIMEOUT 回歸測試**(對應 rv2 稽核發現):執行緒 A 進入 checkTimeout 且已完成
     snapshot(以 hook / 兩步 API 或高頻壓力重現),執行緒 B reportActivity → 斷言最終態 ACTIVE。
@@ -587,7 +641,7 @@ private:
 | 案例 | 內容 | 預期 |
 |---|---|---|
 | L1 | 初始 | INITIAL |
-| L2 | reportActivity | → ACTIVE, true |
+| L2 | reportActivity | → ACTIVE(回傳 ACTIVE) |
 | L3 | checkTimeout(elapsed > t) | ACTIVE → TIMEOUT |
 | L4 | TIMEOUT 後 reportActivity | → ACTIVE |
 | L5 | disconnect 後 checkTimeout | DISCONNECTED(不動作) |
@@ -690,6 +744,7 @@ class ControlSignalSource : public BaseControlSignalSource,
 {
     friend class ControlSignalManager;
     friend class ControlSignalFactory;   // creator lambda
+    friend struct ManagerTestAccess;     // 測試通道(§5.4;定義僅編入測試 target)
 private:
     ControlSignalSource(rclcpp::Node* node, const InfoT& info);   // private!
 
@@ -716,7 +771,7 @@ public:
     SendResult send(const msgT& msg);
     float sendRateHz() const;                       // 讀 cachedRateHz_,不觸發計算
     EntityStatus getStatus() const;                 // v0.5.0(my_note FSM #4):{state, cachedRate} 整合查詢
-    ControlSignalState getState() const override;   // link 狀態由 Manager 餵入:見下
+    ControlSignalState getState() const override;   // 狀態由 CSM 經 master 通知注入(§8.3):見下
     ...
 };
 
@@ -727,22 +782,25 @@ public:
 
 - **send(共通前置,v0.4.0,my_note Source #1)**:`shutdown_` 檢查 →
   `rate_.record(now)`(rolling window 原子遞增,窗長可配置)→ 進入模式分支。
-- **send(topic)**:publish → `OK`。狀態不變(無 send-side 回饋;liveness 由 Manager link 供給)。
+- **send(topic)**:publish → `OK`。狀態不變(無 send-side 回饋;liveness 由 master 通知經 CSM 注入,§2.5/§8.3)。
 - **send(service)**:`service_is_ready()` → `async_send_request` → 等待 ≤ `timeout_ns`
   (**無 50ms 隱藏 fallback**;`timeout_ns` 必填,直接使用)。
   ready → `liveness_.reportActivity()`,依 response 回 `OK`/`REJECTED`;
   逾時 → `liveness_.checkTimeout()` 語意下記為 TIMEOUT 並回 `TIMEOUT`,
   並呼叫 `client->remove_pending_request()`(rv2 稽核:pending request 洩漏)。
-- **link liveness 注入**:Source 本身不訂閱 status。Manager 的 link 監視器
-  在 link activity / link timeout 時對該 target 的所有 Source 呼叫
-  `liveness_.reportActivity()` / `checkTimeout()`。Source 保持零 timer、零訂閱。
+- **liveness 注入**(v0.5.0):Source 本身不訂閱 status、不與 master 直接通訊。
+  CSM 於 `_onGetNotifications`(§8.3)收到 master 的配對狀態通知時,對相應 Source
+  呼叫 `liveness_.reportActivity()` / `checkTimeout()`。Source 保持零 timer、零訂閱。
 - **DISCONNECTED(休眠)下的 send**:回 `SendResult::DISCONNECTED`,拒絕發送;
-  transport **保留**(v0.3.0:斷線不再 shutdown,等待 link 恢復觸發重連 → INITIAL)。
+  transport **保留**(v0.3.0:斷線不再 shutdown,等待 master 通知注入活動觸發重連 → INITIAL)。
 - **`_calcRate()`**(v0.4.0,非公開,`friend class ControlSignalManager` 專用):
-  CSM status tick 每週期呼叫一次。`rate_.calcHz(now)` →
-  store `cachedRateHz_` → `liveness_.checkTimeout(now, timeout, disconnect)`(雙閾值)
-  → 回傳 `{state, rateHz}`。公開 `sendRateHz()` 僅讀快取——
-  **記錄(每次 send,O(1) atomic)與計算(每 tick 一次)分離**,hot path 零除法零鎖。
+  CSM status tick 每週期呼叫一次。`rate_.calcHz(now)` → store `cachedRateHz_` →
+  (service 模式)`liveness_.checkTimeout(now, timeout, disconnect)`(雙閾值)
+  → 回傳 `{state, rateHz}`。**topic 模式跳過 checkTimeout**(v1.0.0):
+  topic Source 無任何自主活動來源(send 無回饋),自身 elapsed 不具意義,
+  若照常檢查將於建構後必然虛假逾時;其狀態完全由 master 通知注入驅動(§8.3)。
+  公開 `sendRateHz()` 僅讀快取——**記錄(每次 send,O(1) atomic)與計算
+  (每 tick 一次)分離**,hot path 零除法零鎖。
 - **state callback fire 規則**(v0.5.0):所有經本類方法觸發的 LivenessState 轉移
   (`_calcRate` 內 checkTimeout、Manager 注入 activity/disconnect、service send 的
   reportActivity/TIMEOUT)在偵測到 old ≠ new 時,shared_lock 下 copy 對應
@@ -765,9 +823,9 @@ public:
 | S4 | service 模式無 server | `TIMEOUT`;state → TIMEOUT;耗時 ≈ `timeout_ns`(驗證無 50ms fallback) |
 | S5 | shutdown 後 send | `NO_TRANSPORT`;冪等 shutdown |
 | S6 | sendErased 型別轉發 | 與 send 等價;`msgType()` 正確 |
-| S7 | Manager 注入 link timeout | state → TIMEOUT;再注入 activity → ACTIVE |
+| S7 | Manager 注入對側逾時(checkTimeout) | state → TIMEOUT;再注入 activity → ACTIVE |
 | S8 | disconnect 後 send | `DISCONNECTED`(transport 保留但拒送) |
-| S9 | **重連**:disconnect 後注入 link activity | state → INITIAL;再注入 → ACTIVE;send 恢復 `OK` |
+| S9 | **重連**:disconnect 後注入 activity(master 通知) | state → INITIAL;再注入 → ACTIVE;send 恢復 `OK` |
 | S10 | **send rate**:20 Hz send 2 秒後呼叫 `_calcRate()`(測試經 friend 通道) | 回傳 rateHz ∈ [18, 22];`sendRateHz()` 讀到同值;停止 1 窗後歸 0 |
 | S11 | rate 並發:高頻 send + 週期 `_calcRate()` + 高頻 `sendRateHz()` | 無 race(TSan);快取值單調收斂 |
 | S12 | **state callback**:註冊 TIMEOUT/ACTIVE slot,驅動轉移 | 每次轉移恰觸發一次、old/new 正確;未註冊 slot 無動作;nullptr 清除 |
@@ -808,6 +866,9 @@ class ControlSignalSink : public BaseControlSignalSink,
 {
     friend class ControlSignalManager;
     friend class ControlSignalFactory;
+    friend struct ManagerTestAccess;     // 測試通道(§5.4)
+public:
+    using MsgCb = std::function<void(const msgT&, const InfoT&)>;
 private:
     ControlSignalSink(rclcpp::Node* node, const InfoT& info);
 
@@ -923,9 +984,11 @@ public:
     bool Register(const std::string& name);       // false = 名稱已存在
 
     std::shared_ptr<BaseControlSignalSource>
-    CreateSource(const std::string& type, rclcpp::Node*, const InfoT&) noexcept;
+    CreateSource(const std::string& type, rclcpp::Node*, const InfoT&,
+                 std::string* errOut = nullptr) noexcept;
     std::shared_ptr<BaseControlSignalSink>
-    CreateSink(const std::string& type, rclcpp::Node*, const InfoT&) noexcept;
+    CreateSink(const std::string& type, rclcpp::Node*, const InfoT&,
+               std::string* errOut = nullptr) noexcept;
 
     std::string typeKey(std::type_index) const;   // 反查;未註冊回 ""
     bool has(const std::string& type) const;
@@ -960,7 +1023,7 @@ public:
 - **ManagerStatus 發布**(v0.3.0):單一 status timer 週期發布 §2.5.1 訊息;
   v0.5.0 起訂閱者為 master,CSM 互不訂閱。
 - **Master 互動**(v0.5.0):啟動時 `/csm_master/register` 註冊;每 tick 呼叫
-  `/csm_master/heartbeat`(Trigger,async;response 逾時 → degraded mode log)。
+  `/csm_master/heartbeat`(CsmHeartbeat,async;response 逾時 → degraded mode log)。
 - 同一 status tick 內完成:狀態計算、發布、master heartbeat、entity 掃描
   (雙閾值 → TIMEOUT / **disconnect→休眠**)、PENDING TTL 回收。
 - Sink callback 註冊:`registerCallback`;**per-state 轉移 callback 註冊**(v0.5.0,見下)。
@@ -1055,19 +1118,24 @@ struct ManagerOptions {
 
 - **registerSource(兩階段)**:validate → 過濾 → `sourceMtx_` 下雙鍵查重 +
   `emplace` PENDING(失敗 = 重複 → error)→ 放鎖 → 遠端 manage(REGISTER) →
-  成功:factory 建 Source、entry 轉正、確保 link 監視器存在、回 Handle;
+  成功:factory 建 Source、entry 轉正、回 Handle;
   失敗/逾時:erase PENDING(+ 逾時情境 best-effort UNREGISTER)。
   轉正時**再持鎖檢查 entry 仍為自己的 PENDING**(防禦性;佔位已排除他人)。
 - **_onManage(REGISTER)**:validate → 過濾 → `sinkMtx_` 查重 + emplace PENDING →
   放鎖建 Sink → 持鎖轉正(re-check:entry 仍存在且 `phase == PENDING` 才轉正;
   已被 TTL 回收 → 銷毀剛建的 Sink、回 error)→ 套用 typed callback → 回 SUCCESS。
-- **休眠 entry 的重註冊**(v0.6.0,應用情境 A.1.1.3 所暴露的缺口):查重時若發現
-  同 `controller_name` 的既有 entry 且其狀態為 **DISCONNECTED(休眠)**:
-  比對新舊 info 的 `channel_name` 與 `type`——一致 → 視為同一控制器重新上線
-  (Source CSM crash 後重啟的典型情況),沿用既有 Sink、以 `reportActivity()`
-  將其轉入 INITIAL,回 SUCCESS;不一致 → 回 error(識別鍵衝突,須先 unregister)。
-  非休眠(INITIAL/ACTIVE/TIMEOUT)的同名 entry 一律拒絕(原查重規則)。
-  `registerSource()` 本地側適用同一規則。
+- **休眠 entry 的重註冊**(v0.6.0,應用情境 A.1.1.3 所暴露的缺口;v1.0.0 補完條件):
+  查重時若發現同 `controller_name` 的既有 entry,且其狀態為 **DISCONNECTED(休眠)
+  或 TIMEOUT**(後者涵蓋 §2.3.1 變體 B——`disconnect_timeout_ns = 0` 時 entry
+  停留於 TIMEOUT、無法自動休眠):比對新舊 info 的 `channel_name`、`type` 與
+  `mode`——三者一致 → 視為同一控制器重新上線(Source CSM crash 後重啟的典型情況),
+  沿用既有 Sink、更新其餘 info 欄位(逾時閾值、priority),以 `reportActivity()`
+  將其轉入 INITIAL,回 SUCCESS;任一不一致 → 回 error(識別鍵衝突,須先 unregister)。
+  INITIAL/ACTIVE 的同名 entry 一律拒絕(原查重規則)。
+  `registerSource()` 本地側適用同一查重判定(同名休眠/TIMEOUT entry 不拒絕),
+  但**照常執行完整兩階段流程**:重發遠端 manage(REGISTER)——target 為空(重啟後)
+  → 建新 Sink;target 側休眠 → 觸發遠端休眠重註冊——成功後沿用本地 entry 轉入
+  INITIAL 並回傳 Handle;失敗則本地 entry 維持原狀(無 PENDING 佔位,無需回收)。
   Sink PENDING 起 TTL:掃描 timer 發現 PENDING 超過 `pendingTtlMs` 且 liveness 仍 INITIAL → 回收。
   轉正與 TTL 回收**皆在 `sinkMtx_` 下檢查 `phase`**,互斥無競態;
   且 `pendingTtlMs`(預設 10s)≫ service 處理時間(ms 級),正常路徑不會被誤收。
@@ -1079,23 +1147,21 @@ struct ManagerOptions {
      (寫欄位為 tick 專屬,單寫者,shared_lock 下安全)。轉移發生 → entity
      fire per-state callback(§5.3/§6.3)。
   2. 發布 ManagerStatus(直接取 `lastStatus` 快取組訊息,鎖外 publish)。
-  3. **master heartbeat**:async 呼叫 `/csm_master/heartbeat`(Trigger);
+  3. **master heartbeat**:async 呼叫 `/csm_master/heartbeat`(CsmHeartbeat,req = 本 Manager 名);
      上次呼叫的 response 逾時未達 → degraded mode(log,一次性)。
   4. PENDING TTL 回收;log 以快取 snapshot。
 - **_onGetNotifications**(v0.5.0,master → CSM):收 `CsmNotify::Request.entries` →
   比對本地 entries:對側 TIMEOUT/DISCONNECTED → 對本地配對 entity 立即
   `checkTimeout()`(加速收斂);對側恢復 ACTIVE 且本地 DISCONNECTED →
-  `reportActivity()` 注入(重連 → INITIAL)→ 觸發 `setNotificationCallback`
-  使用者回呼(無鎖)→ 回 SUCCESS。
+  連續注入兩次 `reportActivity()`(對側 ACTIVE 通知本身即為通道有效的證據:
+  休眠 → INITIAL → ACTIVE;單次注入會使無自主活動來源的 topic Source
+  停滯於 INITIAL)→ 觸發 `setNotificationCallback` 使用者回呼(無鎖)→ 回 SUCCESS。
 - **degraded mode**(master 失聯):本地判定照常;不重試 register(heartbeat 本身
   即持續探測,master 回線後第一個成功 heartbeat 觸發 re-register 確認)。
 - **移除路徑**(僅 unregister / 解構):`entity->shutdown()` → erase(先 shutdown 再 erase)。
-- **LinkMonitor 生命週期**:Source 註冊轉正時 `links_[target].controllers.insert(ctrl)`
-  (無 entry 則建立訂閱);Source 移除(unregister / auto-disconnect / 解構)時
-  `controllers.erase(ctrl)`,**集合空 → erase LinkMonitor(關閉 heartbeat 訂閱)**。
-  多個 Source 同 target 共用一個 link,個別 unregister 不影響其餘。
-- **鎖序**:`sourceMtx_`/`sinkMtx_` → `cbMtx_`(單向,承襲 rv2 已驗證無死鎖);
-  `linkMtx_` 獨立,不與前兩者巢狀。
+- (v0.5.0:LinkMonitor 已移除——跨 CSM 活性一律由 master 經 `_onGetNotifications`
+  注入,本章不再有 per-target 訂閱管理。)
+- **鎖序**:`sourceMtx_`/`sinkMtx_` → `cbMtx_`(單向,承襲 rv2 已驗證無死鎖)。
 
 ### 8.4 單元測試方法與流程
 
@@ -1112,18 +1178,18 @@ struct ManagerOptions {
 | M6 | 遠端接受但 response 丟失(mock 攔截) | 本地 error + UNREGISTER 送出;遠端 Sink 經 TTL 回收(孤兒回歸) |
 | M7 | unregisterSource | 兩側移除;Handle 失效;同名可重註冊 |
 | M8 | **get_notifications 注入**(mock master 呼叫):對側 TIMEOUT 清單 | 本地配對 Source 加速 checkTimeout;對側恢復清單 + 本地 DISCONNECTED → 重連 INITIAL;`setNotificationCallback` 觸發 |
-| M9 | auto-disconnect(v0.3.0 休眠語意) | TIMEOUT 持續 > disconnect_timeout → 兩側各自轉 DISCONNECTED;entry 保留、Handle 仍 valid、state 查詢回 DISCONNECTED |
-| M15 | **重連復原**:M9 後恢復資料/link | 兩側 DISCONNECTED → INITIAL → ACTIVE;無 add/remove、無重新註冊 |
+| M9 | auto-disconnect(雙閾值休眠語意) | elapsed(距最後活動)> disconnect_timeout_ns → 兩側各自轉 DISCONNECTED;entry 保留、Handle 仍 valid、state 查詢回 DISCONNECTED |
+| M10 | Handle 在移除後操作 | error code,無 crash、無殭屍活動(shutdown 已釋放 transport entities) |
+| M11 | 黑白名單:雙向、enable/disable、空白名單=全擋 | 承襲 rv2 案例組 |
+| M12 | registerCallback:template 版與字串版、先註冊後建 Sink / 先建後註冊、覆蓋與 unregister | 兩序皆觸發;未註冊 type 回 false |
+| M13 | InfoReq 服務 | 列表正確;PENDING 佔位排除(僅列已轉正 entries) |
+| M14 | callback 內呼叫 registerSource(debug build) | assert / 明確錯誤,而非 5s 假逾時 |
+| M15 | **重連復原**:M9 後恢復資料 / master 通知 | 兩側 DISCONNECTED → INITIAL → ACTIVE;無 add/remove、無重新註冊 |
 | M16 | ManagerStatus 內容 | 訊息含全部 entries、state 值正確、source/sink `data_rate_hz` ≈ 實際速率(取自 `lastStatus` 快取);週期 ≈ `statusIntervalMs` |
 | M17 | **master heartbeat**:mock master 有回應/無回應 | 有:tick 正常;無:degraded log 一次、本地判定不受影響;回線後 heartbeat 恢復 + re-register 確認 |
 | M18 | **per-state callback**:registerSourceStateCallback(TIMEOUT)/registerSinkStateCallback(ACTIVE) | 全部同類 entities 轉移各觸發一次;old/new 正確;覆蓋與 nullptr 清除語意 |
 | M19 | **雙閾值休眠**(取代 TIMEOUT-持續邏輯):elapsed 一次越過兩閾值 | entity 直接 DISCONNECTED;CSM 無 per-entry 計時殘留;status 反映 |
-| M20 | **休眠重註冊**(v0.6.0):Sink 休眠後,同 controller/channel/type 再 REGISTER | 接受;沿用既有 Sink 轉 INITIAL;channel 或 type 不一致 → 拒絕;非休眠同名 → 拒絕 |
-| M10 | Handle 在移除後操作 | error code,無 crash、無殭屍活動(shutdown 已停止 heartbeat 與 subscription) |
-| M11 | 黑白名單:雙向、enable/disable、空白名單=全擋 | 承襲 rv2 案例組 |
-| M12 | registerCallback:template 版與字串版、先註冊後建 Sink / 先建後註冊、覆蓋與 unregister | 兩序皆觸發;未註冊 type 回 false |
-| M13 | InfoReq 服務 | 列表正確、含 PENDING 排除策略(僅列 ACTIVE) |
-| M14 | callback 內呼叫 registerSource(debug build) | assert / 明確錯誤,而非 5s 假逾時 |
+| M20 | **休眠重註冊**(v0.6.0):Sink 休眠或 TIMEOUT 後,同 controller/channel/type/mode 再 REGISTER | 接受;沿用既有 Sink 轉 INITIAL、更新其餘 info 欄位;channel/type/mode 任一不一致 → 拒絕;INITIAL/ACTIVE 同名 → 拒絕 |
 
 ---
 
@@ -1149,7 +1215,7 @@ struct ManagerOptions {
 | 介面 | 型別 | 說明 |
 |---|---|---|
 | `/csm_master/register`(server) | `srv/r1/CsmRegister` | CSM 註冊:req = csm_name;res = response + reason。重複註冊 = 冪等更新(重啟支援) |
-| `/csm_master/heartbeat`(server) | `std_srvs/srv/Trigger` | CSM 每 tick 呼叫;master 記 lastSeen;res.success 恆 true(在線證明) |
+| `/csm_master/heartbeat`(server) | `srv/r1/CsmHeartbeat` | CSM 每 tick 呼叫;master 以 req.csm_name 定位 CsmRecord 記 lastSeen;res.success 恆 true(在線證明) |
 | `<csm>/status`(subscriber) | `msg/r1/ManagerStatus` | 每註冊 CSM 一條;更新 entities 快取 + 變化偵測 |
 | `<csm>/get_notifications`(client) | `srv/r1/CsmNotify` | 變化推送:req.entries = 變化 EntryStatus 清單(含歸屬 manager_name);async best-effort |
 
@@ -1202,7 +1268,7 @@ struct MasterOptions {
 
 | 案例 | 內容 | 預期 |
 |---|---|---|
-| CM1 | 註冊 + heartbeat | record 建立;heartbeat 後 lastSeen 更新;Trigger res.success |
+| CM1 | 註冊 + heartbeat | record 建立;heartbeat 後對應 csm_name 的 lastSeen 更新;res.success |
 | CM2 | 黑白名單 | 拒絕者 register 得 error、無訂閱建立 |
 | CM3 | **配對通知**:mock A 發 status(Source X ACTIVE→TIMEOUT) | A 與配對 B 各收到一次 CsmNotify,entries 含 X 新狀態 |
 | CM4 | one-shot:同狀態重複 status | 不重發;恢復 ACTIVE → 再發一次 |
@@ -1296,14 +1362,14 @@ public:
 | I4 auto-disconnect + 重連 | 同 I3 但 disconnect_timeout 有值;斷流至雙側 DISCONNECTED → 恢復發送 | 兩側轉 DISCONNECTED(entry 保留、status 可觀測);恢復後自動 INITIAL → ACTIVE,無重新註冊 |
 | I5 CSM 失聯(master 判定) | kill B node(heartbeat 停) | master 逾時 → 通知 A:B 的 entities DISCONNECTED;A 對應 Source 注入;B 回線 → 通知恢復 |
 | I6 target 重啟 | kill B node → 重啟 B(空 Manager)| master 失聯→回線流程;B 已無 entry → A 需 unregister + 重新註冊;驗證 A 側顯式 re-register 流程 |
-| I11 status 對帳 | 訂閱兩側 `<name>/status`,對照 InfoReq 與實際狀態 | entries/state/rate 一致;斷線期間 DISCONNECTED 可見 |
-| I12 **master 通報鏈**(v0.5.0) | A 停止發送 → B 側 Sink TIMEOUT → master 偵測變化 | master 對 A、B 各推 get_notifications 恰一次;A 的 `setNotificationCallback` 收到、清單正確;恢復後再斷 → 再一次 |
-| I14 **master 失聯 degraded**(v0.5.0) | kill master;A、B 之間資料傳輸持續 | 兩側本地判定不受影響;degraded log;master 回線後 heartbeat 與通知恢復,無通知風暴 |
-| I13 waitForMessage 端到端 | 使用者執行緒 `handle.waitForMessage(out, 1s)`,期間 A 發送 | 即時返回;斷流時 ≈ 1s 逾時 false;unregister 中斷等待 false |
 | I7 註冊風暴 | 兩個 node 並發向同 target 註冊 100 組(部分同名) | 唯一性不變量成立;成功數 = 唯一名數;無殘留 PENDING |
 | I8 response 丟失 | MockManagerNode:接受但不回覆 | A 逾時 error;B(真 Manager 版場景)Sink TTL 回收 |
 | I9 惡意/錯誤 payload | MockSourceNode 以錯誤型別發往 channel | Sink 不 crash;型別安全(DDS 層擋掉或 read 型別檢查) |
 | I10 壓力 + sanitizer | I1 拉長 × ASan/TSan build | 無 leak / race 報告 |
+| I11 status 對帳 | 訂閱兩側 `<name>/status`,對照 InfoReq 與實際狀態 | entries/state/rate 一致;斷線期間 DISCONNECTED 可見 |
+| I12 **master 通報鏈**(v0.5.0) | A 停止發送 → B 側 Sink TIMEOUT → master 偵測變化 | master 對 A、B 各推 get_notifications 恰一次;A 的 `setNotificationCallback` 收到、清單正確;恢復後再斷 → 再一次 |
+| I13 waitForMessage 端到端 | 使用者執行緒 `handle.waitForMessage(out, 1s)`,期間 A 發送 | 即時返回;斷流時 ≈ 1s 逾時 false;unregister 中斷等待 false |
+| I14 **master 失聯 degraded**(v0.5.0) | kill master;A、B 之間資料傳輸持續 | 兩側本地判定不受影響;degraded log;master 回線後 heartbeat 與通知恢復,無通知風暴 |
 
 ### 11.3 執行環境
 
@@ -1331,13 +1397,15 @@ public:
    但 B 已無對應 Sink,不會自動復原。v0.5.0 起 master 持全域 entries 快取,
    是偵測配對缺失的適當位置:master 偵測「Source 存在、配對 Sink 消失」→
    通知 A(或代為觸發 re-REGISTER)。機制歸 master 或 CSM、自動或人工,未決。
-7. **rate window 粒度**:`rateWindowNs` 目前為 Manager 全域(ManagerOptions);
+4. **rate window 粒度**:`rateWindowNs` 目前為 Manager 全域(ManagerOptions);
    高頻(50Hz joy)與低頻(1Hz)通道並存時是否需 per-entity 配置(Info 欄位)?
-4. **DISCONNECTED 休眠 entry 的 GC**:休眠 entry 常駐是 v0.3.0 特性,但永久休眠
+5. **DISCONNECTED 休眠 entry 的 GC**:休眠 entry 常駐是 v0.3.0 特性,但永久休眠
    (對向已 unregister / 更名)是否需要可選 purge timeout?(0 = 永不,預設)
-5. **`registerSource` 之 async 版本**:提供 future/callback 版避免阻塞需求?
-6. **rv2 → r1 migration 路徑**:兩套並存期間,`rv2_server_control` 等下游何時切換、
+6. **`registerSource` 之 async 版本**:提供 future/callback 版避免阻塞需求?
+7. **rv2 → r1 migration 路徑**:兩套並存期間,`rv2_server_control` 等下游何時切換、
    是否提供 adapter。
+8. **使用者層 forced disconnect API**:§2.3 的 forced 邊目前僅限 CSM 內部呼叫,
+   是否經 Manager / Handle 對使用者開放?
 
 ---
 
@@ -1403,9 +1471,9 @@ sequenceDiagram
     App->>S: registerSource(infoA: joy)
     Note over S: validate + 過濾 + 查重<br/>emplace PENDING(A)
     S->>T: manage(REGISTER, infoA)
-    Note over T: validate + 過濾 + 查重<br/>CreateSink<joy> → 轉正(A)
+    Note over T: validate + 過濾 + 查重<br/>CreateSink("joy") → 轉正(A)
     T-->>S: SUCCESS
-    Note over S: CreateSource<joy> → PENDING(A) 轉正
+    Note over S: CreateSource("joy") → PENDING(A) 轉正
     S-->>App: SourceHandle(A)
 
     App->>S: registerSource(infoB: twist)
@@ -1506,10 +1574,10 @@ sequenceDiagram
     Note over T: 重啟:register(M)；manager 為空
     T->>M: status(空)
     Note over M: T 回線；S 側 Source 休眠、<br/>T 側無配對 Sink(配對缺失)
-    Note over S: 自動復原不可能——需 App 或對帳機制<br/>unregister + registerSource 重建(§12 #4)
+    Note over S: 自動復原不可能——需 App 或對帳機制<br/>重新執行 registerSource 重建(本地休眠 entry 依 §8.3 沿用)(§12 #3)
 ```
 
-要點:此情境為 §12 未決 #4(對帳)的動機;目前設計需應用層在收到
+要點:此情境為 §12 未決 #3(對帳)的動機;目前設計需應用層在收到
 `setNotificationCallback` 後決策重建。master 通知是 topic 模式下 Source 側
 得知 Sink 消失的唯一途徑。
 
@@ -1581,17 +1649,17 @@ sequenceDiagram
     App->>S: registerSource(infoA: joy → T1)
     Note over S: validate + 過濾 + 查重<br/>emplace PENDING(A)
     S->>T1: manage(REGISTER, infoA)
-    Note over T1: validate + 過濾 + 查重<br/>CreateSink<joy> → 轉正(A)
+    Note over T1: validate + 過濾 + 查重<br/>CreateSink("joy") → 轉正(A)
     T1-->>S: SUCCESS
-    Note over S: CreateSource<joy> → PENDING(A) 轉正
+    Note over S: CreateSource("joy") → PENDING(A) 轉正
     S-->>App: SourceHandle(A)
 
     App->>S: registerSource(infoB: twist → T2)
     Note over S: validate + 過濾 + 查重<br/>emplace PENDING(B)
     S->>T2: manage(REGISTER, infoB)
-    Note over T2: validate + 過濾 + 查重<br/>CreateSink<twist> → 轉正(B)
+    Note over T2: validate + 過濾 + 查重<br/>CreateSink("twist") → 轉正(B)
     T2-->>S: SUCCESS
-    Note over S: CreateSource<twist> → PENDING(B) 轉正
+    Note over S: CreateSource("twist") → PENDING(B) 轉正
     S-->>App: SourceHandle(B)
 
     Note over S,M: 下一 tick 起,S 的 status 含 A、B 兩 entries<br/>T1、T2 各含一個 sink entry
@@ -1711,13 +1779,13 @@ sequenceDiagram
     Note over T1: 重啟:register(M)；manager 為空
     T1->>M: status(空)
     Note over M: T1 回線；S 側 Source A 休眠、<br/>T1 側無配對 Sink(配對缺失)
-    Note over S: A 的自動復原不可能——需 App 或對帳機制<br/>unregister + registerSource 重建(§12 #4)
+    Note over S: A 的自動復原不可能——需 App 或對帳機制<br/>重新執行 registerSource 重建(本地休眠 entry 依 §8.3 沿用)(§12 #3)
 ```
 
 要點:Sink CSM 的 crash 只波及以其為 target 的配對——Source A 休眠,而 Source B
 與 T2 的資料流、liveness 判定、master 通知均照常,此為 1:N 拓撲相對於單一 target
 的隔離優勢。T1 重啟後為空 manager,S 側休眠的 Source A 等不到可重連的配對 Sink,
-此情境為 §12 未決 #4(對帳)的動機;目前設計需應用層在收到
+此情境為 §12 未決 #3(對帳)的動機;目前設計需應用層在收到
 `setNotificationCallback` 後決策重建。master 通知是 topic 模式下 Source 側得知
 Sink 消失的唯一途徑。
 
@@ -1805,17 +1873,17 @@ sequenceDiagram
     A1->>S1: registerSource(infoA: joy)
     Note over S1: validate + 過濾 + 查重<br/>emplace PENDING(A)
     S1->>T: manage(REGISTER, infoA)
-    Note over T: validate + 過濾 + 查重<br/>CreateSink<joy> → 轉正(A)
+    Note over T: validate + 過濾 + 查重<br/>CreateSink("joy") → 轉正(A)
     T-->>S1: SUCCESS
-    Note over S1: CreateSource<joy> → PENDING(A) 轉正
+    Note over S1: CreateSource("joy") → PENDING(A) 轉正
     S1-->>A1: SourceHandle(A)
 
     A2->>S2: registerSource(infoB: twist)
     Note over S2: validate + 過濾 + 查重<br/>emplace PENDING(B)
     S2->>T: manage(REGISTER, infoB)
-    Note over T: validate + 過濾 + 查重<br/>controller_name 全域唯一,與 A 不衝突<br/>CreateSink<twist> → 轉正(B)
+    Note over T: validate + 過濾 + 查重<br/>controller_name 全域唯一,與 A 不衝突<br/>CreateSink("twist") → 轉正(B)
     T-->>S2: SUCCESS
-    Note over S2: CreateSource<twist> → PENDING(B) 轉正
+    Note over S2: CreateSource("twist") → PENDING(B) 轉正
     S2-->>A2: SourceHandle(B)
 
     Note over S1,M: 下一 tick 起,三方 status 各含所屬 entries
@@ -1938,14 +2006,14 @@ sequenceDiagram
     Note over T: 重啟:register(M)；manager 為空
     T->>M: status(空)
     Note over M: T 回線；S1、S2 側 Source 休眠、<br/>T 側無配對 Sink(配對缺失)
-    Note over S1,S2: 自動復原不可能——S1、S2 各自需 App<br/>或對帳機制 unregister + registerSource<br/>重建(§12 #4)
+    Note over S1,S2: 自動復原不可能——S1、S2 各自需 App<br/>或對帳機制重新執行 registerSource<br/>重建(本地休眠 entry 依 §8.3 沿用)(§12 #3)
 ```
 
 要點:單點 target 的 crash 是 N:1 拓撲的最大衝擊面——全部 source CSM 同時受
 影響,master 通知是 topic 模式下 S1、S2 得知 Sink 消失的唯一途徑。T 重啟後
 manager 為空,兩個 source CSM 的休眠 entry 在 target 側均無配對 Sink,無法
 自動復原;重建決策分散於 App1 與 App2(各自在收到 `setNotificationCallback`
-後決策 unregister + 重新註冊),彼此無協調機制。此情境使 §12 未決 #4(對帳)
+後決策 unregister + 重新註冊),彼此無協調機制。此情境使 §12 未決 #3(對帳)
 的動機在 N:1 下更為突出:master 持有全域 entries 快取,是集中偵測「多個
 Source 存在、配對 Sink 全數消失」的適當位置。
 
@@ -2042,7 +2110,7 @@ sequenceDiagram
     App->>S: registerSource(infoA: joy, mode = service)
     Note over S: validate(timeout_ns > 0,§3.2 規則 5)<br/>+ 過濾 + 查重,emplace PENDING(A)
     S->>T: manage(REGISTER, infoA)
-    Note over T: validate + 過濾 + 查重<br/>CreateSink<ControlSignalJoy>(service Server)→ 轉正(A)
+    Note over T: validate + 過濾 + 查重<br/>CreateSink("joy")(service Server)→ 轉正(A)
     T-->>S: SUCCESS
     Note over S: CreateSource<ControlSignalJoy>(service Client)<br/>→ PENDING(A) 轉正
     S-->>App: SourceHandle(A)
@@ -2188,7 +2256,7 @@ sequenceDiagram
     Note over T: 重啟:register(M)、manager 為空
     T->>M: status(空)
     Note over M: T 回線、S 側 Source 休眠、<br/>T 側無配對 Sink(配對缺失)
-    Note over S: 自動復原不可能——需 App 或對帳機制<br/>unregister + registerSource 重建(§12 #4)
+    Note over S: 自動復原不可能——需 App 或對帳機制<br/>重新執行 registerSource 重建(本地休眠 entry 依 §8.3 沿用)(§12 #3)
 ```
 
 要點:此情境是 service 模式與 topic 模式差異最大之處——Source **不依賴 master
@@ -2197,7 +2265,7 @@ sequenceDiagram
 `TIMEOUT`,自身狀態機隨即被資料面回饋驅動;master 的 T 失聯通知退為輔助,
 價值在於涵蓋 App 未主動 send 的期間。但重建仍無法自動完成:T 重啟後
 manager 為空,S 側休眠 entry 在 target 無配對 Sink,需應用層在收到
-`setNotificationCallback` 後決策 unregister + 重新註冊——此即 §12 未決 #4
+`setNotificationCallback` 後決策 unregister + 重新註冊——此即 §12 未決 #3
 (對帳機制)的動機,service 模式僅改善察覺速度,不改變重建責任歸屬。
 
 ##### A.2.1.5 CSM Master crash
@@ -2276,17 +2344,17 @@ sequenceDiagram
     App->>S: registerSource(infoA: joy, target: T1)
     Note over S: validate + 過濾 + 雙鍵查重<br/>emplace PENDING(A)
     S->>T1: manage(REGISTER, infoA)
-    Note over T1: validate + 過濾 + 查重<br/>CreateSink<joy>(service Server)→ 轉正(A)
+    Note over T1: validate + 過濾 + 查重<br/>CreateSink("joy")(service Server)→ 轉正(A)
     T1-->>S: SUCCESS
-    Note over S: CreateSource<joy>(service Client)<br/>→ PENDING(A) 轉正
+    Note over S: CreateSource("joy")(service Client)<br/>→ PENDING(A) 轉正
     S-->>App: SourceHandle(A)
 
     App->>S: registerSource(infoB: twist, target: T2)
     Note over S: validate + 過濾 + 雙鍵查重<br/>emplace PENDING(B)
     S->>T2: manage(REGISTER, infoB)
-    Note over T2: validate + 過濾 + 查重<br/>CreateSink<twist>(service Server)→ 轉正(B)
+    Note over T2: validate + 過濾 + 查重<br/>CreateSink("twist")(service Server)→ 轉正(B)
     T2-->>S: SUCCESS
-    Note over S: CreateSource<twist>(service Client)<br/>→ PENDING(B) 轉正
+    Note over S: CreateSource("twist")(service Client)<br/>→ PENDING(B) 轉正
     S-->>App: SourceHandle(B)
 
     Note over S,M: 下一 tick 起:S 的 status 含 A、B 兩 entries,<br/>T1 僅含 A、T2 僅含 B
@@ -2299,9 +2367,9 @@ sequenceDiagram
 函數呼叫流程(每條通道一次,詳 A.0 註冊鏈):
 1. `registerSource(infoA)` — 驗證、過濾、`sourceMtx_` 下雙鍵查重 + emplace PENDING 佔位
 2. `manage(REGISTER)` service 呼叫至 target CSM_T1(阻塞至多 timeoutMs)
-3. CSM_T1 `_onManage(REGISTER)` — 驗證、過濾、查重,`CreateSink<joy>`(service Server)、轉正
-4. 本側 `CreateSource<joy>`(service Client)、PENDING 轉正、回傳 `SourceHandle(A)`
-5. Source B 對 CSM_T2 重複步驟 1–4(`CreateSink<twist>` / `CreateSource<twist>`)
+3. CSM_T1 `_onManage(REGISTER)` — 驗證、過濾、查重,`CreateSink("joy")`(service Server)、轉正
+4. 本側 `CreateSource("joy")`(service Client)、PENDING 轉正、回傳 `SourceHandle(A)`
+5. Source B 對 CSM_T2 重複步驟 1–4(`CreateSink("twist")` / `CreateSource("twist")`)
 
 資料流建立後:`App: handle.send(msg)` → `Source::send()`(`shutdown_` 檢查 →
 `rate_.record()` → `service_is_ready()` → `async_send_request`,等待 response 至多
@@ -2425,7 +2493,7 @@ sequenceDiagram
     Note over T1: 重啟:register(M)；manager 為空
     T1->>M: status(空)
     Note over M: T1 回線；S 側 Source A 休眠、<br/>T1 側無配對 Sink(配對缺失)
-    Note over S: 自動復原不可能——需 App 或對帳機制<br/>unregister + registerSource 重建(§12 #4)
+    Note over S: 自動復原不可能——需 App 或對帳機制<br/>重新執行 registerSource 重建(本地休眠 entry 依 §8.3 沿用)(§12 #3)
 ```
 
 要點:service 模式的關鍵差異在於 Source A 於**下一次 `send()` 即自主察覺** Sink
@@ -2524,17 +2592,17 @@ sequenceDiagram
     App1->>S1: registerSource(infoA: joy, mode=service)
     Note over S1: validate + 過濾 + 查重<br/>emplace PENDING(A)
     S1->>T: manage(REGISTER, infoA)
-    Note over T: validate + 過濾 + 查重(sinks_ 雙鍵)<br/>CreateSink<joy> → service Server(channel A)→ 轉正(A)
+    Note over T: validate + 過濾 + 查重(sinks_ 雙鍵)<br/>CreateSink("joy") → service Server(channel A)→ 轉正(A)
     T-->>S1: SUCCESS
-    Note over S1: CreateSource<joy> → Client(channel A)<br/>PENDING(A) 轉正
+    Note over S1: CreateSource("joy") → Client(channel A)<br/>PENDING(A) 轉正
     S1-->>App1: SourceHandle(A)
 
     App2->>S2: registerSource(infoB: twist, mode=service)
     Note over S2: validate + 過濾 + 查重<br/>emplace PENDING(B)
     S2->>T: manage(REGISTER, infoB)
-    Note over T: 對第二來源獨立查重:與 entry A 的<br/>controller/channel 均不同 → 通過<br/>CreateSink<twist> → service Server(channel B)→ 轉正(B)
+    Note over T: 對第二來源獨立查重:與 entry A 的<br/>controller/channel 均不同 → 通過<br/>CreateSink("twist") → service Server(channel B)→ 轉正(B)
     T-->>S2: SUCCESS
-    Note over S2: CreateSource<twist> → Client(channel B)<br/>PENDING(B) 轉正
+    Note over S2: CreateSource("twist") → Client(channel B)<br/>PENDING(B) 轉正
     S2-->>App2: SourceHandle(B)
 
     Note over S1,M: 下一 tick 起,各 CSM status 各自發布
@@ -2674,7 +2742,7 @@ sequenceDiagram
     Note over T: 重啟:register(M)；manager 為空
     T->>M: status(空)
     Note over M: T 回線；S1、S2 側 Source 休眠、<br/>T 側無配對 Sink(配對缺失 ×2)
-    Note over S1,S2: 自動復原不可能——兩個 source CSM<br/>各自需 App 決策重建(§12 #4)
+    Note over S1,S2: 自動復原不可能——兩個 source CSM<br/>各自需 App 決策重建(§12 #3)
     App1->>S1: unregister + registerSource(infoA)(重建)
     App2->>S2: unregister + registerSource(infoB)(重建)
     Note over S1,T: 重建走 A.2.3.1 完整註冊鏈(對 T 為全新 entry)<br/>→ send/response 恢復 → ACTIVE
@@ -2686,7 +2754,7 @@ TIMEOUT + `remove_pending_request()`),master 通知降為輔助,僅補足 App �
 期間的觀測。影響範圍為**全部** source CSM(N:1 匯聚點失效,S1、S2 皆休眠)。
 T 重啟後 manager 為空,休眠重註冊規則無從適用(該規則由 target 側查重觸發,
 而 target 已無任何 entry);S1、S2 各自面對配對缺失,需應用層在收到
-`setNotificationCallback` 後決策 unregister + 重新註冊——此即 §12 未決 #4
+`setNotificationCallback` 後決策 unregister + 重新註冊——此即 §12 未決 #3
 (status 對帳)的動機,master 持全域 entries 快取,是偵測「Source 存在、
 配對 Sink 消失」的適當位置。
 
