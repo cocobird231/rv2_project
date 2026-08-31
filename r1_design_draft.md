@@ -1,4 +1,4 @@
-# R1 Control Signal Transport 程式設計規劃書(草稿 v0.6.2)
+# R1 Control Signal Transport 程式設計規劃書(草稿 v0.7.0)
 
 > 狀態:初版草稿,供討論。未決事項集中在第 11 章。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v0.7.0 | 依 my_note.md(Project Design Scope):**通用化**——`priority` 改為通用欄位 **0–100**(0 = invalid 拒絕註冊、100 = 最高),僅攜帶轉發、不影響傳輸行為,語意由上層消費者定義,移除特定系統之頻帶約定(1–94、e-stop、requester band);新增 §1.1 通用性原則與 §1.7 程式碼註解原則(註解簡短,細節寫文件);全稿去除上層系統專屬敘述;未決事項 #2(priority 語意)裁決結案並重新編號 |
 | v0.6.2 | 附錄 A 全組合完整化:六種「模式 × 拓撲」組合(topic/service × 1:1、1:N、N:1)之五種情境均改為自含完整描述(各含時序圖與說明),移除差異表式帶過;A.2 依組合重分章(A.2.1–A.2.3);設計無變更 |
 | v0.6.1 | 修正 mermaid render 失敗:附錄 A 時序圖 Note 文字內 4 處半形分號(mermaid 語句分隔符)改為全形;以 mermaid-cli 驗證全稿 15 個圖均可 render |
 | v0.6.0 | 依 my_note.md 撰寫準則 #4:新增**附錄 A 應用情境**——三種拓撲(1:1、1:N、N:1)× 五種情境(註冊流程、逾時、Source CSM crash、Sink CSM crash、master crash),以 topic / service 模式分章,含時序圖、流程圖與函數呼叫流程。情境分析暴露一項設計缺口並補完:**休眠 entry 重註冊規則**(§8.3、M20)——Source CSM crash 重啟後,同 controller/channel/type 的 REGISTER 沿用休眠 Sink 轉 INITIAL,不需先 unregister |
@@ -28,7 +29,7 @@
 | **殭屍(zombie)** | 已自管理容器(CSM 的 `sources_`/`sinks_` map)移除,但因外部仍持有引用而繼續運作(發送心跳、接收訊息、觸發 callback)的 Source/Sink 物件。rv2 稽核中的「殭屍 Sink」即此類;r1 以 Handle(`weak_ptr`)設計消除此問題 |
 | **風暴(storm)** | 單一事件在短時間內觸發大量重複請求或通知的現象。本文件的具體情境:**註冊風暴**(多執行緒並發發出註冊請求)、**通知風暴**(master 或 CSM 於重啟/狀態跳變時重複發送大量變化通知) |
 | **孤兒(orphan)** | 分散式註冊部分失敗後,單側殘留、無配對對象的 entry(例如 target CSM 已建 Sink,但 source 側因逾時未建 Source) |
-| **休眠(dormant)** | DISCONNECTED 狀態的別稱:entry 保留於管理容器中、transport 保留、等待重連,不參與上層仲裁 |
+| **休眠(dormant)** | DISCONNECTED 狀態的別稱:entry 保留於管理容器中、transport 保留、等待重連;上層消費者應視其為不可用 |
 | **degraded mode** | CSM 與 master 失聯期間的運作模式:本地逾時判定照常,僅失去跨 CSM 的狀態通知 |
 
 ---
@@ -48,6 +49,11 @@
    r1 逐項以架構手段消除,而非事後補丁。
 4. **RAII 貫穿所有元件**(my_note 總則)— 資源(rclcpp entities、狀態、map entries)
    一律「建構取得、解構釋放」,詳 §1.5。
+5. **通用性**(v0.7.0,my_note Project Design Scope)— r1 為通用的控制訊號傳輸層,
+   介面(含 `ControlSignalInfo.msg`)不得綁定任何特定上層系統的約定。
+   `priority` 為通用欄位(0–100,§3.1),僅攜帶轉發、不影響傳輸行為,
+   其語意(頻帶劃分、保留值等)完全由上層消費者自行定義。
+   本文件與 rv2 的比較(§1.2、§1.3)屬設計沿革說明,非相依關係。
 
 ### 1.2 與 rv2 的差異總表
 
@@ -134,6 +140,13 @@ ControlSignalManager ──(唯一擁有 shared_ptr)──► Source / Sink 實�
   (`std::shared_lock` 讀 / `std::unique_lock` 寫),否則普通 mutex 更省;
   持鎖區塊最小化,callback 一律鎖外呼叫(承襲 rv2 驗證過的模式)。
 - 每個成員變數在類別章節中標注其保護手段;無標注 = 建構後唯讀。
+
+### 1.7 程式碼註解原則(v0.7.0,my_note Project Design Scope)
+
+- 註解**簡短明確**:一行說明目的或不變量即可;不重述程式行為、不展開設計背景。
+- 詳細資訊(設計理由、協定流程、狀態機語意、時序)一律寫入文件
+  (本規劃書與後續 API 文件),註解只留指向(例如「詳見設計文件 §4.2」)。
+- 實作階段的 code review 將以此為檢核項目之一。
 
 ---
 
@@ -257,7 +270,7 @@ stateDiagram-v2
   不穩定連線在 TIMEOUT/DISCONNECTED/INITIAL 之間反覆轉換,map entry 常駐,
   避免 rv2 的頻繁 add/remove(含跨 CSM 重新註冊)開銷與識別鍵競爭。
   移除只發生於顯式 `unregisterSource()` 或 Manager 解構。
-  上層仲裁(如 ControlServer)視 DISCONNECTED sink 為不可選——效果等同 rv2 的移除,但可自癒。
+  上層消費者應將 DISCONNECTED 的 sink 視為不可用——效果等同移除,但具備自癒能力。
 
 #### 2.3.1 Timeout 停用之 FSM 變體(v0.5.0,my_note Timeout #3)
 
@@ -296,7 +309,7 @@ stateDiagram-v2
 
 **變體 D — 兩者停用**(`timeout_ns = 0, disconnect_timeout_ns = 0`):
 無任何自動逾時;只有 forced `disconnect()` 能離開 INITIAL/ACTIVE
-(適合離散事件型通道,如 e-stop 指令)。
+(適合離散事件型通道,例如單次事件型指令)。
 
 ```mermaid
 stateDiagram-v2
@@ -436,7 +449,7 @@ int8   priority
 | `target_manager_name` | string | 註冊時必填;Sink 所在 Manager 名 |
 | `mode` | string | `"topic"` / `"service"`(常數定義於 msg) |
 | `type` | string | Factory 型別鍵(`"joy"` / `"twist"` / `"string"` / …) |
-| `priority` | int8 | 1–94,值大者優先;僅攜帶轉發,由上層仲裁消費 |
+| `priority` | int8 | **通用欄位,0–100**:0 = invalid(註冊拒絕),100 = 最高優先,值大者優先。僅攜帶轉發,**不影響傳輸行為**;語意由上層消費者自行定義(v0.7.0,不再綁定特定系統的頻帶約定) |
 | `timeout_ns` | int64 | data-rate timeout 閾值;**0 = 停用**(v0.5.0,§2.3.1)。service 模式亦為 response 等待上限(0 時 service 模式拒絕註冊,見 §3.2 規則 5) |
 | `disconnect_timeout_ns` | int64 | 0 = 永不自動移除;否則須 > `timeout_ns` |
 
@@ -450,7 +463,7 @@ int8   priority
 1. `controller_name` 非空。
 2. `channel_name` 非空。
 3. `mode` ∈ {topic, service};`type` 非空。
-4. `priority` ∈ [1, 94]。
+4. `priority` ∈ [1, 100](0 = invalid,負值與大於 100 者拒絕)。
 5. `timeout_ns ≥ 0`、`disconnect_timeout_ns ≥ 0`(0 = 各自停用,§2.3.1);
    兩者皆 > 0 時 `disconnect_timeout_ns > timeout_ns`;
    `mode == service` 時 `timeout_ns > 0`(response 等待上限不可停用)。
@@ -468,8 +481,8 @@ int8   priority
 | V2 | `controller_name = ""` | invalid, error 含 "controller_name" |
 | V3 | `channel_name = ""` | invalid |
 | V4 | `mode = "unknown"` | invalid |
-| V5 | `priority` ∈ {0, -1, 95, 127} | invalid(4 子案例) |
-| V6 | `priority` ∈ {1, 94} | valid(邊界) |
+| V5 | `priority` ∈ {0, -1, 101, 127} | invalid(4 子案例) |
+| V6 | `priority` ∈ {1, 100} | valid(邊界) |
 | V7 | `timeout_ns = 0`(topic 模式) | valid(停用,v0.5.0);`mode = service` 時 invalid |
 | V8 | `disconnect_timeout_ns = timeout_ns`(皆 > 0) | invalid(須嚴格大於) |
 | V10 | `timeout_ns = 0, disconnect_timeout_ns > 0`(topic) | valid(變體 C) |
@@ -1312,20 +1325,18 @@ public:
 1. **master SPOF 與 HA**(v0.5.0 新):集中式後 master 為單點。degraded mode 保住
    本地判定,但 topic-模式 Source 在 master 失聯期間**完全沒有活性來源**
    (v0.3.0 link 已移除)——是否補本地 fallback(如可選 per-target 直訂)或 master 備援?
-2. **priority 語意**:1–94 頻帶與 e-stop=94 約定是否原樣承襲?`controller_priority_type`
-   降為文件約定是否可行(rv2_server_control 目前讀該欄位)?
-3. **msg/srv 放置**:暫置 `rv2_interfaces/msg/r1/` vs 直接新開 `r1_interfaces` package?
+2. **msg/srv 放置**:暫置 `rv2_interfaces/msg/r1/` vs 直接新開 `r1_interfaces` package?
    (migrate 成本與相依耦合的取捨)
-4. **status 對帳(reconciliation)**:I6 缺口——target 重啟後 A 側 entry 休眠,
+3. **status 對帳(reconciliation)**:I6 缺口——target 重啟後 A 側 entry 休眠,
    但 B 已無對應 Sink,不會自動復原。v0.5.0 起 master 持全域 entries 快取,
    是偵測配對缺失的適當位置:master 偵測「Source 存在、配對 Sink 消失」→
    通知 A(或代為觸發 re-REGISTER)。機制歸 master 或 CSM、自動或人工,未決。
-8. **rate window 粒度**:`rateWindowNs` 目前為 Manager 全域(ManagerOptions);
+7. **rate window 粒度**:`rateWindowNs` 目前為 Manager 全域(ManagerOptions);
    高頻(50Hz joy)與低頻(1Hz)通道並存時是否需 per-entity 配置(Info 欄位)?
-5. **DISCONNECTED 休眠 entry 的 GC**:休眠 entry 常駐是 v0.3.0 特性,但永久休眠
+4. **DISCONNECTED 休眠 entry 的 GC**:休眠 entry 常駐是 v0.3.0 特性,但永久休眠
    (對向已 unregister / 更名)是否需要可選 purge timeout?(0 = 永不,預設)
-6. **`registerSource` 之 async 版本**:提供 future/callback 版避免阻塞需求?
-7. **rv2 → r1 migration 路徑**:兩套並存期間,`rv2_server_control` 等下游何時切換、
+5. **`registerSource` 之 async 版本**:提供 future/callback 版避免阻塞需求?
+6. **rv2 → r1 migration 路徑**:兩套並存期間,`rv2_server_control` 等下游何時切換、
    是否提供 adapter。
 
 ---
