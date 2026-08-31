@@ -1,4 +1,4 @@
-# 討論稿:TIMEOUT / DISCONNECTED 狀態定義與錯誤模式行為(v0.1.0)
+# 討論稿:TIMEOUT / DISCONNECTED 狀態定義與錯誤模式行為(v0.2.0)
 
 > 目的:確認新提出的狀態語意(send/receive 活動自驅 + DISCONNECTED 即註銷),
 > 分析其對現行設計(r1_design_draft.md v1.0.1)的衝擊,並針對各錯誤模式繪製狀態機,
@@ -245,29 +245,127 @@ stateDiagram-v2
 
 ---
 
-## 4. 裁決項
+## 4. 裁決結果(v0.2.0 更新:D1–D4 已裁決,新增 D6/D7)
 
-| # | 問題 | 建議 | 理由 |
+| # | 問題 | 裁決 | 說明 |
 |---|---|---|---|
-| D1 | 對側 CSM crash(master 失聯通知)→ 本地配對 entities 標 TIMEOUT 還是 DISCONNECTED? | **TIMEOUT** | DISCONNECTED 具註銷副作用,其判定應保持唯一決策源(本地 elapsed > disconnect 閾值)。master 通知作為加速預警(提前進 TIMEOUT);若對側快速重啟,TIMEOUT → ACTIVE 零成本恢復;若真死亡,本地計時自然走到 DISCONNECTED。避免 master 的 600ms 級失聯判定繞過秒級 disconnect 閾值造成過早註銷 |
-| D2 | Sink CSM crash 後,S 側 Source 的註銷由誰觸發? | master 對帳(§12 #3)偵測配對缺失 → 通知 S 註銷 | Source 自身 send 自驅不會逾時;需要外部事實(配對已不存在)觸發生命週期同步。對帳在新語意下為必要元件 |
-| D3 | 同名 **TIMEOUT** entry 的重註冊(對側快速重啟,本地尚未註銷)? | 允許:controller/channel/type/mode 一致 → 沿用 entry 轉 INITIAL | v1.0.0 休眠重註冊規則的簡化殘留(僅剩 TIMEOUT 一種情況);拒絕會迫使等待 disconnect 閾值走完,拉長恢復時間 |
-| D4 | DISCONNECTED 註銷後的重新註冊由誰發起? | 預設 App(notification callback 告知);可選 CSM 自動重試(`ManagerOptions.autoReregister`,預設關) | 重新註冊是否恰當屬應用層決策(通道可能已無意義);自動重試作為便利選項 |
-| D5 | master crash 期間單側註銷、對側未同步的窗口 | 接受(對側大概率自行走到 DISCONNECTED);master 回線後對帳補收 | 窗口有限;引入額外同步機制不符成本 |
+| D1 | 對側 CSM 失聯(網路不穩)→ 本地配對 entities 的狀態 | **TIMEOUT**(已裁決) | 網路不穩造成 heartbeat 失聯 → TIMEOUT,可恢復;網路恢復後繼續工作,無註銷成本 |
+| D2 | Sink CSM crash 後 Source 側如何得知並重建 | **master 雙閾值判定 + 通知註銷 + retry 重建**(已裁決,見 D6/D7) | master 判 T 失聯超過 disconnect 閾值 → 通知 S「對方 entities DISCONNECTED」→ S 註銷 Source → retry 重新註冊直到 T 重啟接受 |
+| D3 | 同名 TIMEOUT entry 的重註冊沿用規則 | **否決;採 retry-until-success**(已裁決) | 重複註冊被拒即重試,待對方 entry 依本地 elapsed 走到 DISCONNECTED 註銷後,重試自然成功。以時間換取協定簡單性,無需任何特殊沿用規則 |
+| D4 | 重新註冊的發起者 | **CSM 內建 retry 機制**(已裁決;細節見 D7) | 「Source CSM 重啟後需嘗試重新註冊直到成功」「S 重新註冊直到對方重啟成功」——retry 由 CSM 執行,App 經 callback 得知結果 |
+| D5 | master crash 期間單側註銷、對側未同步的窗口 | 接受;master 回線後對帳補收 | 維持原建議 |
+| D6 | **CSM–master heartbeat 雙閾值**(本輪新提案) | **採納**:CSM 向 master 註冊時傳入 `csm_timeout_ns` 與 `csm_disconnect_timeout_ns`;master 以 polling 檢查各 CSM 的 heartbeat elapsed——超過 timeout → 該 CSM 全部 entities 視為 TIMEOUT(預警通知配對方);超過 disconnect timeout → 視為 DISCONNECTED(通知配對方註銷 + 觸發 retry) | CSM 級失聯與 entity 級同構的雙閾值語意:TIMEOUT 吸收網路抖動、DISCONNECTED 確認死亡。`CsmRegister.srv` 增列兩欄位 |
+| D7 | retry 機制細節 | **待定案**(方向已定,參數待議) | 建議:CSM 維護 pending-register 佇列,tick 驅動重試(間隔 = `statusIntervalMs` 之整數倍,預設 5 倍;無上限,App 可經 unregister 取消);首次 `registerSource()` 同步嘗試,失敗依 info 之 `auto_retry` 旗標(或 ManagerOptions 預設)入佇列;每次結果經 notification callback 回報 |
+
+### 4.1 殘餘缺口:Sink CSM 快速重啟(雙閾值不觸發)
+
+D6 處理「T 失聯足夠久」的情況;若 T 在 `csm_disconnect_timeout_ns` 內快速重啟
+(supervisor 秒級拉起),master 的 T record 恢復、不會發出 DISCONNECTED 通知——
+但 T 的註冊資料已全部遺失:S 的 Source 持續 send、資料落空,S 無從察覺。
+
+此情況唯一的偵測者是 **master 對帳**(status 配對缺失偵測,正式文件 §12 #3):
+master 於 T 回線後的 status 中發現「S 有 Source A、T 無配對 Sink A」→
+通知 S「配對缺失」→ S 註銷 Source A 並進 retry(對 T 重新註冊,T 為空、立即成功)。
+
+結論:**D6 雙閾值(慢死亡)與 master 對帳(快重啟)互補,兩者皆為必要元件**。
+對帳實作:master 收到 status 後,對每個 entry 檢查配對是否存在;
+「單側存在超過寬限期(建議 2 × statusInterval,容忍註冊傳播延遲)」→ 發配對缺失通知。
 
 ---
 
-## 5. 採納後對正式文件的修訂範圍(預估)
+## 5. 錯誤模式收斂時序(v0.2.0,retry 機制)
+
+### 5.1 M2:Source CSM crash 重啟 → retry 直到對方註銷
+
+```mermaid
+sequenceDiagram
+    participant S as CSM_S(crash 後重啟)
+    participant T as CSM_T
+    participant M as Master
+
+    Note over S: crash:資料與 heartbeat 停止
+    Note over T: Sink A:elapsed 起算<br/>TIMEOUT(可恢復區間)
+    Note over M: S 的 heartbeat elapsed 起算(D6)
+
+    Note over S: 重啟:register(M) 成功<br/>heartbeat 恢復(M 的 S record 復原)
+    S->>T: manage(REGISTER, A)
+    T-->>S: REJECTED(同名 entry 仍在 TIMEOUT)
+    Note over S: 入 retry 佇列(D7)
+
+    Note over T: Sink A:elapsed > disconnect_timeout_ns<br/>→ DISCONNECTED → 註銷(本地判定)
+    S->>T: manage(REGISTER, A)(retry)
+    T-->>S: SUCCESS(空位,全新註冊)
+    Note over S,T: 資料恢復,兩側 INITIAL → ACTIVE
+```
+
+- 收斂上限 = T 的 `disconnect_timeout_ns` + 一個 retry 間隔。
+- 若 S 失聯已超過 `csm_disconnect_timeout_ns`(重啟慢),master 先通知 T
+  「S entities DISCONNECTED」→ T 提前註銷 → S 重啟後首次註冊即成功(更快)。
+
+### 5.2 M3:Sink CSM crash → master 雙閾值通知 → 註銷 + retry
+
+```mermaid
+sequenceDiagram
+    participant AppS as App(S 側)
+    participant S as CSM_S
+    participant M as Master
+    participant T as CSM_T(crash 後重啟)
+
+    Note over T: crash:heartbeat 與 status 停止
+    Note over S: Source A:App 持續 send → 維持 ACTIVE
+    Note over M: T 的 heartbeat elapsed > csm_timeout_ns<br/>→ T 之 entities 視為 TIMEOUT
+    M->>S: get_notifications(T 側 entities:TIMEOUT 預警)
+    Note over S: notification callback(預警,不註銷)
+
+    Note over M: elapsed > csm_disconnect_timeout_ns<br/>→ T 之 entities 視為 DISCONNECTED
+    M->>S: get_notifications(T 側 entities:DISCONNECTED)
+    Note over S: 註銷 Source A → callback 通知 App<br/>Source A 入 retry 佇列(D7)
+
+    S->>T: manage(REGISTER, A)(retry,T 未回線)
+    Note over S: 服務不可達 → 續留佇列
+    Note over T: 重啟:register(M)、空 manager
+    S->>T: manage(REGISTER, A)(retry)
+    T-->>S: SUCCESS
+    Note over S,T: 通道重建完成(App 恢復 send)
+```
+
+- Source 無法自動復原的問題由 D6 + D7 解決:master 的 CSM 級 DISCONNECTED
+  判定觸發註銷,retry 佇列負責重建,全程無需 App 介入(App 僅收 callback)。
+
+### 5.3 M3′:Sink CSM 快速重啟(§4.1 對帳路徑)
+
+```mermaid
+sequenceDiagram
+    participant S as CSM_S
+    participant M as Master
+    participant T as CSM_T(快速重啟)
+
+    Note over T: crash → supervisor 秒級拉起<br/>(< csm_disconnect_timeout_ns)
+    Note over M: T 的 heartbeat 恢復<br/>雙閾值未觸發 DISCONNECTED
+    T->>M: status(空)
+    Note over M: 對帳:S 有 Source A、T 無配對 Sink A<br/>單側存在超過寬限期 → 配對缺失
+    M->>S: get_notifications(A:配對缺失)
+    Note over S: 註銷 Source A → 入 retry 佇列
+    S->>T: manage(REGISTER, A)(retry)
+    T-->>S: SUCCESS(T 為空,立即成功)
+```
+
+---
+
+## 6. 採納後對正式文件的修訂範圍(v0.2.0 更新)
 
 - §2.3 / §2.3.1:狀態機重繪(DISCONNECTED 改終出態 + 註銷出口);變體圖同步。
-- §2.5:liveness 表改為雙側自驅;master 角色改預警 + 生命週期同步 + 對帳。
-- §4 `LivenessState`:reportActivity 於 DISCONNECTED 的重連轉移刪除;
-  epoch/CAS 機制不變。
-- §5 Source:send(topic)改記活動;刪除「topic 跳過 checkTimeout」特例;
-  S 表測試改寫。
-- §6 Sink:刪除休眠收訊重連;K8 改寫。
-- §8 CSM:休眠重註冊規則縮減為 D3;新增註銷流程與 D2/D4;
-  `_onGetNotifications` 簡化(刪連續注入兩次補丁)。
-- §9 Master:對帳從未決升為必要元件(§12 #3 結案)。
-- §12:#1、#5 消解;#3 結案;#8(forced disconnect)語意改「強制進入註銷流程」。
-- 附錄 A:六組合的 b/c/d/e 情境全面改寫。
+- §2.5:liveness 表改為雙側自驅;master 角色 = CSM 級雙閾值判定(D6)+
+  預警/註銷通知 + 對帳(§4.1);`CsmRegister.srv` 增 `csm_timeout_ns`、
+  `csm_disconnect_timeout_ns` 欄位。
+- §4 `LivenessState`:刪 DISCONNECTED → INITIAL 重連轉移;其餘不變。
+- §5 Source:send(topic)記活動;刪「topic 跳過 checkTimeout」特例;測試表改寫。
+- §6 Sink:刪休眠收訊重連;K8 改寫。
+- §8 CSM:刪休眠重註冊規則(D3 否決);新增 **pending-register retry 佇列**(D7)、
+  註銷流程與跨側同步;`_onGetNotifications` 處理 TIMEOUT 預警 / DISCONNECTED 註銷 /
+  配對缺失三類通知。
+- §9 Master:tick 增 CSM 級雙閾值 polling(D6)與對帳(配對缺失偵測 + 寬限期);
+  CM 測試組改寫。
+- §12:#1、#5 消解;#3 結案(對帳為必要元件);#8 語意改「強制進入註銷流程」;
+  新增 retry 參數細節(D7)待定項。
+- 附錄 A:六組合的 b/c/d/e 情境全面改寫(retry 收斂時序取代休眠重連)。
