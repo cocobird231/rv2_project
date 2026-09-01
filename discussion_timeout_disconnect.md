@@ -1,4 +1,4 @@
-# 討論稿:TIMEOUT / DISCONNECTED 狀態定義與錯誤模式行為(v0.2.0)
+# 討論稿:TIMEOUT / DISCONNECTED 狀態定義與錯誤模式行為(v0.3.0)
 
 > 目的:確認新提出的狀態語意(send/receive 活動自驅 + DISCONNECTED 即註銷),
 > 分析其對現行設計(r1_design_draft.md v1.0.1)的衝擊,並針對各錯誤模式繪製狀態機,
@@ -132,6 +132,63 @@ sequenceDiagram
 - 重新註冊的觸發者:預設由 App 決策(收到 callback);
   是否提供 CSM 自動重註冊選項(retry 參數)列為裁決項 D4。
 
+### 2.4 狀態推進的職責劃分(v0.3.0,已裁決 D8)
+
+Entities(Source/Sink)**不自行推進狀態機**,職責縮減為三件事:
+
+| 角色 | 職責 |
+|---|---|
+| Entity(Source/Sink) | 1. **記錄**觸發次數與時間(send 呼叫 / receive callback,hot path 原子寫入);2. 提供**計算 status 的 function**(純計算,不改動狀態);3. 提供**更新狀態 function**(由 CSM 呼叫寫入) |
+| CSM | tick 時對每個管理的 entity:呼叫計算 function → 結果記錄於 **CSM 自身的 table** → 呼叫 entity 的更新狀態 function;DISCONNECTED 結果一併觸發註銷流程 |
+
+介面草案:
+
+```cpp
+// Entity 側(Source/Sink 共通;applyStatus 為 CSM 專用 friend 通道)
+void recordActivity(int64_t nowNs);            // hot path:send()/收訊 callback 內呼叫
+EntityStatus calcStatus(int64_t nowNs) const;  // 純計算:記錄 + info 閾值 → {state, rateHz}
+void applyStatus(ControlSignalState s);        // CSM 呼叫:寫入狀態,old != new 時 fire state callback
+ControlSignalState getState() const;           // 讀取最後一次 applyStatus 的結果
+```
+
+CSM tick 流程:
+
+```
+for (entity : entities) {
+    st = entity->calcStatus(now);        // 1. 計算(entity 提供)
+    table[ctrl].lastStatus = st;         // 2. 記錄於 CSM 自身 table
+    entity->applyStatus(st.state);       // 3. 寫回 entity(+ state callback)
+    if (st.state == DISCONNECTED) 註銷流程(§2.3);
+}
+publish ManagerStatus(table);
+```
+
+**並發模型的重大簡化**:
+
+- 狀態變數的**唯一寫者是 CSM tick**(單執行緒序列化);hot path 只寫時間戳與
+  計數(單調遞增,relaxed atomic 即足)。
+- 正式文件 §4.2 的 **epoch CAS 機制不再必要**——stale-TIMEOUT 競態的根源是
+  「多執行緒併發寫狀態」(收訊路徑 reportActivity vs 檢查路徑 checkTimeout),
+  單寫者模型下該競態在結構上不存在。`LivenessState` 退化為:
+  記錄欄位(atomic 時間戳 + RateRecorder)+ 純計算函數 + 單一 atomic 狀態,
+  類別可大幅簡化或併入 entity 本體。
+- state callback 一律於 CSM tick 執行緒(mgmtGroup)觸發,執行緒來源單一,
+  使用者 callback 的並發約束更簡單。
+- tick 讀取 lastActivity 與 hot path 寫入的交錯:最多使當次判定晚一個 tick
+  修正,無害(下一 tick 讀到新值即回正)。
+
+**取捨(需接受)**:狀態更新粒度 = tick 週期(`statusIntervalMs`,預設 200ms)。
+第一次 send / 收訊後,狀態於下一個 tick 才由 INITIAL 轉 ACTIVE;`read()` 的
+「僅 ACTIVE 回 true」與 state callback 同樣以 tick 粒度反應。監控語意下可接受;
+資料層的即時性不受影響(訊息到達本身即為 App 的即時回饋)。
+
+- `forced disconnect()` 同樣收斂到 CSM:呼叫路徑改為 CSM 直接
+  `applyStatus(DISCONNECTED)` + 註銷,無並發寫者問題。
+- service 模式 send 的 response 結果(成功/逾時)同樣**只記錄**
+  (lastResponseNs、失敗計數);`send()` 的回傳值即時反映當次結果
+  (API 層回饋),狀態機推進仍統一於 tick。calcStatus 將 response 記錄
+  納入計算(response 逾時計為活動中斷)。
+
 ---
 
 ## 3. 錯誤模式與狀態機
@@ -255,6 +312,7 @@ stateDiagram-v2
 | D4 | 重新註冊的發起者 | **CSM 內建 retry 機制**(已裁決;細節見 D7) | 「Source CSM 重啟後需嘗試重新註冊直到成功」「S 重新註冊直到對方重啟成功」——retry 由 CSM 執行,App 經 callback 得知結果 |
 | D5 | master crash 期間單側註銷、對側未同步的窗口 | 接受;master 回線後對帳補收 | 維持原建議 |
 | D6 | **CSM–master heartbeat 雙閾值**(本輪新提案) | **採納**:CSM 向 master 註冊時傳入 `csm_timeout_ns` 與 `csm_disconnect_timeout_ns`;master 以 polling 檢查各 CSM 的 heartbeat elapsed——超過 timeout → 該 CSM 全部 entities 視為 TIMEOUT(預警通知配對方);超過 disconnect timeout → 視為 DISCONNECTED(通知配對方註銷 + 觸發 retry) | CSM 級失聯與 entity 級同構的雙閾值語意:TIMEOUT 吸收網路抖動、DISCONNECTED 確認死亡。`CsmRegister.srv` 增列兩欄位 |
+| D8 | 狀態推進職責劃分 | **已裁決**(§2.4):entity 僅記錄 + 純計算 + 被動接受狀態;CSM 為唯一狀態推進者,計算結果記於 CSM table 後寫回 entity | 單寫者模型;epoch CAS 機制廢除,LivenessState 大幅簡化;狀態粒度 = tick 週期 |
 | D7 | retry 機制細節 | **待定案**(方向已定,參數待議) | 建議:CSM 維護 pending-register 佇列,tick 驅動重試(間隔 = `statusIntervalMs` 之整數倍,預設 5 倍;無上限,App 可經 unregister 取消);首次 `registerSource()` 同步嘗試,失敗依 info 之 `auto_retry` 旗標(或 ManagerOptions 預設)入佇列;每次結果經 notification callback 回報 |
 
 ### 4.1 殘餘缺口:Sink CSM 快速重啟(雙閾值不觸發)
@@ -358,10 +416,10 @@ sequenceDiagram
 - §2.5:liveness 表改為雙側自驅;master 角色 = CSM 級雙閾值判定(D6)+
   預警/註銷通知 + 對帳(§4.1);`CsmRegister.srv` 增 `csm_timeout_ns`、
   `csm_disconnect_timeout_ns` 欄位。
-- §4 `LivenessState`:刪 DISCONNECTED → INITIAL 重連轉移;其餘不變。
-- §5 Source:send(topic)記活動;刪「topic 跳過 checkTimeout」特例;測試表改寫。
-- §6 Sink:刪休眠收訊重連;K8 改寫。
-- §8 CSM:刪休眠重註冊規則(D3 否決);新增 **pending-register retry 佇列**(D7)、
+- §4 `LivenessState`:重寫為單寫者模型(D8)——刪 DISCONNECTED → INITIAL 重連轉移、**刪 epoch CAS 機制**(競態根源已被職責劃分結構性消除);介面改為 recordActivity / calcStatus(純計算)/ applyStatus(CSM 專用);並發測試組(L7/L8/L11 等)改寫為單寫者語意驗證。
+- §5 Source:send 只記錄(recordActivity),不改狀態;刪「topic 跳過 checkTimeout」特例;service response 結果改記錄制;測試表改寫。
+- §6 Sink:`_store()` 只記錄 + 存訊息 + 喚醒 + user callback,不改狀態;刪休眠收訊重連;K8 改寫。
+- §8 CSM:tick 重寫為 calcStatus → table → applyStatus → 註銷 判定鏈(D8);刪休眠重註冊規則(D3 否決);新增 **pending-register retry 佇列**(D7)、
   註銷流程與跨側同步;`_onGetNotifications` 處理 TIMEOUT 預警 / DISCONNECTED 註銷 /
   配對缺失三類通知。
 - §9 Master:tick 增 CSM 級雙閾值 polling(D6)與對帳(配對缺失偵測 + 寬限期);
