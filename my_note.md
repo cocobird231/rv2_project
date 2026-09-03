@@ -100,3 +100,31 @@ Please review current draft, check if there're some control server or rv2 system
       - Sink CSM crash時的系統反應
       - CSM master crash時的系統反應
    - 分別使用topic模式與service模式進行上述的CSM組合與應用情境描述，並以模式為主要章節區別
+
+## R1 Testing
+在新的R1設計中，針對每個class到每個function，要各自的unit test和test case。針對系統整合，如實際多CSM、多Sources和Sinks和master互動的各種場景案例，請撰寫integration test，必要時使用mock和各種模擬節點進行測試。
+在新的R1設計中，我們要求所有測試必須在docker環境中進行，請建立一個腳本來建置不同作業系統版本的docker映像檔，這會影響到ROS2版本的使用。而這些docker檔案必須考慮到volume掛載，和image重用節省時間。如Ubuntu, ROS2 image可以重用，但每次執行build腳本需要將package test container清除後重建，並將package路徑掛載。
+目前考慮到的腳本有:
+- test_build.sh: 負責下載需要的docker image和產生per package test docker container，在docker中建立`~/ros2_ws`工作資料夾，在這資料夾中新增`src`, `install/`, `build/`和`log/`資料夾，並掛載package程式碼到`~/ros2_ws/src/test_pkg/`中。腳本可parse ROS2 distro，script要有能力識別ROS2 distro，找到對應的images，包含作業系統。腳本會根據ROS2版本在package路徑下新增`test_env/<ROS2_distro>/`資較夾，並在這之中新增`install/`, `build/`, `log/`資料夾，並一對一掛載到docker中的`~/ros2_ws/`中的`install/`, `build/`, `log/`, 這樣在docker外部也可讀取測試log。
+- test_deps.sh: 負責找到`~/ros2_ws/src/test_pkg/`，rosdep安裝測試所需的依賴項。通常在這步驟需要完美解決dependencies問題。
+- test_run.sh: 先將docker內部的測試環境`install/`, `build/`, `log/`初始化，然後執行colcon build和test。
+- test_packages.sh: 負責將程式碼載docker內部打包成.deb檔。注意package需parse ROS2版本，並且產生的.deb檔名符合ROS2官方命名規則，包含ROS2 distro、package name, package version，但我們還需要加上timestamp和commit hash在後面，為了開發測試方便。
+
+針對R1 testing，這是一個general的testing framework。後續只要是R1相關的package都會有相同的測試流程和標準。所以會需要建立一個package針對test framework進行管理 (暫定r1_test_framework)，而每個R1 package需要使用submodule加入這個test framework，例如
+```
+rv2_control_signal_transport
+├── CMakeLists.txt
+├── include/
+├── package.xml
+├── r1_test_framework/     <-- submodule
+│   ├── test_build.sh
+│   ├── test_deps.sh
+│   ├── test_packages.sh
+│   └── test_run.sh
+├── src/
+├── test/
+├── test_build.sh       <-- ln -s r1_test_framework/test_build.sh
+├── test_deps.sh        <-- ln -s r1_test_framework/test_deps.sh
+├── test_packages.sh    <-- ln -s r1_test_framework/test_packages.sh
+└── test_run.sh         <-- ln -s r1_test_framework/test_run.sh
+```
