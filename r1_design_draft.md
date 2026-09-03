@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.1.0)
+# R1 Control Signal Transport 程式設計規劃書(v1.2.0)
 
-> 狀態:正式版(v1.1.0)。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.2.0)。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.2.0 | 依 my_note.md(R1 Testing):新增 §11.5 **r1_test_framework 與 docker 化測試環境**——全部測試於 docker 執行、base image 重用/test container 重建策略、`test_env/<distro>/` 產物一對一掛載、四支腳本規格(build/deps/run/packages)、`.deb` 命名規則(官方樣式 + timestamp + commit hash)、submodule + symlink 引入約定;§11.3 執行環境改寫(docker 化 + 逐 function unit test 要求);§2.1 檔案布局補測試框架項 |
 | v1.1.0 | 深度整合 discussion_timeout_disconnect.md(D1–D6、D8 已裁決；D7 已確立 retry 方向,參數仍待議):**狀態語意改版**——entity 非終態與本地死亡判定只由本端活動事實自驅(send 呼叫 / 收訊),TIMEOUT 為可隨時恢復的緩衝區間、**DISCONNECTED 改為終出態**,判定或 matching lifecycle command 後完成 state callback、shutdown 與 entity 移除；**單寫者模型**(D8):hot path 只記錄,CSM 專用非重入 tick 執行計算、提交、callback 與註銷,移除 state+epoch CAS；**registration intent + 非阻塞 retry 狀態機**(D4/D7)取代休眠重連與 TIMEOUT entry 沿用(D3 否決),SourceHandle 透過穩定 slot 跨 retry 保持可用；**master CSM 級雙閾值**(D6)與 **level-triggered status 對帳**(原 §12 #3 結案)處理慢死亡與快速重啟；加入 generation/incarnation 防 stale 控制訊息、生命週期通知 ACK 重送、完整 status snapshot 與依 cause 分流的 activity-generation / response-failure-epoch terminal seal；master 的 peer-health 預警與本地 liveness 分層,不再互相覆寫；§12 原 #1、#5 消解；附錄 A 全面改寫 |
 | v1.0.1 | 文件規則終審:prose 標點統一(280 處 ASCII 分號改全形,code 與 mermaid 不受影響,經逐 block 比對驗證)、一處譬喻用語修正、版控說明去「草稿」字樣；內容與設計無變更 |
 | v1.0.0 | **正式版**。最終審查(5 視角 59 項確認發現)修正:v0.5.0 前殘留清除(LinkMonitor、終態 DISCONNECTED、TIMEOUT-持續斷線語意、互訂 status 敘述、per-entity heartbeat 敘述)；章節引用與清單編號修正(§12 重排、附錄 11 處 #4→#3)；設計補完:`CsmHeartbeat.srv` 取代匿名 Trigger(request 攜帶 csm_name)、休眠重註冊條件擴充(TIMEOUT 適用、加入 mode 比對、本地側完整兩階段語意)、topic Source 於 tick 跳過自身逾時檢查(無自主活動來源)、對側 ACTIVE 通知連續注入兩次達 ACTIVE、§2.5.2 服務欄位定義、驗證規則 6(target_manager_name)、Factory errOut、ManagerTestAccess friend 宣告、MsgCb 別名、測試檔配置補全、測試表重排；§12 新增 #8(使用者層 forced disconnect API) |
@@ -216,6 +217,10 @@ test/r1/
     test_csm_master.cpp        # CsmMaster(§9.4 CM1–CM13,mock CSM 裸 node)
     test_handles.cpp           # Handle(§10.4 H1–H8)
 ```
+
+測試框架(v1.2.0,§11.5):package 根目錄另含 `r1_test_framework/`(git submodule)、
+四支 symlink 腳本(`test_build.sh` 等)與腳本產物目錄 `test_env/<distro>/`
+(`.gitignore` 排除)。
 
 介面定義(暫置 `rv2_interfaces`,migrate 時搬移):
 
@@ -2022,10 +2027,17 @@ public:
 | I17 retry 非阻塞與 storm 控制 | 多 target 同時 crash/restart | status / heartbeat 週期不中斷；bounded in-flight、backoff+jitter、per-intent 去重成立 |
 | I18 service response failure 先於 master | 暫停 target service 回覆但讓 heartbeat 繼續；Source 高頻 send | failure streak elapsed 越過 disconnect 後以 epoch guard 提交 Source terminal、matching UNREGISTER + 單筆 mandatory retry；持續失敗 send 不取消終出,稍後 master event 不重複 enqueue |
 
-### 11.3 執行環境
+### 11.3 執行環境(v1.2.0:全面 docker 化)
 
-- 每個場景獨立 `ROS_DOMAIN_ID`(launch_testing 配發),避免互相干擾。
-- CI:`colcon test` 跑單元；整合場景獨立 job(`colcon test --packages-select r1_integration_tests`)。
+- **所有測試(unit 與 integration)一律於 docker 容器內執行**(my_note R1 Testing);
+  容器由 `r1_test_framework` 的腳本建置與管理(§11.5)。
+- 測試涵蓋要求:每個 class 之每個 function 均須有對應 unit test 與 test case
+  (§3–§10 各章之案例表為最低集合);系統整合(多 CSM、多 Source/Sink、master
+  互動場景)以 §11.2 場景集為準,必要時使用 §11.1 之 mock 與模擬節點。
+- 每個場景獨立 `ROS_DOMAIN_ID`(launch_testing 配發),避免互相干擾;
+  容器間隔離另由 docker network 提供第二層保障。
+- CI:呼叫 §11.5 腳本鏈(`test_build.sh` → `test_deps.sh` → `test_run.sh`),
+  單元與整合場景分 job;產物打包走 `test_packages.sh`。
 
 ### 11.4 Sanitizer 矩陣
 
@@ -2034,6 +2046,80 @@ public:
 | ASan + LSan | H6 / K10 / M10 / I10(UAF 與 leak 回歸) |
 | TSan | LivenessState activity seal、Source/Sink hot path、tick commit、Handle replacement、M4 註冊風暴 |
 | UBSan | 全單元測試 |
+
+
+### 11.5 r1_test_framework 與 docker 化測試環境(v1.2.0)
+
+#### 11.5.1 定位與引入方式
+
+`r1_test_framework` 為**通用測試框架 package**(獨立 git repo):所有 R1 相關
+package 共用同一套測試流程與標準。各 package 以 **git submodule** 引入,
+並於 package 根目錄建立 symlink 指向框架腳本:
+
+```
+rv2_control_signal_transport
+├── CMakeLists.txt
+├── include/
+├── package.xml
+├── r1_test_framework/     <-- git submodule
+│   ├── test_build.sh
+│   ├── test_deps.sh
+│   ├── test_packages.sh
+│   └── test_run.sh
+├── src/
+├── test/
+├── test_env/              <-- 腳本產生(per-distro 測試產物,加入 .gitignore)
+│   └── <ROS2_distro>/
+│       ├── install/
+│       ├── build/
+│       └── log/
+├── test_build.sh          <-- ln -s r1_test_framework/test_build.sh
+├── test_deps.sh           <-- ln -s r1_test_framework/test_deps.sh
+├── test_packages.sh       <-- ln -s r1_test_framework/test_packages.sh
+└── test_run.sh            <-- ln -s r1_test_framework/test_run.sh
+```
+
+#### 11.5.2 Docker 環境策略
+
+| 項目 | 策略 |
+|---|---|
+| Base image | 依 ROS2 distro 對應之官方 image(含對應 OS 版本);**可重用**,不隨測試重建 |
+| Per-package test container | 每次執行 `test_build.sh` **清除後重建**(命名 `r1_test_<package>_<distro>`,清除目標可識別) |
+| 工作目錄 | 容器內建立 `~/ros2_ws/`,含 `src/`、`install/`、`build/`、`log/` |
+| 程式碼掛載 | package 原始碼 volume 掛載至容器內 `~/ros2_ws/src/test_pkg/` |
+| 產物掛載 | package 路徑下 `test_env/<ROS2_distro>/` 之 `install/`、`build/`、`log/` **一對一掛載**至容器內 `~/ros2_ws/` 對應資料夾——測試 log 於容器外部直接可讀 |
+
+ROS2 distro 與 base image 對應(隨支援版本擴充):
+
+| ROS2 distro | OS | Base image |
+|---|---|---|
+| humble | Ubuntu 22.04 | `ros:humble-ros-base-jammy` |
+| jazzy | Ubuntu 24.04 | `ros:jazzy-ros-base-noble` |
+| rolling | Ubuntu(隨版) | `ros:rolling-ros-base` |
+
+#### 11.5.3 腳本規格
+
+| 腳本 | 職責 |
+|---|---|
+| `test_build.sh` | 解析目標 ROS2 distro(參數或環境變數)→ 識別對應 base image(含 OS)並下載;清除既有同名 test container 後重建;容器內建立 `~/ros2_ws/{src,install,build,log}`;掛載 package 原始碼至 `~/ros2_ws/src/test_pkg/`;於 package 路徑建立 `test_env/<distro>/{install,build,log}` 並一對一掛載 |
+| `test_deps.sh` | 於容器內定位 `~/ros2_ws/src/test_pkg/`,以 rosdep 安裝測試所需全部依賴;此步驟須完整解決 dependency 問題(失敗即中止,不進入 build) |
+| `test_run.sh` | 初始化容器內 `install/`、`build/`、`log/`(清空前次產物)→ 執行 `colcon build` 與 `colcon test`;結束碼反映測試結果(CI 判定依據) |
+| `test_packages.sh` | 於容器內將 package 打包為 `.deb`;檔名符合 ROS2 官方命名規則(distro、package name、version)並附加 **timestamp 與 commit hash**(開發測試辨識用) |
+
+`.deb` 命名規則:於官方樣式之 version 段附加辨識資訊——
+
+```
+ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch>.deb
+例:ros-jazzy-rv2-control-signal-transport_1.2.0.20260901143000.a1b2c3d_amd64.deb
+```
+
+#### 11.5.4 一般化約定
+
+- 本框架為 R1 系列 package 的**共同測試標準**:新 package 引入 submodule +
+  symlink 後即獲得相同的 build / deps / run / packages 流程,不另行客製。
+- 框架腳本之修訂於 `r1_test_framework` repo 版控;各 package 以 submodule
+  pin 版本,升級為顯式操作(`git submodule update --remote`)。
+- `test_env/` 為腳本產物目錄,各 package 之 `.gitignore` 須排除。
 
 ---
 
