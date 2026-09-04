@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.2.0)
+# R1 Control Signal Transport 程式設計規劃書(v1.2.1)
 
-> 狀態:正式版(v1.2.0)。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.2.1)。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.2.1 | 最終架構審核(4 視角 15 項確認發現,全數驗證)修正:response-health 補 disconnect=0 停用語意;waitForMessage shutdown 喚醒協定修 lost-wakeup(flag 持鎖寫入 + 等待者計數);§10.3 Handle 路由改以 RemovalReason 分類並補列 RESPONSE_FAILURE;重建震盪抑制(quarantine backoff,防單向資料面故障之註冊/註銷震盪);EntryStatus 增 `source_csm_instance_id`(identity 三元組上線);D3 conflict retry 明定不受 D7 旗標約束;UNREGISTER stale 回覆碼對齊 enum;master 對帳增**缺席 CSM absence clock**(補 master 重啟 × peer 死亡無 owner 缺口);live-but-DISCONNECTED CSM 恢復路徑定義(STALE_INSTANCE → 同 ID register 視為全量重建);heartbeat deadline < csm_timeout/2 驗證;retry commit point 統一為 completion queue;docker 測試增 `test_depends.repos` workspace-local 依賴掛載機制;附錄三處舊 instance disconnect 分支改對帳路徑;registration 支援型別提升至 source_registration.h 消除 header 循環相依 |
 | v1.2.0 | 依 my_note.md(R1 Testing):新增 §11.5 **r1_test_framework 與 docker 化測試環境**——全部測試於 docker 執行、base image 重用/test container 重建策略、`test_env/<distro>/` 產物一對一掛載、四支腳本規格(build/deps/run/packages)、`.deb` 命名規則(官方樣式 + timestamp + commit hash)、submodule + symlink 引入約定;§11.3 執行環境改寫(docker 化 + 逐 function unit test 要求);§2.1 檔案布局補測試框架項 |
 | v1.1.0 | 深度整合 discussion_timeout_disconnect.md(D1–D6、D8 已裁決；D7 已確立 retry 方向,參數仍待議):**狀態語意改版**——entity 非終態與本地死亡判定只由本端活動事實自驅(send 呼叫 / 收訊),TIMEOUT 為可隨時恢復的緩衝區間、**DISCONNECTED 改為終出態**,判定或 matching lifecycle command 後完成 state callback、shutdown 與 entity 移除；**單寫者模型**(D8):hot path 只記錄,CSM 專用非重入 tick 執行計算、提交、callback 與註銷,移除 state+epoch CAS；**registration intent + 非阻塞 retry 狀態機**(D4/D7)取代休眠重連與 TIMEOUT entry 沿用(D3 否決),SourceHandle 透過穩定 slot 跨 retry 保持可用；**master CSM 級雙閾值**(D6)與 **level-triggered status 對帳**(原 §12 #3 結案)處理慢死亡與快速重啟；加入 generation/incarnation 防 stale 控制訊息、生命週期通知 ACK 重送、完整 status snapshot 與依 cause 分流的 activity-generation / response-failure-epoch terminal seal；master 的 peer-health 預警與本地 liveness 分層,不再互相覆寫；§12 原 #1、#5 消解；附錄 A 全面改寫 |
 | v1.0.1 | 文件規則終審:prose 標點統一(280 處 ASCII 分號改全形,code 與 mermaid 不受影響,經逐 block 比對驗證)、一處譬喻用語修正、版控說明去「草稿」字樣；內容與設計無變更 |
@@ -435,8 +436,10 @@ sequenceDiagram
   PENDING 時暫停該配對的 missing grace,避免註冊 service 尚在等待 response 時誤判孤兒。
 - **註冊失敗的重試**(v1.1.0,D3/D7):typed `RETRYABLE_CONFLICT` 依 D3 必須進
   `RETRY_WAIT` 並持續至舊 entry 終出後成功；初次目標不可達 / 結果不明是否保留
-  intent 則由 D7 policy 決定。tick 只排程**非阻塞** attempt；service
-  response callback 完成狀態轉移,不得在 timer callback 內同步呼叫 `registerSource()`。
+  intent 則由 D7 policy 決定。tick 只排程**非阻塞** attempt;service
+  response callback **僅將結果寫入 completion queue**,狀態轉移一律由下一個 tick 的
+  phase 5 提交(單一 commit point,§2.6/§8.3),不得在 timer callback 內同步呼叫
+  `registerSource()`。
   對側舊 entry 經本地 DISCONNECTED、CSM 死亡通知或 level-triggered 對帳移除後,
   新世代 retry 自然成功；不沿用任何 TIMEOUT entry(D3)。數值型 backoff、jitter 與
   optional initial retry 上限等 D7 參數仍列 §12；D3 conflict 與已建立 intent 的
@@ -540,6 +543,10 @@ r1/EntryStatus[] sinks            # 完整 snapshot,含 PENDING/REGISTERED
 string manager_name         # 所屬 CSM(v0.5.0;master 配對與通知定位用)
 string csm_instance_id      # 所屬 CSM incarnation
 string source_manager_name  # logical pair 的 Source CSM；Sink 由 REGISTER request 保存
+string source_csm_instance_id # RegistrationIdentity 第一分量(v1.2.1):Source 填自身
+                            #  csm_instance_id;Sink 由保存的 REGISTER request identity 填。
+                            #  使 status / CsmNotify 皆可攜帶完整 identity 三元組,
+                            #  master 的全欄位比較(§9.1/§9.2)方可實作
 string target_manager_name  # logical pair 的目標 CSM；Source 取自 ControlSignalInfo
 string registration_id     # logical registration intent UUID
 uint64 attempt_generation   # 此 intent 的註冊世代
@@ -662,8 +669,12 @@ control-plane identity,不加入通用的
 預設停止自動重試並通知 App,不得猜測為 transient。
 
 `CsmRegister` 雙閾值驗證與 entity 規則同構:值不得為負,兩者皆大於 0 時
-`csm_disconnect_timeout_ns > csm_timeout_ns`；非零值至少涵蓋數個 heartbeat / master
-tick 週期。設為 0 表示停用該層判定,但若 disconnect 判定停用,永久 CSM crash 的
+`csm_disconnect_timeout_ns > csm_timeout_ns`;非零值至少涵蓋數個 heartbeat / master
+tick 週期。CSM 端另須滿足 `HeartbeatAttempt.deadlineNs` 對應時長 <
+`csm_timeout_ns / 2`(v1.2.1):單筆 in-flight heartbeat 在逾 deadline 前不釋放
+slot(§8.3 phase 4),若 deadline 未受此約束,一筆遲滯 attempt 即可佔用整個
+timeout 窗而使 master 誤判失聯;Manager 於向 master 註冊時驗證此關係,
+不符即拒絕啟動(組態錯誤)。設為 0 表示停用該層判定,但若 disconnect 判定停用,永久 CSM crash 的
 自動回收只能依賴其他可用的終止來源,不保證有限時間收斂。
 `status_interval_ns > 0`、`registration_grace_ns >= 2 × status_interval_ns`；後者不得
 小於該 CSM 允許的最大同步 registration wait 加兩個 status 週期。
@@ -1095,7 +1106,9 @@ public:
   `liveness_.calcState(now, timeout, disconnect)`；service 模式另取得 ResponseHealth
   snapshot,以嚴重度 `DISCONNECTED > TIMEOUT > ACTIVE > INITIAL` 合併兩個子判定:
   send-cadence 使用通用 liveness；failure streak 存在時 response-health 立即為
-  TIMEOUT,且 `now - failureSinceNs > disconnect_timeout_ns` 時為 DISCONNECTED。
+  TIMEOUT,且 `disconnect_timeout_ns > 0 && now - failureSinceNs > disconnect_timeout_ns`
+  時為 DISCONNECTED(與 `calcState` 相同的停用語意:`disconnect_timeout_ns = 0`
+  時 response-health 最深為 TIMEOUT,不觸發終出,§2.3.1 變體 B)。
   持續呼叫 send 但持續無 server / response 時,新鮮 send timestamp 因而不會掩蓋
   response 故障；只有較新的 response 可清除 streak。回傳 `EntityDecision`(公開
   status 加 activity generation、failure epoch 與 cause),不寫 liveness / cache /
@@ -1271,7 +1284,13 @@ public:
   以**序號**為條件:免疫 spurious wakeup、無 lost-wakeup(notify 在持鎖遞增 seq 之後)；
   亦不受狀態粒度影響(條件是訊息序號,不是狀態)。
   滿足且非 shutdown → copy `latestMsg_` 回 true；逾時或 shutdown → false。
-  `shutdown()` 置 flag 後 `notify_all()`,等待者即刻退出(RAII:解構前 shutdown 保證無滯留等待者)。
+  `shutdown()` 的喚醒協定(v1.2.1 修正 lost-wakeup):`shutdown_` 置位必須於
+  `msgMtx_` 持鎖下進行(或置位後 lock/unlock `msgMtx_` 一次)再 `notify_all()`,
+  使 flag 寫入與等待者的 pred 檢查互斥——與 msgSeq_ 路徑遵循同一準則
+  (notify 之資料寫入在持鎖之後),否則等待者可能在 pred 檢查後、入眠前錯過通知
+  而永久滯留。「解構前無滯留等待者」另需等待者計數(`waiters_` atomic):
+  解構端於 shutdown 後自旋等待計數歸零(等待者離開 `waitForMessage` 前遞減),
+  確保 condition variable 銷毀時無人阻塞其上。
   ⚠ 阻塞呼叫:禁止在任何 ROS callback 內使用(同 `registerSource` 規則,§2.6)。
 - **read()**:讀 `liveness_.state()`(不觸發計算)→ 僅 ACTIVE 回 true → `msgMtx_` 下 copy。
   狀態為 tick 粒度(§4.2):首筆訊息後、下一 tick 前,read 仍回 false；
@@ -1484,6 +1503,13 @@ public:
 private:
     friend class SourceHandle;
 
+    // 下列 registration 支援型別(RegistrationIdentity / RegistrationPhase /
+    // SourceRegistrationSlot / RetryCompletion / RemovalReason 等)實際定義於
+    // `source_registration.h` 之 **namespace scope**(§2.1;v1.2.1):
+    // SourceHandle 持 `std::weak_ptr<SourceRegistrationSlot>`(§10.2)而
+    // Manager 之 RegisterResult 又以值持有 SourceHandle,若型別巢狀於 Manager
+    // 將形成無法排序的循環相依。以 friend 約定維持「僅 Manager 寫入」語意。
+    // 此處內嵌僅為閱讀完整性:
     struct RegistrationIdentity {
         std::string sourceCsmInstanceId;
         std::string registrationId;
@@ -1591,7 +1617,7 @@ private:
   至 status snapshot,使 master 不在兩階段交易進行中啟動 pair-missing grace。
 - **_onManage(UNREGISTER)**:只有 controller、source CSM incarnation、registration ID、
   attempt generation 全部相符才將 removal command 排入 tick；較舊或不同 identity
-  回 STALE/ALREADY_REMOVED,不得碰目前 entry。實際 state callback、shutdown 與移除
+  回 STALE,已移除之同 identity 重送回 ALREADY_APPLIED(§2.5.2 enum),不得碰目前 entry。實際 state callback、shutdown 與移除
   一律由 tick 執行。
 - **status tick**(`tickGroup_`,週期 `statusIntervalMs`；v1.1.0,D8)採五階段,
   `tickRunning_` 已設時本輪直接返回:
@@ -1644,6 +1670,15 @@ private:
      explicit unregister、Manager shutdown 或 typed permanent error 結束。D7 的
      `maxInitialAttempts` 僅適用尚未成功過的 optional initial-failure retry。不可修復
      錯誤轉成事件並停止。最後執行 PENDING TTL。
+     **重建震盪抑制(v1.2.1)**:因 PAIR_MISSING / RESPONSE_FAILURE 觸發的自動重建,
+     若新 endpoint 自建立起**從未轉 ACTIVE** 即再度終出(單向資料面故障的特徵,
+     例如單向 DDS partition 或 QoS 不匹配:Source 持續 send、Sink 永收不到,
+     控制面卻正常),對同一 registration intent 連續發生達
+     `quarantineThreshold`(D7,建議 3)次後,該 intent 進入 **quarantine backoff**
+     (以 `maxDelayMs` 為底的長退避),並發 notification callback
+     (kind = SUSPECTED_DATA_PATH_FAULT)告知 App；App 可 unregister 終止或
+     修復環境後等待下一次 retry 自然成功。此規則防止「重建 → never-active 終出 →
+     對帳 PAIR_MISSING → 再重建」的無終止註冊/註銷震盪。
 - **_onGetNotifications**(master → CSM)先驗證 `target_csm_instance_id`、event ID 與每筆
   registration identity；重複事件回 ALREADY_APPLIED,舊世代回 STALE:
   - STATE 僅轉為 `PEER_STATE` application event,不改 table / local state。
@@ -1854,10 +1889,27 @@ struct MasterOptions {
   - 轉入 DISCONNECTED(edge):視為 CSM 死亡——對配對方發**註銷指示**
     (kind = DISCONNECTED),觸發 matching generation 的 endpoint 註銷 + retry(§8.3)。
     舊 snapshot 標為 logically absent,但保留 identity tombstone直到 control event ACK,
-    供去重與 stale 防護；CsmRecord 保留。其後 CSM 必以新 instance register,
-    舊 heartbeat / status 皆不得使 record 復活。
-- **對帳(reconciliation)**(v1.1.0,tick；§0.1):對 entries 快取檢查配對完整性——
-  只有相關 CSM 皆已交付目前 incarnation 的 ready snapshot 才開始。兩側
+    供去重與 stale 防護;CsmRecord 保留。其後舊 incarnation 的 heartbeat / status
+    皆不得使 record 復活——master 對 health = DISCONNECTED 之 record 的相符
+    instance heartbeat / status 一律回 **STALE_INSTANCE**(v1.2.1,「必以新
+    instance」語意的可實作化):CSM 收到 STALE_INSTANCE completion 依 §8.3 排程
+    re-register;master 對「同 csm_name + 同 csm_instance_id、record health =
+    DISCONNECTED」的 register 視為**全量重建**(清空 entries 快取、重置 health、
+    等待新 ready snapshot),而非冪等 no-op——register 為顯式意圖表達,
+    與 stale 資料流不同,可安全恢復仍存活但曾被判失聯的 CSM(網路分割恢復情境),
+    不需 runtime 更換 csm_instance_id(維持 §2.5.2 per-process UUID 定義與既有
+    RegistrationIdentity 的有效性)。
+- **對帳(reconciliation)**(v1.1.0,tick;§0.1):對 entries 快取檢查配對完整性——
+  只有相關 CSM 皆已交付目前 incarnation 的 ready snapshot 才開始。
+  **缺席 CSM 的 absence clock**(v1.2.1,補「master 重啟 × peer 死亡」的無 owner
+  缺口):任一已接受的 ready snapshot 中出現的 `source_manager_name` /
+  `target_manager_name`,若該名稱**無對應註冊 record**,master 為其啟動
+  per-name absence clock;超過 `max(pairGraceMs, 該配對之 registration grace)`
+  仍未註冊者,其涉及的配對**免除 ready-snapshot gate**,直接進入
+  PAIR_MISSING 判定(向存活側發配對缺失通知)。此規則使「master 重啟期間
+  peer 已死、永不 re-register」的配對仍有明確回收 owner——否則雙閾值
+  (無 record 無時鐘)與對帳(gate 永不滿足)皆不觸發,topic-mode Source
+  將永久停留 ACTIVE。兩側
   `REGISTERED && endpoint_present` 且 identity 完全相符才算成對；任一側同 identity
   尚為 PENDING 時暫停 grace,不同 identity 則視為兩個不配對世代。RETRY_WAIT Source
   不算 live endpoint；若 matching Sink 仍 REGISTERED,後者是 Sink-only orphan。
@@ -1939,7 +1991,7 @@ public:
     std::optional<msg::r1::ControlSignalInfo> info() const;
 private:
     friend class ControlSignalManager;
-    std::weak_ptr<ControlSignalManager::SourceRegistrationSlot> slot_;
+    std::weak_ptr<SourceRegistrationSlot> slot_;   // 型別定義於 source_registration.h(v1.2.1,§2.1/§8.2)
     std::string controllerName_;
 };
 
@@ -1972,9 +2024,12 @@ public:
 - `send<msgT>` 於 debug build 以 `msgType()` 驗證型別,不符 assert；release 回錯誤碼。
 - Handle 不延長 slot / endpoint 生命週期(weak_ptr),Manager 移除後即失效,
   殭屍物件問題(§0.1)因此不會發生。
-- **Handle 與註銷原因**:本地 inactivity、forced disconnect、explicit unregister
-  會移除 Source slot,Handle 失效；matching peer DISCONNECTED / PAIR_MISSING 保留
-  slot 進 RETRY_WAIT,Handle valid 但 not ready。這使 D4 的自動重建包含資料面恢復,
+- **Handle 與註銷原因**:路由判準為 **RemovalReason 分類**(§8.3 stage 3),
+  不是「判定發生在本地與否」——INACTIVITY、FORCED、EXPLICIT_UNREGISTER
+  會移除 Source slot,Handle 失效；**RESPONSE_FAILURE**、PEER_DISCONNECTED、
+  PAIR_MISSING 保留 slot 進 RETRY_WAIT,Handle valid 但 not ready
+  (RESPONSE_FAILURE 雖為本端 tick 判定,它是遠端 transport 故障的證據,
+  依 D2/D4 必須自動重建)。這使 D4 的自動重建包含資料面恢復,
   不需 App 取得新 Handle。Manager process crash 會摧毀所有 slots,仍需 App/config 重建。
 
 ### 10.4 單元測試方法與流程
@@ -2087,6 +2142,7 @@ rv2_control_signal_transport
 | Per-package test container | 每次執行 `test_build.sh` **清除後重建**(命名 `r1_test_<package>_<distro>`,清除目標可識別) |
 | 工作目錄 | 容器內建立 `~/ros2_ws/`,含 `src/`、`install/`、`build/`、`log/` |
 | 程式碼掛載 | package 原始碼 volume 掛載至容器內 `~/ros2_ws/src/test_pkg/` |
+| **Workspace-local 依賴掛載**(v1.2.1) | package 根目錄之 `test_depends.repos` 宣告檔列出 workspace 內尚未釋出的相依 packages(如 `rv2_interfaces`、`r1_test_mocks`);`test_build.sh` 將各相依原始碼一併**唯讀掛載**至 `~/ros2_ws/src/<dep>/`。rosdep 無法解析未釋出的 sibling package,缺此機制單一掛載模型無法 build |
 | 產物掛載 | package 路徑下 `test_env/<ROS2_distro>/` 之 `install/`、`build/`、`log/` **一對一掛載**至容器內 `~/ros2_ws/` 對應資料夾——測試 log 於容器外部直接可讀 |
 
 ROS2 distro 與 base image 對應(隨支援版本擴充):
@@ -2102,7 +2158,7 @@ ROS2 distro 與 base image 對應(隨支援版本擴充):
 | 腳本 | 職責 |
 |---|---|
 | `test_build.sh` | 解析目標 ROS2 distro(參數或環境變數)→ 識別對應 base image(含 OS)並下載;清除既有同名 test container 後重建;容器內建立 `~/ros2_ws/{src,install,build,log}`;掛載 package 原始碼至 `~/ros2_ws/src/test_pkg/`;於 package 路徑建立 `test_env/<distro>/{install,build,log}` 並一對一掛載 |
-| `test_deps.sh` | 於容器內定位 `~/ros2_ws/src/test_pkg/`,以 rosdep 安裝測試所需全部依賴;此步驟須完整解決 dependency 問題(失敗即中止,不進入 build) |
+| `test_deps.sh` | 於容器內以 `rosdep install --from-paths ~/ros2_ws/src --ignore-src` 安裝全部**外部**依賴(workspace-local 依賴已由掛載滿足,`--ignore-src` 使 rosdep 跳過 src 內已存在的 packages);此步驟須完整解決 dependency 問題(失敗即中止,不進入 build) |
 | `test_run.sh` | 初始化容器內 `install/`、`build/`、`log/`(清空前次產物)→ 執行 `colcon build` 與 `colcon test`;結束碼反映測試結果(CI 判定依據) |
 | `test_packages.sh` | 於容器內將 package 打包為 `.deb`;檔名符合 ROS2 官方命名規則(distro、package name、version)並附加 **timestamp 與 commit hash**(開發測試辨識用) |
 
@@ -2117,6 +2173,10 @@ ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch
 
 - 本框架為 R1 系列 package 的**共同測試標準**:新 package 引入 submodule +
   symlink 後即獲得相同的 build / deps / run / packages 流程,不另行客製。
+  `test_depends.repos` 為**宣告式輸入**(每 package 一份,列 workspace-local
+  依賴),不屬流程客製;`r1_integration_tests` 亦以同機制宣告其依賴
+  (transport package、`r1_test_mocks`、`rv2_interfaces`),使 §11.2 全部整合場景
+  可於同一容器模型內組出多 package workspace 並執行。
 - 框架腳本之修訂於 `r1_test_framework` repo 版控;各 package 以 submodule
   pin 版本,升級為顯式操作(`git submodule update --remote`)。
 - `test_env/` 為腳本產物目錄,各 package 之 `.gitignore` 須排除。
@@ -2855,8 +2915,9 @@ sequenceDiagram
     Note over S1: D3:新 slot 必進 RETRY_WAIT<br/>新 Handle valid但not ready
     alt 舊 Sink 本地越過 disconnect
         Note over T: activity generation seal 成功<br/>Sink A:DISCONNECTED→callback→shutdown→erase
-    else S1 舊 instance 越過 CSM disconnect
-        M->>T: DISCONNECTED(old identity,event ID,重送至 ACK)
+    else 對帳路徑(舊 Sink 為 Sink-only orphan)
+        Note over M: 新 incarnation register 已汰換舊 record<br/>(舊 instance 時鐘不再存在,§9.2)<br/>level reconciliation:舊 identity 單側存在逾 grace
+        M->>T: PAIR_MISSING(old identity,event ID,重送至 ACK)
         Note over T: matching-generation terminal removal
     end
     S1->>T: manage(REGISTER, infoA + next generation)(async retry)
@@ -3176,8 +3237,9 @@ sequenceDiagram
 
     alt 舊 Sink 本地 elapsed 越過 disconnect
         Note over T: generation seal 成功<br/>Sink A:DISCONNECTED→callback→shutdown→移除
-    else 舊 S instance 越過 CSM disconnect
-        M->>T: DISCONNECTED(old identity,event ID,重送至 ACK)
+    else 對帳路徑(舊 Sink 為 Sink-only orphan)
+        Note over M: 新 incarnation register 已汰換舊 record<br/>(舊 instance 時鐘不再存在,§9.2)<br/>level reconciliation:舊 identity 單側存在逾 grace
+        M->>T: PAIR_MISSING(old identity,event ID,重送至 ACK)
         Note over T: matching-generation removal<br/>舊 Sink A 移除；新 identity 不受影響
     end
     Note over S: tick 排程 bounded async retry<br/>次數不設限；delay/backoff數值由D7決定
@@ -3463,7 +3525,7 @@ sequenceDiagram
     Note over S: D3:兩個 typed conflicts 必進 RETRY_WAIT<br/>新 Handles valid但not ready
 
     Note over T1: tick:elapsed > disconnect_timeout_ns<br/>generation seal→Sink A callback→shutdown→erase
-    Note over T2: Sink B 同理；或 master 以舊 identity<br/>可靠 DISCONNECTED 提前移除
+    Note over T2: Sink B 同理；或 level reconciliation 以<br/>PAIR_MISSING(old identity)提前移除(§9.3)
     S->>T1: manage(REGISTER, infoA + next generation)(async)
     T1-->>S: SUCCESS(空位,全新註冊)
     S->>T2: manage(REGISTER, infoB + next generation)(async)
