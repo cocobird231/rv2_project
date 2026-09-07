@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.1.1)
+# R1 實作 TODO List(v0.2.1)
 
 > 依據:`r1_design_draft.md` v1.2.2(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
@@ -7,6 +7,8 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.2.1 | 新增 §1.4 Git 版控規範:agent 身分命名(`coco-claude` 等)、每階段獨立 branch(`<身分>/<項目>`)、完成後 push + PR + 回報;`r1_test_framework` remote 建立,T0.5 解除阻塞 |
+| v0.2.0 | T1.1–T1.6 完成(docker t1 build 通過、`ros2 interface show` 10/10 解析、欄位↔條文逐欄查核通過)。**裁決 §12 #1 結案:新開 `r1_interfaces` package**——rosidl 型別名僅取檔案 basename(子目錄不入 namespace),`ControlSignalInfo`、`ControlSignalInfoReq`、`ControlSignalJoy`、`ControlSignalTwist` 與 `rv2_interfaces` legacy 型別同名衝突,無法照 §2.1 原文放置。框架佈局變更:`r1_test_framework` 自 package 內搬移至 workspace `src/r1_test_framework/`(獨立 repo 與各 package 平行,取代 §11.5.1 巢狀 submodule 模型),package 根目錄 symlink 改為相對路徑 `../r1_test_framework/*.sh`,腳本 `PKG_DIR` 解析順序改為 env → symlink 位置 → CWD;`todo_check.sh t1` 改查 `r1_interfaces`。t0 基線修復:legacy `csm_test_utils.h` `makeInfo()` 補上現行驗證必填之 `controller_name` / `priority` / `controller_priority_type`(t0 重驗 23 gtests 全綠) |
 | v0.1.1 | T0.1–T0.4 查核完成勾選。t0 baseline 於 docker 實測通過(28 gtests 全綠,container 自動卸載,host 無殘留)；框架修正:container 內以空 tmpfs 遮蔽 `test_env/`(避免 ament linters 掃到產物之 418 筆誤報)、t0 篩選至既有 gtest 迴歸(legacy lint 一致性不在 R1 範圍;jazzy uncrustify 將 `.h` 以 C 解析致 `constexpr` 報錯,屬既有狀態) |
 | v0.1.0 | 初版:大項 T0–T12、依賴序、逐小項查核條件、逐大項語意查核與 docker 實測指令；隨附 `r1_test_framework` 腳本組(test_build / test_deps / test_run / test_packages / test_clean / todo_check)與 package 根目錄接線(symlink、`test_depends.repos`、`.gitignore` 排除 `test_env/`) |
 
@@ -48,11 +50,22 @@ cd ~/Workspace/ros2_ws/src/rv2_control_signal_transport
 
 `<item>` 對照表見附錄 B。
 
-### 1.4 前置裁決(開工前決定)
+### 1.4 Git 版控規範(v0.2.1)
+
+適用於本案全部 repos(`rv2_control_signal_transport`、`r1_test_framework`、`r1_interfaces`,以及日後的 `r1_test_mocks`、`r1_integration_tests`):
+
+| 規則 | 內容 |
+|---|---|
+| Commit 身分 | AI agent 產出之 commit 以 repo-local `git config user.name` 標示身分,命名 `coco-<agent>`:Claude 為 `coco-claude`、ChatGPT 為 `coco-gpt`,依此類推 |
+| 分支模型 | 每個階段(一個或連續數個 TODO 大項)之新增、修改、刪除一律開新 branch,不直接 commit 至 master/main。branch 命名 `<身分>/<項目>`,如 `coco-claude/T0-T1`、`coco-claude/T2` |
+| 完成流程 | 階段完成(該大項查核與實測通過)後:push branch → 對預設分支提出 PR → 回報使用者。PR 合併由使用者裁決 |
+| Remote | `r1_test_framework`:`git@github.com:cocobird231/r1_test_framework.git`。`r1_interfaces` remote 待建立;建立前 branch 僅存本地 |
+
+### 1.5 前置裁決(開工前決定)
 
 | 裁決點 | 影響大項 | §12 編號 | 暫定預設 |
 |---|---|---|---|
-| msg/srv 放置於 `rv2_interfaces/msg/r1/` 或新開 `r1_interfaces` | T1 | #1 | 依規劃書現文:暫置 `rv2_interfaces`,migrate 時一併搬移 |
+| msg/srv 放置於 `rv2_interfaces/msg/r1/` 或新開 `r1_interfaces` | T1 | #1 | **已裁決(v0.2.0):新開 `r1_interfaces`**。rosidl 型別名僅取 basename,四個型別與 legacy 衝突,暫置方案不可行 |
 | retry 參數數值與 policy(initial/max delay、initial cap、`auto_retry` 歸屬) | T7.7 | #6 | 實作時提案預設值,寫入 `RetryPolicy` 預設建構並回饋規劃書 |
 | `registerSource` async 版本 | T7.4 | #3 | 首版僅同步版,介面預留擴充 |
 | 使用者層 forced disconnect API | T8 | #5 | 首版不開放,內部保留 forced 路徑 |
@@ -85,7 +98,7 @@ graph LR
 | 大項 | 內容 | 產出位置 | 測試案例 |
 |---|---|---|---|
 | T0 | 測試框架與 docker 環境 | `r1_test_framework/` + package 根目錄 | —(框架自身查核) |
-| T1 | msg/srv 介面定義 | `rv2_interfaces/msg/r1/`、`srv/r1/` | —(build + 欄位對照) |
+| T1 | msg/srv 介面定義 | `r1_interfaces/msg/`、`srv/`(§12 #1 裁決) | —(build + 欄位對照) |
 | T2 | `r1::LivenessState` | `include/.../r1/liveness_state.h` | L1–L18 |
 | T3 | Info 與驗證 | `include/.../r1/control_signal_info.h` | V1–V11 |
 | T4 | `r1::ControlSignalSource` | `include/.../r1/control_signal_source.h` | S1–S16 |
@@ -108,13 +121,13 @@ graph LR
 - [x] **T0.1** `r1_test_framework/` 腳本組:`test_build.sh`、`test_deps.sh`、`test_run.sh`、`test_packages.sh`(§11.5.3 四支標準腳本)加上 `test_clean.sh`(卸載)與 `todo_check.sh`(TODO 查核執行器),以獨立 git repo 版控。
   查核:`bash -n` 全數通過；每支腳本有用法說明；`git log` 存在初始 commit。
 - [x] **T0.2** package 根目錄接線:六支 symlink、`test_depends.repos`(宣告 `rv2_interfaces`)、`.gitignore` 排除 `test_env/`。
-  查核:`ls -l test_*.sh` symlink 有效；`git status` 不出現 `test_env/`。
+  查核:`ls -l test_*.sh` symlink 有效；`git status` 不出現 `test_env/`。(v0.2.0 重接:框架搬至 `src/r1_test_framework/` 後 symlink 改為 `../r1_test_framework/*.sh`;repos 增列 `r1_interfaces`)
 - [x] **T0.3** Container 生命週期驗證:base image 下載、container 建立、掛載(原始碼唯讀、`test_env` 一對一)、卸載。
   查核:`./test_build.sh` 後 `docker ps` 可見 container；container 內 `ls /root/ros2_ws/src/` 見本 package 與 `rv2_interfaces`；`./test_clean.sh` 後 `docker ps -a` 無殘留；host 上除 `test_env/` 外無任何新檔案。
 - [x] **T0.4** Baseline 全鏈:以現有 rv2 package 走完 build → deps → run,證明框架可獨立完成一次完整測試。
   查核:`./todo_check.sh t0` 結束碼 0,輸出含 `colcon test` 結果與 `PASS: t0`。
-- [ ] **T0.5** 框架抽離:將 `r1_test_framework` 推上獨立 remote repo,改以 git submodule 引入並 pin 版本(§11.5.4)。
-  查核:`.gitmodules` 存在；fresh clone + `git submodule update --init` 後 `./todo_check.sh t0` 仍通過。
+- [ ] **T0.5** 框架抽離:`r1_test_framework` 已搬移至 workspace `src/r1_test_framework/` 為獨立平行 repo(v0.2.0,取代 §11.5.1 巢狀 submodule 模型;各 package 以相對 symlink 引用)。remote 已建立並推送(v0.2.1):master = baseline `1e00e1e`,階段工作於 `coco-claude/T0-T1` branch,PR 待合併。
+  查核:remote 存在且已 push ✅;PR 合併後 fresh clone workspace + 還原 symlink 執行 `./todo_check.sh t0` 仍通過(待 PR 合併後執行)。
 
 **驗證**
 - 語意查核:逐條對照 §11.5.3 腳本職責表(distro 解析、container 重建、`~/ros2_ws` 結構、唯讀掛載、rosdep `--ignore-src`、結束碼語意、`.deb` 命名)與 §11.5.2 環境策略表；確認 `test_depends.repos` 為宣告式輸入而非流程客製(§11.5.4)。
@@ -124,25 +137,25 @@ graph LR
 
 ## T1 介面定義(§2.1、§2.5.1、§2.5.2、§3.1)
 
-**目標**:在 `rv2_interfaces` 建立 `msg/r1/`、`srv/r1/` 全部介面,供後續各章編譯。
-**依賴**:T0；前置裁決 §12 #1(預設:暫置 `rv2_interfaces`)。
+**目標**:建立全部 msg/srv 介面,供後續各章編譯。
+**依賴**:T0;前置裁決 §12 #1——**已裁決(v0.2.0):新開獨立 `r1_interfaces` package**(`ros2_ws/src/r1_interfaces/`)。rosidl 型別名僅取檔案 basename(子目錄不入 namespace),`ControlSignalInfo` / `ControlSignalInfoReq` / `ControlSignalJoy` / `ControlSignalTwist` 與 `rv2_interfaces` legacy 型別同名衝突,§2.1「暫置 `rv2_interfaces/msg/r1/`」原文不可行;獨立 package 亦免除日後 migrate 搬移。
 
-- [ ] **T1.1** `msg/r1/ControlSignalInfo.msg`:8 欄位依 §3.1。
-  查核:欄位名稱、型別、順序與 §3.1 表逐欄一致；`ros2 interface show` 輸出正確。
-- [ ] **T1.2** `msg/r1/EntryStatus.msg` 與 `msg/r1/ManagerStatus.msg`:依 §2.5.1(EntryStatus 含 manager identity 欄位；ManagerStatus 含 instance / sequence 與完整 entry snapshot)。
-  查核:欄位與 §2.5.1 定義逐欄一致；master 對帳所需之 identity(§9.3)欄位齊備。
-- [ ] **T1.3** `srv/r1/ControlSignalManage.srv`(op = REGISTER | UNREGISTER)與 `srv/r1/ControlSignalInfoReq.srv`:依 §2.5.2,含 identity 三元組與 typed error(RETRYABLE_CONFLICT、STALE 等)。
-  查核:欄位與 §2.5.2 一致；回覆碼列舉涵蓋 §8.3 引用的全部結果類別。
-- [ ] **T1.4** `srv/r1/CsmRegister.srv`、`srv/r1/CsmHeartbeat.srv`、`srv/r1/CsmNotify.srv`:依 §2.5.2 與 §9.2(CsmRegister 攜帶 CSM 雙閾值、status interval、registration grace；CsmHeartbeat request 攜帶 `csm_name`；CsmNotify 含 kind、event ID、identity、ACK 語意)。
-  查核:欄位與 §2.5.2 / §9.2 一致；四種 kind 與 ALREADY_APPLIED / STALE 回覆可表達。
-- [ ] **T1.5** 資料通道 srv:`srv/r1/ControlSignalJoy.srv`、`srv/r1/ControlSignalTwist.srv`；String 型別之 service 模式配套依 §7 型別註冊需求確認,若需要則補齊並回饋 §2.1 清單。
-  查核:與 §7 註冊型別集合(Joy / Twist / String)對齊,service 模式可用型別無缺漏。
-- [ ] **T1.6** `rv2_interfaces` 之 rosidl 產生設定(CMakeLists / package.xml)納入上述檔案。
-  查核:`rv2_interfaces` 於 docker 內 build 通過。
+- [x] **T1.1** `msg/ControlSignalInfo.msg`:8 欄位依 §3.1。
+  查核:欄位名稱、型別、順序與 §3.1 表逐欄一致;`ros2 interface show` 輸出正確。✅ 逐欄查核通過;另含 MODE_*(§3.1 要求)與 TYPE_* 常數(加值,§7 型別鍵)。
+- [x] **T1.2** `msg/EntryStatus.msg` 與 `msg/ManagerStatus.msg`:依 §2.5.1(EntryStatus 含 manager identity 欄位;ManagerStatus 含 instance / sequence 與完整 entry snapshot)。
+  查核:欄位與 §2.5.1 定義逐欄一致;master 對帳所需之 identity(§9.3)欄位齊備。✅ 含 v1.2.1 之 `source_csm_instance_id`;phase / state 常數依 §2.5.1 編號。
+- [x] **T1.3** `srv/ControlSignalManage.srv`(op = REGISTER | UNREGISTER)與 `srv/ControlSignalInfoReq.srv`:依 §2.5.2,含 identity 三元組與 typed error(RETRYABLE_CONFLICT、STALE 等)。
+  查核:欄位與 §2.5.2 一致;回覆碼列舉涵蓋 §8.3 引用的全部結果類別。✅ 七類回覆碼齊備。
+- [x] **T1.4** `srv/CsmRegister.srv`、`srv/CsmHeartbeat.srv`、`srv/CsmNotify.srv`:依 §2.5.2 與 §9.2(CsmRegister 攜帶 CSM 雙閾值、status interval、registration grace;CsmHeartbeat request 攜帶 `csm_name`;CsmNotify 含 kind、event ID、identity、ACK 語意)。
+  查核:欄位與 §2.5.2 / §9.2 一致;四種 kind 與 ALREADY_APPLIED / STALE 回覆可表達。✅ kind 編號依 §2.5.2(0–3);heartbeat 非匿名 Trigger。
+- [x] **T1.5** 資料通道 srv:`srv/ControlSignalJoy.srv`、`srv/ControlSignalTwist.srv`;String 型別之 service 模式配套依 §7 型別註冊需求確認,若需要則補齊並回饋 §2.1 清單。
+  查核:與 §7 註冊型別集合(Joy / Twist / String)對齊,service 模式可用型別無缺漏。✅ §7.2:string 為 topic-only(SrvT = void),無需 ControlSignalString.srv;回覆常數名取 §6.3 字面 `SRV_RES_*`。
+- [x] **T1.6** `r1_interfaces` 之 rosidl 產生設定(CMakeLists / package.xml)納入上述檔案。
+  查核:`r1_interfaces` 於 docker 內 build 通過。✅ `./todo_check.sh t1` PASS;10/10 介面 `ros2 interface show` 解析正確。
 
 **驗證**
-- 語意查核:製作「msg/srv 欄位 ↔ § 條文」對照表逐欄打勾；重點確認三處易錯點——CsmHeartbeat 非匿名 Trigger(v1.0.0 修正)、ManagerStatus 含 PENDING 交易(§2.4)、EntryStatus 可在單側 snapshot 定位預期配對(CM10)。
-- 實際測試:`./todo_check.sh t1`(container:`r1_todo_t1_jazzy`；build 驗證,無 gtest)。
+- 語意查核:製作「msg/srv 欄位 ↔ § 條文」對照表逐欄打勾;重點確認三處易錯點——CsmHeartbeat 非匿名 Trigger(v1.0.0 修正)、ManagerStatus 含 PENDING 交易(§2.4)、EntryStatus 可在單側 snapshot 定位預期配對(CM10)。✅ 逐檔對抗式查核完成(0 must-fix),三處易錯點逐一確認。
+- 實際測試:`./todo_check.sh t1`(container:`r1_todo_t1_jazzy`;build 驗證,無 gtest)。✅ PASS。
 
 ---
 
@@ -437,7 +450,7 @@ graph LR
 | item | 查核內容 | container 名稱 |
 |---|---|---|
 | `t0` | 框架 baseline(現有 package 全量 build + test) | `r1_todo_t0_jazzy` |
-| `t1` | `rv2_interfaces` build(msg/srv 定義) | `r1_todo_t1_jazzy` |
+| `t1` | `r1_interfaces` build(msg/srv 定義,§12 #1 裁決) | `r1_todo_t1_jazzy` |
 | `t2`–`t9` | 對應大項之 ctest 過濾執行(附錄 A) | `r1_todo_t2_jazzy` 等 |
 | `t10` | `r1_test_mocks` build + smoke | `r1_todo_t10_jazzy` |
 | `t11` | `r1_integration_tests` 全場景 | `r1_todo_t11_jazzy` |
