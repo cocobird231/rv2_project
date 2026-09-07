@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.1.0)
+# R1 實作 TODO List(v0.1.1)
 
 > 依據:`r1_design_draft.md` v1.2.2(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
@@ -7,6 +7,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.1.1 | T0.1–T0.4 查核完成勾選。t0 baseline 於 docker 實測通過(28 gtests 全綠,container 自動卸載,host 無殘留)；框架修正:container 內以空 tmpfs 遮蔽 `test_env/`(避免 ament linters 掃到產物之 418 筆誤報)、t0 篩選至既有 gtest 迴歸(legacy lint 一致性不在 R1 範圍;jazzy uncrustify 將 `.h` 以 C 解析致 `constexpr` 報錯,屬既有狀態) |
 | v0.1.0 | 初版:大項 T0–T12、依賴序、逐小項查核條件、逐大項語意查核與 docker 實測指令；隨附 `r1_test_framework` 腳本組(test_build / test_deps / test_run / test_packages / test_clean / todo_check)與 package 根目錄接線(symlink、`test_depends.repos`、`.gitignore` 排除 `test_env/`) |
 
 ## 1. 使用方式與共通規範
@@ -108,9 +109,9 @@ graph LR
   查核:`bash -n` 全數通過；每支腳本有用法說明；`git log` 存在初始 commit。
 - [x] **T0.2** package 根目錄接線:六支 symlink、`test_depends.repos`(宣告 `rv2_interfaces`)、`.gitignore` 排除 `test_env/`。
   查核:`ls -l test_*.sh` symlink 有效；`git status` 不出現 `test_env/`。
-- [ ] **T0.3** Container 生命週期驗證:base image 下載、container 建立、掛載(原始碼唯讀、`test_env` 一對一)、卸載。
+- [x] **T0.3** Container 生命週期驗證:base image 下載、container 建立、掛載(原始碼唯讀、`test_env` 一對一)、卸載。
   查核:`./test_build.sh` 後 `docker ps` 可見 container；container 內 `ls /root/ros2_ws/src/` 見本 package 與 `rv2_interfaces`；`./test_clean.sh` 後 `docker ps -a` 無殘留；host 上除 `test_env/` 外無任何新檔案。
-- [ ] **T0.4** Baseline 全鏈:以現有 rv2 package 走完 build → deps → run,證明框架可獨立完成一次完整測試。
+- [x] **T0.4** Baseline 全鏈:以現有 rv2 package 走完 build → deps → run,證明框架可獨立完成一次完整測試。
   查核:`./todo_check.sh t0` 結束碼 0,輸出含 `colcon test` 結果與 `PASS: t0`。
 - [ ] **T0.5** 框架抽離:將 `r1_test_framework` 推上獨立 remote repo,改以 git submodule 引入並 pin 版本(§11.5.4)。
   查核:`.gitmodules` 存在；fresh clone + `git submodule update --init` 後 `./todo_check.sh t0` 仍通過。
