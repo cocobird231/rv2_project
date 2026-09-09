@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.6.0)
+# R1 實作 TODO List(v0.7.0)
 
 > 依據:`r1_design_draft.md` v1.2.2(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
@@ -7,6 +7,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.7.0 | **更新 Agent:`coco-codex`**。T11.1–T11.5 完成:`r1_integration_tests` launch_testing 基架、I00 空場景/並行實證與 I1–I18 全場景；19 個 CTest targets 以獨立 ROS_DOMAIN_ID(可整段 relocation)及 parallel=2 執行。補齊 real-manager PENDING TTL、master lost-ACK 原 event 重送/冪等、manager/service readiness barrier、雙 ready snapshot gate、真 waiter armed barrier、MockMaster out-of-order/stale generation、process-model crash/restart、producer timestamp 週期/in-flight/backoff、fresh/raw status identity 證據。多輪對抗式查核發現全修，最終 3-agent 分區複核 0 must-fix；`./todo_check.sh t11` docker PASS(39-test 彙總,0 error/failure/skip,container 自動卸載)，受影響 I5/I6/I11/I12/I17 另各連跑 3 次全綠；mock 支援異動另經 t10 27-test regression 全綠。I10 sanitizer 組態依規劃保留至 T12。 |
 | v0.6.0 | **更新 Agent:`coco-codex`**。T10.1–T10.6 完成:`r1_test_mocks` 五個可腳本化 nodes、23 個 smoke gtests、嚴格 `<10%` rate 驗證、接受但不回覆、ACK 串接固定序列與四種 CsmNotify/亂序/舊世代注入；修正 callback lifetime 與跨執行緒計數 race。docker t10 PASS(27-test 彙總),3-agent 最終對抗式複核 0 must-fix。同步修正 §1.3 跨 package 執行位置、T10/T11 的 pre-T1 舊依賴/框架文字與附錄案例數 |
 | v0.5.1 | **更新 Agent:`coco-codex`**。新增 §1.4 文件修訂紀錄規範:每次更動 `r1_todo.md` 或 `r1_design_draft.md`,除同步更新文件版本號與版本歷史外,必須於該筆歷史明確標示實際更新 Agent；並補列 Codex 的 agent 身分命名 |
 | v0.5.0 | T8.1–T8.4、T9.1–T9.9 完成:`test_handles.cpp`(H1–H8,含 in-flight unregister 不復活與 debug/release 雙模式 H3)、`csm_master.h`(status 唯一訂閱者、identity 配對、CSM 級雙閾值 polling、level reconciliation 含 v1.2.1 absence clock、可靠通知 pump)、`csm_master_node` 執行檔與 CM1–CM13(mock CSM 裸 node)。docker t8 / t9 閘門 PASS。4-agent 對抗式查核 27 項發現、14 must-fix 全修:實作面 6(DISCONNECTED record 之 status 復活防護、same-instance rebuild 保留 seq fence、pending 健康事件按 owner 區分取代、notify RPC in-flight deadline 防 budget 餓死、DISCONNECTED peer 不永久關閉 ready gate、event FIFO);測試面 8(H8 補真 in-flight、CM1 interval/grace 驗證、CM2 訂閱斷言、CM6 stale-status fence、CM11 grace 起點、CM12 STALE settle、CM13 變體 C 無幻影 TIMEOUT)。獨立複核逐項確認 |
@@ -401,20 +402,20 @@ graph LR
 **目標**:launch_testing 場景集 I1–I18,含 `csm_master_node` in loop。獨立 package(`ros2_ws/src/r1_integration_tests/`)。
 **依賴**:T8、T9、T10。
 
-- [ ] **T11.1** Package 骨架與工具:launch_testing 基架、狀態收斂等待 helper、`ros2 topic` / `service` 探測工具、每場景獨立 `ROS_DOMAIN_ID` 配發(§11.3)；`test_depends.repos` 宣告 transport package、`r1_test_mocks`、`r1_interfaces`。
-  查核:單一空場景可於 docker 內 launch_test 通過；兩場景並行不互擾。
-- [ ] **T11.2** I1–I4:全流程、多型別多通道、斷線恢復(disconnect=0 不誤移除)、確認死亡 + 重建(同 tick 註銷三要件)。
-  查核:各場景驗證欄逐句轉為 assert。
-- [ ] **T11.3** I5–I8:CSM 失聯(master 雙閾值 + RETRY_WAIT + Handle 恢復)、target 快速重啟(空 snapshot 對帳)、註冊風暴(100 組並發,成功數 = 唯一名數)、response 丟失(三層回收)。
-  查核:同上；I5/I6 使用真 `csm_master_node` 而非 mock。
-- [ ] **T11.4** I9–I13:錯誤 payload、壓力 + sanitizer(拉長版 I1)、status 觀測(與 InfoReq 互證)、master 通報鏈(丟包重送 + 冪等)、waitForMessage 端到端。
-  查核:同上；I10 之 sanitizer build 由 T12 組態提供。
-- [ ] **T11.5** I14–I18:master 失聯 degraded(回線無風暴)、terminal activity race、stale generation、retry 非阻塞與 storm 控制、service response failure 先於 master。
-  查核:同上；I15/I16 需 MockMasterNode 之亂序 / 舊 generation 腳本(T10.4)。
+- [x] **T11.1** Package 骨架與工具:launch_testing 基架、狀態收斂等待 helper、`ros2 topic` / `service` 探測工具、每場景獨立 `ROS_DOMAIN_ID` 配發(§11.3)；`test_depends.repos` 宣告 transport package、`r1_test_mocks`、`r1_interfaces`。
+  查核:單一空場景可於 docker 內 launch_test 通過；兩場景並行不互擾。✅ CMake 自動註冊 I00 + I1–I18 共 19 個 launch targets；I00 無 ROS node 的 keepalive 場景驗證 launch ready、domain 配發與 parallel live-PID overlap；domain 30–48 唯一且可由 `R1_ITEST_DOMAIN_BASE` 整段 relocation；`todo_check.sh t11` 固定 CTest parallel=2。
+- [x] **T11.2** I1–I4:全流程、多型別多通道、斷線恢復(disconnect=0 不誤移除)、確認死亡 + 重建(同 tick 註銷三要件)。
+  查核:各場景驗證欄逐句轉為 assert。✅ I1 的 read/callback/payload/雙側 ACTIVE/InfoReq exact list、I2 的 joy/twist/string 與 topic/service 隔離、I3 的 TIMEOUT→ACTIVE 且 disconnect=0 entry 以 2 秒/至少 8 筆 fresh snapshots 證明留存、I4 的雙側各自 terminal、proxy gate、callback-before-notification、同 tick absent snapshot、舊 Handles 失效、無 retry與 App 顯式重建均為機器斷言。
+- [x] **T11.3** I5–I8:CSM 失聯(master 雙閾值 + RETRY_WAIT + Handle 恢復)、target 快速重啟(空 snapshot 對帳)、註冊風暴(100 組並發,成功數 = 唯一名數)、response 丟失(三層回收)。
+  查核:同上；I5/I6 使用真 `csm_master_node` 而非 mock。✅ I5 以 producer timestamp 驗 600ms/2.5s 雙門檻，並逐筆 fresh snapshot及 state-edge 證明中間 Source 持續 ACTIVE/REGISTERED；I6 以 raw status 精確觀察同 identity 的 RETRY_WAIT/endpoint absent、驗 5.2s dynamic grace下界，且對 PAIR_MISSING 首 ACK 丟失驗證同 event 重送、APPLIED→ALREADY_APPLIED、ACK quiet及 App exactly-once。I7 以 barrier 同時送出 60+40=100 attempts、producer interval overlap，並驗成功數=60 unique names、三側無 PENDING。I8 先 warm subscription，再以 integration-only blocking Sink 在真 Manager 決定性驗證 PENDING producer-time 0.35–1.0s、500ms TTL 回收與 late completion STALE，另驗已 REGISTERED entry 由 matching UNREGISTER 回收及舊世代不傷 successor。
+- [x] **T11.4** I9–I13:錯誤 payload、壓力 + sanitizer(拉長版 I1)、status 觀測(與 InfoReq 互證)、master 通報鏈(丟包重送 + 冪等)、waitForMessage 端到端。
+  查核:同上；I10 之 sanitizer build 由 T12 組態提供。✅ I9 DDS 型別隔離、I10 manager/service readiness 後執行三型別 100Hz×8s 壓力、I11 readiness 後以 status/InfoReq/Handle exact metadata/state/rate互證、I12 readiness 與明確 proxy arm 後驗 STATE exact payload/雙方 local row 不受 peer observation 改寫及 reliable lost-ACK same-event APPLIED→ALREADY_APPLIED、I13 即時/約1s timeout/真 waiter-count armed 後 unregister 喚醒均為機器斷言；I10 sanitizer build 依原規劃明確留待 T12。
+- [x] **T11.5** I14–I18:master 失聯 degraded(回線無風暴)、terminal activity race、stale generation、retry 非阻塞與 storm 控制、service response failure 先於 master。
+  查核:同上；I15/I16 需 MockMasterNode 之亂序 / 舊 generation 腳本(T10.4)。✅ I14 以雙 status proxy 分段放行 post-restart ready snapshots、驗第二側前零對帳及回線後 bounded STATE burst/次窗零新增；I15 以 MockMaster 將 DISCONNECTED 與舊 STATE 亂序送入高頻接收，逐列核對 Source ownership並驗 seal 後零資料；I16 對 late G+1 response、G UNREGISTER/DISCONNECTED 逐項驗 STALE/ignore 且 G+2 持續；I17 三 targets process-model crash/restart、producer steady timestamp 量測 bounded in-flight/週期/backoff+jitter，以新 instance/fresh snapshots/完整 identity及 settle 後重驗封住 stale cache，並對相異 event immediate replay驗 whole-history dedup；I18 response epoch terminal、matching G 在 RETRY_WAIT 回 APPLIED並觸發 matching UNREGISTER、唯一 G+1 mandatory retry及晚到 G 回 STALE且不重複 enqueue。
 
 **驗證**
-- 語意查核:I 表 18 列逐列對照 §11.2 之「步驟 / 驗證」欄；確認每列的驗證欄位全部轉為機器斷言,無「人工觀察」殘留。
-- 實際測試:`./todo_check.sh t11`(container:`r1_todo_t11_jazzy`；單 container 內多 node,ROS_DOMAIN_ID 隔離 + docker network 第二層保障)。
+- 語意查核:I 表 18 列逐列對照 §11.2 之「步驟 / 驗證」欄；確認每列的驗證欄位全部轉為機器斷言,無「人工觀察」殘留。✅ 多輪對抗式查核修正 PENDING TTL 空洞、DDS arrival-time 偽時序、ready/startup gate、waiter pre-call race、late exact-one、stale status cache、門檻間暫態與 status/InfoReq partial compare；全部發現修正後由 3 agents 依 T11.1/I1–I6、I7–I12、I13–I18 分區重審，最終 0 must-fix。
+- 實際測試:`./todo_check.sh t11`(container:`r1_todo_t11_jazzy`；單 container 內多 node,ROS_DOMAIN_ID 隔離 + docker network 第二層保障)。✅ 最終 clean PASS:19 個 CTest launch targets、39 筆 xUnit 彙總,0 error/failure/skip；CTest parallel=2，I00 machine-assert 實際 overlap；container 自動卸載。受影響 I5/I6/I11/I12/I17 另以 `--repeat until-fail:3` 全綠；I10 startup gate另連跑 5 次全綠。另因 T11 擴充 mock crash/restart 與 producer timestamp，`./todo_check.sh t10` regression PASS(27 tests)。
 
 ---
 
@@ -453,7 +454,7 @@ graph LR
 | T8 | `test/r1/test_handles.cpp` | `test_handles` | H1–H8 | 8 |
 | T9 | `test/r1/test_csm_master.cpp` | `test_csm_master` | CM1–CM13 | 13 |
 | T10 | `r1_test_mocks/test/test_mock_{manager,source_sink,master}.cpp`、`test_status_fault.cpp` | 4 smoke targets | — | 23 |
-| T11 | `r1_integration_tests`(launch_testing) | — | I1–I18 | 18 |
+| T11 | `r1_integration_tests`(launch_testing) | 19 launch targets | I1–I18(+I00 harness smoke) | 18(+1 framework smoke) |
 
 單元 + 整合案例合計 154(不含 §11.3 之逐 function 補充案例)。
 
