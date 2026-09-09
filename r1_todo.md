@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.5.1)
+# R1 實作 TODO List(v0.6.0)
 
 > 依據:`r1_design_draft.md` v1.2.2(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
@@ -7,6 +7,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.6.0 | **更新 Agent:`coco-codex`**。T10.1–T10.6 完成:`r1_test_mocks` 五個可腳本化 nodes、23 個 smoke gtests、嚴格 `<10%` rate 驗證、接受但不回覆、ACK 串接固定序列與四種 CsmNotify/亂序/舊世代注入；修正 callback lifetime 與跨執行緒計數 race。docker t10 PASS(27-test 彙總),3-agent 最終對抗式複核 0 must-fix。同步修正 §1.3 跨 package 執行位置、T10/T11 的 pre-T1 舊依賴/框架文字與附錄案例數 |
 | v0.5.1 | **更新 Agent:`coco-codex`**。新增 §1.4 文件修訂紀錄規範:每次更動 `r1_todo.md` 或 `r1_design_draft.md`,除同步更新文件版本號與版本歷史外,必須於該筆歷史明確標示實際更新 Agent；並補列 Codex 的 agent 身分命名 |
 | v0.5.0 | T8.1–T8.4、T9.1–T9.9 完成:`test_handles.cpp`(H1–H8,含 in-flight unregister 不復活與 debug/release 雙模式 H3)、`csm_master.h`(status 唯一訂閱者、identity 配對、CSM 級雙閾值 polling、level reconciliation 含 v1.2.1 absence clock、可靠通知 pump)、`csm_master_node` 執行檔與 CM1–CM13(mock CSM 裸 node)。docker t8 / t9 閘門 PASS。4-agent 對抗式查核 27 項發現、14 must-fix 全修:實作面 6(DISCONNECTED record 之 status 復活防護、same-instance rebuild 保留 seq fence、pending 健康事件按 owner 區分取代、notify RPC in-flight deadline 防 budget 餓死、DISCONNECTED peer 不永久關閉 ready gate、event FIFO);測試面 8(H8 補真 in-flight、CM1 interval/grace 驗證、CM2 訂閱斷言、CM6 stale-status fence、CM11 grace 起點、CM12 STALE settle、CM13 變體 C 無幻影 TIMEOUT)。獨立複核逐項確認 |
 | v0.4.0 | T6.1–T6.4、T7.1–T7.14 完成:`control_signal_factory.h` + `src/r1/`(singleton 單一定義、joy/twist/string 註冊)、`source_registration.h`、`control_signal_manager.h`(五階段 tick、兩階段註冊、retry 狀態機、master 互動、通知處理、黑白名單)與 F1–F5、M1–M26 全數實作;`control_signal_handles.h` 為 Manager API 相依提前實作(H1–H8 測試屬 T8)。docker t6 / t7 閘門 PASS。**裁決 §12 #6(D7)提案**:`RetryPolicy::Recommended()` = {initialDelayMs 200, maxDelayMs 5000, jitterRatio 0.2, maxInitialAttempts 3, maxInFlight 4, quarantineThreshold 3},`autoRetryInitial` 旗標歸 RetryPolicy(全域);依 §2.4,typed RETRYABLE_CONFLICT 之 D3 retry 為強制、不受 D7 旗標與 initial cap 約束。5-agent 對抗式查核 43 項發現、25 must-fix 全修:實作面 10(D3/D7 retry 治理、stale completion 世代防護、quarantine 未生效、三處鎖巢套、peer-health 世代驗證、FIFO 冪等快取、sink 清理競態、abort 路徑補 rollback UNREGISTER、tick 執行緒 callback guard、**解構 fence**——manager 中途銷毀時 in-flight async callback UAF,以 alive sentinel + callback 計數 drain 修復);測試面 15(M3 依 §2.4 改判 D3 強制 retry、M4 改 16 執行緒跨 4 真實 targets、M5 補 policy-off 分支、M7 補 in-flight、M8 補 PAIR_MISSING、M14 補 in-callback 半、M16 補 sink rate、M17 補 per-CSM 單筆與 degraded 進出、M18 補覆蓋語意、M24 補 established intent 無上限、M25 碰撞決定化)。M4 併 TSan、M10 併 ASan 維持 T12 |
@@ -43,10 +44,12 @@
 
 ### 1.3 查核執行指令
 
-腳本位於 package 根目錄(symlink 至 `r1_test_framework/`,§11.5.1):
+腳本位於各 package 根目錄(symlink 至 workspace sibling `r1_test_framework/`)；必須從
+該 item 的目標 package 執行(附錄 B),例如 T0–T9 從 transport package、T10 從
+`r1_test_mocks`、T11 從 `r1_integration_tests` 執行:
 
 ```bash
-cd ~/Workspace/ros2_ws/src/rv2_control_signal_transport
+cd ~/Workspace/ros2_ws/src/<目標-package>
 ./todo_check.sh <item>          # 一鍵:建 container → 裝依賴 → build + test → 卸載
 ./todo_check.sh <item> -k       # 保留 container 供除錯
 ./todo_check.sh <item> -d humble  # 指定其他 distro
@@ -67,7 +70,7 @@ cd ~/Workspace/ros2_ws/src/rv2_control_signal_transport
 | 分支模型 | 每個階段(一個或連續數個 TODO 大項)之新增、修改、刪除一律開新 branch,不直接 commit 至主 branch。branch 命名 `<身分>/<項目>`,如 `coco-claude/T0-T1`、`coco-claude/T2` |
 | **Migrate 分支政策(v0.2.2)** | 既有 rv2 packages 處於 migrate 階段:R1 新版程式碼以 **`r1` branch 為新版主 branch**,rv2 既有版本(`master`)凍結不動。`rv2_control_signal_transport` 之階段 PR 一律以 `r1` 為 base;純 R1 新 repos(`r1_test_framework`、`r1_interfaces` 等)無 rv2 包袱,主 branch 即 `master` |
 | 完成流程 | 階段完成(該大項查核與實測通過)後:push branch → 對主 branch 提出 PR → 回報使用者。PR 合併由使用者裁決 |
-| Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`。`r1_interfaces` remote 待建立;建立前 branch 僅存本地 |
+| Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`。`r1_interfaces` remote 待建立;建立前 branch 僅存本地 |
 
 ### 1.5 前置裁決(開工前決定)
 
@@ -374,22 +377,22 @@ graph LR
 **目標**:整合測試所需的可腳本化故障注入 nodes。獨立 package,置於 workspace(`ros2_ws/src/r1_test_mocks/`)。
 **依賴**:T1(介面)；與 T7–T9 平行開發可行。
 
-- [ ] **T10.1** Package 骨架:ament_cmake、`test_depends.repos` 宣告(`rv2_interfaces`)、引入 `r1_test_framework` submodule + symlink(§11.5.4 一般化約定之首次複用驗證)。
-  查核:`./todo_check.sh t10` 可 build；框架未經客製即可運作。
-- [ ] **T10.2** `MockManagerNode`:`control_signal_manage` service 之可腳本化行為——接受、拒絕(指定 reason)、延遲 N ms、**不回覆**、回覆後立刻斷線。
-  查核:五種行為逐一可由參數 / service 切換觸發(smoke test)。
-- [ ] **T10.3** `MockSourceNode` / `MockSinkNode`:裸 rclcpp pub / sub / client / server,可設定頻率、突發停止、亂序型別。
-  查核:三種擾動逐一可觸發；頻率誤差 < 10%。
-- [ ] **T10.4** `MockMasterNode`:register 拒絕、heartbeat 不回應、注入四種 CsmNotify kind、重送 / 亂序 / 舊 generation、攔截 ACK。
-  查核:腳本項逐一可觸發；可回放固定序列供 I12/I16 使用。
-- [ ] **T10.5** `StatusFaultNode`:以代理方式暫停 / 恢復 / 降頻某 CSM 的 status 發布。
-  查核:三種操作逐一可觸發且可觀察(`ros2 topic hz`)。
-- [ ] **T10.6** 各 mock 之 smoke tests(gtest 或 launch_testing)。
-  查核:`./todo_check.sh t10` 全綠。
+- [x] **T10.1** Package 骨架:ament_cmake、`test_depends.repos` 宣告(`r1_interfaces`)、以相對 symlink 使用 workspace sibling `r1_test_framework`(依 v0.2.0 layout 裁決,首次複用驗證)。
+  查核:`./todo_check.sh t10` 可 build；框架未經客製即可運作。✅ sibling framework 六支 symlink、local dependency 掛載與五個 executables 均於原框架流程 build 成功。
+- [x] **T10.2** `MockManagerNode`:`control_signal_manage` service 之可腳本化行為——接受、拒絕(指定 reason)、延遲 N ms、**不回覆**、回覆後立刻斷線。
+  查核:五種行為逐一可由參數 / service 切換觸發(smoke test)。✅ 五種行為全覆蓋；reject code/reason 與不落 state、delay 先套用、service 真斷線/恢復均有斷言；no-reply REGISTER 先接受後抑制 response。
+- [x] **T10.3** `MockSourceNode` / `MockSinkNode`:裸 rclcpp pub / sub / client / server,可設定頻率、突發停止、亂序型別。
+  查核:三種擾動逐一可觸發；頻率誤差 < 10%。✅ Joy/Twist/String topic、Joy/Twist service、pause/resume、錯型別隔離均覆蓋；以三秒實際 elapsed 嚴格斷言相對誤差 `< 10%`。
+- [x] **T10.4** `MockMasterNode`:register 拒絕、heartbeat 不回應、注入四種 CsmNotify kind、重送 / 亂序 / 舊 generation、攔截 ACK。
+  查核:腳本項逐一可觸發；可回放固定序列供 I12/I16 使用。✅ heartbeat future 真 timeout；四種 kind、stable event resend、非單調 generation、舊 instance 與飽和舊世代均覆蓋；具名 immutable sequence 以前一筆 ACK 串接下一筆,並記錄 ACK code。
+- [x] **T10.5** `StatusFaultNode`:以代理方式暫停 / 恢復 / 降頻某 CSM 的 status 發布。
+  查核:三種操作逐一可觸發且可觀察(`ros2 topic hz`)。✅ pass/pause/resume/throttle 逐項驗證,forwarded/dropped 計數可觀察且跨執行緒安全。
+- [x] **T10.6** 各 mock 之 smoke tests(gtest 或 launch_testing)。
+  查核:`./todo_check.sh t10` 全綠。✅ 4 個 gtest targets、23 個 cases 全綠。
 
 **驗證**
-- 語意查核:mock 能力清單逐項對照 §11.1 表；確認 M5/M6 之整合版(I8)所需行為(接受但不回覆)確實可腳本化。
-- 實際測試:`./todo_check.sh t10`(container:`r1_todo_t10_jazzy`)。
+- 語意查核:mock 能力清單逐項對照 §11.1 表；確認 M5/M6 之整合版(I8)所需行為(接受但不回覆)確實可腳本化。✅ 多輪對抗式查核之 must-fix 全修,3-agent 最終複核 0 must-fix；ASan 定位並修復短生命週期 probe callback UAF,100 次 targeted regression 全綠。
+- 實際測試:`cd ~/Workspace/ros2_ws/src/r1_test_mocks && ./todo_check.sh t10`(container:`r1_todo_t10_jazzy`)。✅ PASS:23 個 gtests / 4 個 CTest targets,彙總 27 tests、0 error/failure/skip；container 自動卸載。
 
 ---
 
@@ -398,7 +401,7 @@ graph LR
 **目標**:launch_testing 場景集 I1–I18,含 `csm_master_node` in loop。獨立 package(`ros2_ws/src/r1_integration_tests/`)。
 **依賴**:T8、T9、T10。
 
-- [ ] **T11.1** Package 骨架與工具:launch_testing 基架、狀態收斂等待 helper、`ros2 topic` / `service` 探測工具、每場景獨立 `ROS_DOMAIN_ID` 配發(§11.3)；`test_depends.repos` 宣告 transport package、`r1_test_mocks`、`rv2_interfaces`。
+- [ ] **T11.1** Package 骨架與工具:launch_testing 基架、狀態收斂等待 helper、`ros2 topic` / `service` 探測工具、每場景獨立 `ROS_DOMAIN_ID` 配發(§11.3)；`test_depends.repos` 宣告 transport package、`r1_test_mocks`、`r1_interfaces`。
   查核:單一空場景可於 docker 內 launch_test 通過；兩場景並行不互擾。
 - [ ] **T11.2** I1–I4:全流程、多型別多通道、斷線恢復(disconnect=0 不誤移除)、確認死亡 + 重建(同 tick 註銷三要件)。
   查核:各場景驗證欄逐句轉為 assert。
@@ -449,9 +452,10 @@ graph LR
 | T7 | `test/r1/test_manager.cpp` | `test_manager` | M1–M26 | 26 |
 | T8 | `test/r1/test_handles.cpp` | `test_handles` | H1–H8 | 8 |
 | T9 | `test/r1/test_csm_master.cpp` | `test_csm_master` | CM1–CM13 | 13 |
+| T10 | `r1_test_mocks/test/test_mock_{manager,source_sink,master}.cpp`、`test_status_fault.cpp` | 4 smoke targets | — | 23 |
 | T11 | `r1_integration_tests`(launch_testing) | — | I1–I18 | 18 |
 
-單元 + 整合案例合計 131(不含 §11.3 之逐 function 補充案例)。
+單元 + 整合案例合計 154(不含 §11.3 之逐 function 補充案例)。
 
 ## 附錄 B:`todo_check.sh` item 對照
 
