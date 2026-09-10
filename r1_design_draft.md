@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.8)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.9)
 
-> 狀態:正式版(v1.3.8);framework v0.2.0 已合併，package 導入依驗證結果記錄。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.9);C/C++ lint 改以 clang-format 原生能力為界。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.9 | **更新 Agent:`coco-codex`**。依使用者裁決，§11.5.5 的 C/C++ lint 改為只比對 clang-format 18 原生輸出；排除無法自動修正的 block 兩格、空 namespace 缺名、macro/條件編譯語意推論、formatter-off 額外檢查與 Doxygen/多行註解結構要求。文件樣式保留為建議，不再以補充詞法檢查或輸出正規化擋 PR；一般格式、可修正 namespace、Python/Shell 與版本/merge 順序不變。framework Docker 回歸及全檔 lint 通過，獨立版本 commit/tag v0.2.1 `3dd3c27` 已提出 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6)；consumer gitlink 與 rv2 Doxyfile 不動，證據記於 TODO T0.7。 |
 | v1.3.8 | **更新 Agent:`coco-codex`**。framework PR #5 經使用者 rebase merge，主線 release `5316f3e` 與 v0.2.0 tag commit `631a85b` tree 完全相同；consumer 升級固定既有 tag commit，不移動 tag。四個 package gitlink-only dependency commits 已留本地；Docker lint 三個 FAIL、interfaces 無支援來源而 SKIP，未 push、附 release commit/tag 或提出 PR。package 版本、rv2 Doxyfile 與 integration 布局保持不變，導入證據及後續 PR 條件記於 TODO T0.7。 |
 | v1.3.7 | **更新 Agent:`coco-codex`**。使用者同意以目前 lint 格式定版並提出 PR，§11.5 移除待確認標示，保留 120 欄/InlineOnly 與已討論的註解規範。framework 獨立版本 commit `631a85b`/annotated tag `v0.2.0` 已推送 [PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)；其他 package 須等待使用者以 merge commit 合併，再固定至該版本 SHA。本輪不更動其他 package gitlink、版本或 rv2 Doxyfile。 |
 | v1.3.6 | **更新 Agent:`coco-codex`**。§11.5.5 增加一般多行 block 與 Doxygen `/** */` API 文件註解候選：獨立 delimiter、對齊星號、非空內容與首個非空行 `@brief`；保留單行一般註解及 `/**<` 成員註解。說明官方支援語法與專案慣例的區別，lint 僅驗證結構、不驗證文件覆蓋率或參數描述語意；不修改 rv2 Doxyfile、不定版或更新 gitlink。 |
@@ -1755,30 +1756,28 @@ Allman、4 spaces、namespace 不縮排，保留 include 順序與一般註解�
 短函式單行。Python 採 PEP 8/Black 相容格式，由 Ruff 0.15.7 執行
 format check 與 E4/E7/E9/F/I 檢查(88 欄、雙引號)；Shell 採語法檢查與 ShellCheck。
 
-C/C++ 行內 `//` 或 `/* */` 前若同一行已有非空白內容(含前一段註解)，必須恰好兩格，
-不對齊註解欄，也不在註解文字末尾加空白。
-巢狀 namespace 不增加縮排、不合併宣告，結尾註解按實際名稱由內到外標示；
-`FixNamespaceComments: true` 與 `ShortNamespaceLines: 0` 補正非空短 namespace。
-clang-format 18 不會替完全空的 namespace 加上名稱，也不保證處理跨條件編譯或
-停用格式化區段；`SpacesBeforeTrailingComments: 2` 亦不適用於 `/* */`。
-使用者裁決所有情況都須強制檢查，故 lint 增加詞法檢查，涵蓋空 namespace 與 block
-comment 間距，formatter-off 不豁免；直接宣告但無法可靠判定的 namespace 結構明確失敗。
-檢查不做 macro 展開或編譯；局部可見的 namespace/token-paste macro 會失敗，外部
-macro 的 namespace 展開語意無法驗證，namespace 應直接宣告。
-formatter 輸出只在記憶體將 inline block comment 間距
-恢復兩格後與來源比對，其餘差異照常失敗，不寫回檔案；開發者需手動補足 formatter
-不能修正的規則，再次執行 lint。
+C/C++ lint 依本版使用者裁決，僅比較來源與 clang-format 18 原生輸出，
+取代先前「所有情況強制檢查」規則；不另做註解/namespace 詞法檢查，
+也不再正規化 formatter 的 block comment 間距。`SpacesBeforeTrailingComments: 2`
+保留給 `//`，不對齊註解欄；`/* */` 與 `/**< */` 依 formatter 原生間距。
+巢狀 namespace 仍不縮排、不合併；`FixNamespaceComments: true` 與
+`ShortNamespaceLines: 0` 保留，能自動修正的 namespace 結尾名稱照常檢查。
 
-多行一般說明採 `/* */`，class/function API 說明採 Doxygen 官方支援的 JavaDoc-style
-`/** */`；本案統一開頭獨立成行、內文每行為同縮排加 ` * 文字`、空白內容行只留
-` *`、結尾同縮排加 ` */` 且獨立成行，區塊不得空白。文件首個非空內容行為
-`@brief 文字`；`@param[in]`、`@param[out]`、`@param[in,out]` 與 `@return` 等依實際 API 撰寫，非每個
-函式都強制存在回傳或參數標籤。單行一般 `/* 文字 */` 與行內 `/**< 成員說明 */`
-保留，仍依行內註解前兩格規則。星號 margin 使用一格，不能誤套為兩格。
-強制星號/`@brief` 是選自 Doxygen 支援語法的專案慣例，不是 Doxygen 唯一合法形式。
-lint 透過既有詞法 token 檢查區塊結構與 `@brief` 基本形狀，formatter-off 不豁免；
-不修改文件內文、不自動 reflow，不判斷是否每個 API 都有文件，也不核對參數或
-回傳描述與宣告的語意。本輪不執行 Doxygen 產生文件，不更動 rv2 Doxyfile。
+暫不作額外 lint gate 的項目：
+
+- `/* */` 前強制兩格、完全空 namespace 缺少結尾名稱。
+- macro/token-paste/跨條件編譯的 namespace 展開語意及額外括號/詞法驗證；
+  不因出現 macro 就跳過整份檔案，formatter 可處理的一般格式仍須一致。
+- `clang-format off` 與 formatter 原生略過區段內的額外註解/namespace 檢查。
+- 多行 block 的強制星號 margin、獨立 delimiter、非空描述，以及 Doxygen
+  `@brief` 必填、限定 `/** */`、禁止 Qt-style/單行/structural-only 註解等要求。
+
+多行一般說明仍建議對齊星號的 `/* */`，class/function API 文件仍建議 Doxygen
+JavaDoc-style `/** */` 與 `@brief`、`@param`、`@return`；這些是文件撰寫建議，
+不再是 formatter 能力以外的阻擋條件。formatter 自身能調整的註解縮排仍照常比對，
+`ReflowComments: false` 保留；不產生/改寫描述、不驗證 API 文件覆蓋率或參數語意。
+formatter 執行失敗仍回傳非零，Python/Ruff 與 ShellCheck 不受本裁決影響。
+本輪不執行 Doxygen 產生文件，不更動 rv2 Doxyfile。
 
 這個 gate 不取代 C/C++ 編譯、語意分析或功能測試，也不新增自動修正開關。
 若違規，由開發者手動選檔執行 formatter、檢查 diff，再重跑 lint。正式定版後的
@@ -1789,10 +1788,14 @@ lint 透過既有詞法 token 檢查區塊結構與 `@brief` 基本形狀，form
 主線 release commit 改為 `5316f3ebe5efc29ab9cb114138091638ac2c4014`，其 tree 與原 tag
 commit 完全一致；各 package 仍固定原 v0.2.0 tag 所指 `631a85b`，不移動或覆寫 tag。
 consumer 導入須實際跑新版 lint，失敗時如實記錄，不自行批次格式化或跳過 PR 閘門。
-本輪 transport、mocks、integration 的既有來源未通過 lint；interfaces 為無支援來源的
+v1.3.8 導入驗證中 transport、mocks、integration 的既有來源未通過 lint；interfaces 為無支援來源的
 SKIP，且無 remote。四個 dependency commits 留本地，未 push 或提出 PR，詳見 TODO T0.7；
 尚未附 package 版本 commit，integration 原布局不因 gitlink 升級改動。後續版本仍依 §11.5.4
 採 merge commit 保留版本 SHA。
+本版原生能力邊界調整已經 Docker 回歸與 framework 全檔 lint 通過，獨立版本
+commit/tag v0.2.1 `3dd3c27` 已提出 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6)；
+等使用者 merge 後才更新 consumers。transport 以開發 checkout 唯讀 override
+預驗證仍有 35 個格式失敗，不代表目前 pin v0.2.0 的 nested 入口已改版或通過。
 權威來源、指令與檔案排除規則以 framework README 及 lint 設定為準。
 
 ---
