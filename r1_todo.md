@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.7.0)
+# R1 實作 TODO List(v0.8.0)
 
-> 依據:`r1_design_draft.md` v1.2.2(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.0(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.0 | **更新 Agent:`coco-codex`**。先行修訂 T0 規範：依使用者裁決，每個 R1 相關 package 必須於根目錄內嵌 `r1_test_framework` git submodule，直接使用 `./r1_test_framework/*.sh`，取代 v0.2.0 的 sibling/symlink 布局。`test/` 統一分為 `unit/` 與 `integration/`，依單一合約或系統協作分類；新增 T0.6 搬移驗收。既有 T1–T11 通過紀錄保留為歷史證據，新布局須另行 Docker 重驗後勾選 T0.2/T0.5/T0.6。同步依據設計稿 v1.3.0。 |
 | v0.7.0 | **更新 Agent:`coco-codex`**。T11.1–T11.5 完成:`r1_integration_tests` launch_testing 基架、I00 空場景/並行實證與 I1–I18 全場景；19 個 CTest targets 以獨立 ROS_DOMAIN_ID(可整段 relocation)及 parallel=2 執行。補齊 real-manager PENDING TTL、master lost-ACK 原 event 重送/冪等、manager/service readiness barrier、雙 ready snapshot gate、真 waiter armed barrier、MockMaster out-of-order/stale generation、process-model crash/restart、producer timestamp 週期/in-flight/backoff、fresh/raw status identity 證據。多輪對抗式查核發現全修，最終 3-agent 分區複核 0 must-fix；`./todo_check.sh t11` docker PASS(39-test 彙總,0 error/failure/skip,container 自動卸載)，受影響 I5/I6/I11/I12/I17 另各連跑 3 次全綠；mock 支援異動另經 t10 27-test regression 全綠。I10 sanitizer 組態依規劃保留至 T12。 |
 | v0.6.0 | **更新 Agent:`coco-codex`**。T10.1–T10.6 完成:`r1_test_mocks` 五個可腳本化 nodes、23 個 smoke gtests、嚴格 `<10%` rate 驗證、接受但不回覆、ACK 串接固定序列與四種 CsmNotify/亂序/舊世代注入；修正 callback lifetime 與跨執行緒計數 race。docker t10 PASS(27-test 彙總),3-agent 最終對抗式複核 0 must-fix。同步修正 §1.3 跨 package 執行位置、T10/T11 的 pre-T1 舊依賴/框架文字與附錄案例數 |
 | v0.5.1 | **更新 Agent:`coco-codex`**。新增 §1.4 文件修訂紀錄規範:每次更動 `r1_todo.md` 或 `r1_design_draft.md`,除同步更新文件版本號與版本歷史外,必須於該筆歷史明確標示實際更新 Agent；並補列 Codex 的 agent 身分命名 |
@@ -40,25 +41,35 @@
 | Image 共用 | 同一 distro 的所有項目共用**同一個官方 base image**(jazzy 為 `ros:jazzy-ros-base-noble`,§11.5.2),不建自訂 image；可以 `R1_TEST_BASE_IMAGE` 覆蓋 |
 | Container 命名 | TODO 查核為 `r1_todo_<item>_<distro>`(例 `r1_todo_t2_jazzy`),標準流程為 `r1_test_<package>_<distro>`,便於識別與清理 |
 | 測後卸載 | `todo_check.sh` 於查核結束(無論成敗)自動 `docker rm -f` 該 container；`-k` 可保留供除錯 |
-| 產物 | 僅寫入 package 下 `test_env/<distro>/`(已列 `.gitignore`)；因 container 以 root 執行,清除產物用 `./test_clean.sh --purge-env`(經 docker 處理所有權),不需在 host 動用 sudo |
-| 磁碟回收 | 需要釋放空間時 `./test_clean.sh --rmi` 移除 base image；下次查核會重新下載 |
+| 產物 | 僅寫入 package 下 `test_env/<distro>/`(已列 `.gitignore`)；因 container 以 root 執行,清除產物用 `./r1_test_framework/test_clean.sh --purge-env`(經 docker 處理所有權),不需在 host 動用 sudo |
+| 磁碟回收 | 需要釋放空間時 `./r1_test_framework/test_clean.sh --rmi` 移除 base image；下次查核會重新下載 |
 
 ### 1.3 查核執行指令
 
-腳本位於各 package 根目錄(symlink 至 workspace sibling `r1_test_framework/`)；必須從
-該 item 的目標 package 執行(附錄 B),例如 T0–T9 從 transport package、T10 從
-`r1_test_mocks`、T11 從 `r1_integration_tests` 執行:
+每個 R1 相關 package 均須將 framework 以 git submodule 引入至 `<package>/r1_test_framework/`，直接執行其中腳本。適用範圍包含 `rv2_control_signal_transport`、`r1_interfaces`、`r1_test_mocks`、`r1_integration_tests` 與未來的 R1 packages；framework 自身不必遞迴引入自己。不得依賴 workspace sibling checkout 或根目錄 shell symlink。
+
+從該 item 的目標 package 執行(附錄 B)：T0、T2–T9 從 transport、T1 從 `r1_interfaces`、T10 從 `r1_test_mocks`、T11 從 `r1_integration_tests`。
 
 ```bash
 cd ~/Workspace/ros2_ws/src/<目標-package>
-./todo_check.sh <item>          # 一鍵:建 container → 裝依賴 → build + test → 卸載
-./todo_check.sh <item> -k       # 保留 container 供除錯
-./todo_check.sh <item> -d humble  # 指定其他 distro
+git submodule update --init --recursive
+./r1_test_framework/todo_check.sh <item>          # 一鍵:建 container → 裝依賴 → build + test → 卸載
+./r1_test_framework/todo_check.sh <item> -k       # 保留 container 供除錯
+./r1_test_framework/todo_check.sh <item> -d humble  # 指定其他 distro
 ```
 
-分步執行(等同 CI 腳本鏈,§11.3):`./test_build.sh` → `./test_deps.sh` → `./test_run.sh [-f <ctest 過濾>]` → `./test_clean.sh`。
+分步執行(等同 CI 腳本鏈,§11.3):`./r1_test_framework/test_build.sh` → `./r1_test_framework/test_deps.sh` → `./r1_test_framework/test_run.sh [-f <ctest 過濾>]` → `./r1_test_framework/test_clean.sh`。
 
 `<item>` 對照表見附錄 B。
+
+### 1.3.1 測試目錄與分類
+
+- 所有 package 必須有 `test/unit/` 與 `test/integration/`；無案例的一側以 README 說明，不新增空殼測試。
+- `unit/` 驗證單一 function/class 合約，例如 Info 驗證、LivenessState、Source、Sink、Factory、Handle 基本操作、StatusFaultNode 單一代理行為；使用 ROS 或裸 probe 不會自動變成 integration。
+- `integration/` 驗證多元件的系統協作，包括單一 package 內的 CSM 註冊、heartbeat、callback 派送、master 對帳及 retry。M1–M26、CM1–CM13、Handle H7–H8、mock 控制/資料通訊 smoke、I00/I1–I18 放在此類。
+- 共用 fixture/helper 可留於 `test/`，可執行測試案例必須放入上述兩類。混合單一合約與系統流程的檔案須拆開，保留既有 case ID 與斷言。
+- CMake 更新來源/include 路徑，CTest 標示 `unit` / `integration` labels；預設執行兩類，`./r1_test_framework/test_run.sh -s unit` 或 `-s integration` 可分開驗證，指定類別空匹配必須失敗。
+- 遷移先修文件，再改各 package；框架先提交與 push，package 再 pin 經驗證的 framework commit。workspace sibling framework 可保留作開發 checkout，但不可作 package 執行依賴。
 
 ### 1.4 Git 版控規範(v0.2.1;v0.2.2 增列 migrate 分支政策;v0.5.1 增列文件修訂署名)
 
@@ -132,18 +143,20 @@ graph LR
 
 - [x] **T0.1** `r1_test_framework/` 腳本組:`test_build.sh`、`test_deps.sh`、`test_run.sh`、`test_packages.sh`(§11.5.3 四支標準腳本)加上 `test_clean.sh`(卸載)與 `todo_check.sh`(TODO 查核執行器),以獨立 git repo 版控。
   查核:`bash -n` 全數通過；每支腳本有用法說明；`git log` 存在初始 commit。
-- [x] **T0.2** package 根目錄接線:六支 symlink、`test_depends.repos`(宣告 `rv2_interfaces`)、`.gitignore` 排除 `test_env/`。
-  查核:`ls -l test_*.sh` symlink 有效；`git status` 不出現 `test_env/`。(v0.2.0 重接:框架搬至 `src/r1_test_framework/` 後 symlink 改為 `../r1_test_framework/*.sh`;repos 增列 `r1_interfaces`)
+- [ ] **T0.2** 各 R1 package 根目錄以 `.gitmodules` + gitlink 引入 `r1_test_framework/`；保留各自 `test_depends.repos` 的 local dependency 宣告，`.gitignore` 排除 `test_env/`，移除舊根目錄腳本 symlink。
+  查核：四個現有 R1 packages 的 `git ls-files --stage r1_test_framework` 均為 mode `160000` 且 pin 同一經驗證 commit；`git submodule status` 無未初始化/髒版本；由 package 內直接執行框架腳本可解析正確 PKG_DIR。
 - [x] **T0.3** Container 生命週期驗證:base image 下載、container 建立、掛載(原始碼唯讀、`test_env` 一對一)、卸載。
-  查核:`./test_build.sh` 後 `docker ps` 可見 container；container 內 `ls /root/ros2_ws/src/` 見本 package 與 `rv2_interfaces`；`./test_clean.sh` 後 `docker ps -a` 無殘留；host 上除 `test_env/` 外無任何新檔案。
+  查核:`./r1_test_framework/test_build.sh` 後 `docker ps` 可見 container；container 內 `ls /root/ros2_ws/src/` 見本 package 與 `rv2_interfaces`；`./r1_test_framework/test_clean.sh` 後 `docker ps -a` 無殘留；host 上除 `test_env/` 外無任何新檔案。
 - [x] **T0.4** Baseline 全鏈:以現有 rv2 package 走完 build → deps → run,證明框架可獨立完成一次完整測試。
-  查核:`./todo_check.sh t0` 結束碼 0,輸出含 `colcon test` 結果與 `PASS: t0`。
-- [x] **T0.5** 框架抽離:`r1_test_framework` 已搬移至 workspace `src/r1_test_framework/` 為獨立平行 repo(v0.2.0,取代 §11.5.1 巢狀 submodule 模型;各 package 以相對 symlink 引用)。remote 已建立並推送,PR #1 已合併至 master(v0.2.3)。
-  查核:remote 存在且已 push ✅;fresh clone workspace(framework@master + transport@r1 + 本地 interfaces packages)執行 `./todo_check.sh t0` PASS(23 gtests 全綠)✅。
+  查核:`./r1_test_framework/todo_check.sh t0` 結束碼 0,輸出含 `colcon test` 結果與 `PASS: t0`。
+- [ ] **T0.5** 框架獨立版控與可重現引入：framework 維持獨立 remote，各 package 以內嵌 submodule 固定 commit；`git clone` + `git submodule update --init --recursive` 後即可使用。
+  查核：在無 sibling framework 的驗證 checkout 中執行 nested 腳本，確認從 package 內及其他 CWD 均解析相同 package；Docker build/test 與測後卸載成功，不自動追遠端 HEAD。
+- [ ] **T0.6** 全 package 測試分層：依 §1.3.1 搬移測試與更新 CMake/include/helper/文件，保留既有案例覆蓋與 TODO filter；混合 Handle 檔拆分 unit H1–H6 與 integration H7–H8。
+  查核：`test/` 頂層無 executable test cases；CTest unit/integration labels、T0–T11 篩選與案例 ID 都保留；transport 兩類、mock 兩類、I00–I18 及 interfaces build/interface gate 均在 Docker 通過。
 
 **驗證**
 - 語意查核:逐條對照 §11.5.3 腳本職責表(distro 解析、container 重建、`~/ros2_ws` 結構、唯讀掛載、rosdep `--ignore-src`、結束碼語意、`.deb` 命名)與 §11.5.2 環境策略表；確認 `test_depends.repos` 為宣告式輸入而非流程客製(§11.5.4)。
-- 實際測試:`./todo_check.sh t0`(container:`r1_todo_t0_jazzy`)。
+- 實際測試:`./r1_test_framework/todo_check.sh t0`(container:`r1_todo_t0_jazzy`)。
 
 ---
 
@@ -163,11 +176,11 @@ graph LR
 - [x] **T1.5** 資料通道 srv:`srv/ControlSignalJoy.srv`、`srv/ControlSignalTwist.srv`;String 型別之 service 模式配套依 §7 型別註冊需求確認,若需要則補齊並回饋 §2.1 清單。
   查核:與 §7 註冊型別集合(Joy / Twist / String)對齊,service 模式可用型別無缺漏。✅ §7.2:string 為 topic-only(SrvT = void),無需 ControlSignalString.srv;回覆常數名取 §6.3 字面 `SRV_RES_*`。
 - [x] **T1.6** `r1_interfaces` 之 rosidl 產生設定(CMakeLists / package.xml)納入上述檔案。
-  查核:`r1_interfaces` 於 docker 內 build 通過。✅ `./todo_check.sh t1` PASS;10/10 介面 `ros2 interface show` 解析正確。
+  查核:`r1_interfaces` 於 docker 內 build 通過。✅ `./r1_test_framework/todo_check.sh t1` PASS;10/10 介面 `ros2 interface show` 解析正確。
 
 **驗證**
 - 語意查核:製作「msg/srv 欄位 ↔ § 條文」對照表逐欄打勾;重點確認三處易錯點——CsmHeartbeat 非匿名 Trigger(v1.0.0 修正)、ManagerStatus 含 PENDING 交易(§2.4)、EntryStatus 可在單側 snapshot 定位預期配對(CM10)。✅ 逐檔對抗式查核完成(0 must-fix),三處易錯點逐一確認。
-- 實際測試:`./todo_check.sh t1`(container:`r1_todo_t1_jazzy`;build 驗證,無 gtest)。✅ PASS。
+- 實際測試:`./r1_test_framework/todo_check.sh t1`(container:`r1_todo_t1_jazzy`;build 驗證,無 gtest)。✅ PASS。
 
 ---
 
@@ -186,12 +199,12 @@ graph LR
   查核:state 欄位無 CAS(D8:結構上不需要)；與 §4.3 簽名一致。✅ 無條件 exchange 回舊值,無 CAS(L9)。
 - [x] **T2.5** Terminal seal:activity-generation CAS——計算期間有新活動則 seal 失敗；seal 勝出後 `recordActivity()` 拒絕(§4.2、L15–L17)。
   查核:seal 只保護活動接受與 terminal linearization,不寫 state(§4 開頭定義)。✅ `trySealActivity(g)` 單發 CAS、失敗零改動(L16);`sealActivity()` 冪等(L17)。
-- [x] **T2.6** `test/r1/test_liveness_state.cpp`:L1–L18 全數實作,含假時鐘注入(以參數傳入 now,不依賴系統時鐘)。
+- [x] **T2.6** `test/unit/test_liveness_state.cpp`:L1–L18 全數實作,含假時鐘注入(以參數傳入 now,不依賴系統時鐘)。
   查核:18 案例與 §4.5 表逐列對應,無合併、無跳過。✅ 18/18 PASS;純假時鐘,無系統時鐘、無 rclcpp。
 
 **驗證**
 - 語意查核:L 表逐列檢查 assert 內容——特別是 L8(邊界不觸發)、L14(generation = 成功記錄數)、L16(seal 失敗後下一 tick 回 ACTIVE)、L18(INITIAL 直接 apply TIMEOUT 之例外)是否忠實轉譯 §4.4/§4.5 敘述。✅ 4-agent 對抗式查核(介面、memory order、判定表、L 表逐列)0 must-fix;5 nits(註解措辭)已修。
-- 實際測試:`./todo_check.sh t2`(container:`r1_todo_t2_jazzy`)；L14 另納入 T12 TSan job。✅ PASS(host TSan 已先行全綠)。
+- 實際測試:`./r1_test_framework/todo_check.sh t2`(container:`r1_todo_t2_jazzy`)；L14 另納入 T12 TSan job。✅ PASS(host TSan 已先行全綠)。
 
 ---
 
@@ -204,12 +217,12 @@ graph LR
   查核:除 msg 標頭外無 ROS 依賴；錯誤訊息可定位到具體欄位。✅ 別名指向 `r1_interfaces`(§12 #1);錯誤訊息逐欄具名;除 msg 標頭外零 ROS 依賴。
 - [x] **T3.2** `validateControlSignalInfo()`:六條規則依 §3.2,含 priority 0–100 之外拒絕、`timeout_ns = 0` 於 service 模式 invalid、`disconnect_timeout_ns` 須嚴格大於 `timeout_ns` 或為 0、規則 6(`target_manager_name` 於 registerSource 路徑必填)。
   查核:規則逐條與 §3.2 對照；`ManagerOptions` 之 CSM 閾值不混入本驗證(§3.2 末段)。✅ 六規則逐條實作;CSM 閾值驗證未混入。
-- [x] **T3.3** `test/r1/test_info_validation.cpp`:V1–V11 全數實作(V5 含 4 子案例)。
+- [x] **T3.3** `test/unit/test_info_validation.cpp`:V1–V11 全數實作(V5 含 4 子案例)。
   查核:11 案例與 §3.3 表逐列對應。✅ 11 案例(V5 含 4 子案例);docker t3 PASS。
 
 **驗證**
 - 語意查核:V 表逐列對照 §3.2 規則來源；確認 V7 的雙面性(topic valid、service invalid)與 V10(變體 C 合法)未被寫成單面 assert。✅ 對抗式查核通過;V7 雙面、V10 變體 C 皆為雙向斷言。
-- 實際測試:`./todo_check.sh t3`(container:`r1_todo_t3_jazzy`)。✅ PASS。
+- 實際測試:`./r1_test_framework/todo_check.sh t3`(container:`r1_todo_t3_jazzy`)。✅ PASS。
 
 ---
 
@@ -229,13 +242,13 @@ graph LR
 - [x] **T4.5** Shutdown 與 RAII:冪等 shutdown、解構釋放 transport entities(§1.5)。
   查核:S6 語意；shutdown 後無殭屍活動(§0.1 定義)。✅ 冪等 shutdown、解構呼叫 shutdown(S6)。
 - [x] **T4.6** 測試通道:`_calcStatus()` / `_applyStatus()` 經 `ManagerTestAccess` friend 暴露(§5.2、§8.2)。
-  查核:測試不必啟動真 Manager tick 即可驅動狀態轉移。✅ `ManagerTestAccess` 於 test/r1/r1_test_utils.h,僅編入測試 target。
-- [x] **T4.7** `test/r1/test_transport.cpp` Source 部分:S1–S16(gtest suite 以 `SourceTest` 命名,與 Sink 區分)。
+  查核:測試不必啟動真 Manager tick 即可驅動狀態轉移。✅ `ManagerTestAccess` 於 test/unit/r1_test_utils.h,僅編入測試 target。
+- [x] **T4.7** `test/unit/test_transport.cpp` Source 部分:S1–S16(gtest suite 以 `SourceTest` 命名,與 Sink 區分)。
   查核:16 案例與 §5.4 表逐列對應；S5 涵蓋 NO_TRANSPORT 與 TIMEOUT 兩分支。✅ 16 案例 suite `SourceTest`;S5 三分支(NO_TRANSPORT / TIMEOUT / 遮蔽)全覆蓋。
 
 **驗證**
 - 語意查核:S 表逐列對照 §5.3/§5.4——重點 S5(failure streak 不被高頻 send 掩蓋)、S14(epoch 亂序防護)、S15/S16(seal 與活動、與 response-failure 的兩類競合)是否逐字忠實。✅ 5-agent 查核;S5 / S16 測試強度 must-fix 已修(遮蔽斷言以假時鐘置於 cadence-ACTIVE 窗、S16a 補 send 交錯、S16c 改測 in-flight response 路徑)。
-- 實際測試:`./todo_check.sh t4`(container:`r1_todo_t4_jazzy`)；S11 併入 T12 TSan。✅ PASS;S11 併入 T12 TSan。
+- 實際測試:`./r1_test_framework/todo_check.sh t4`(container:`r1_todo_t4_jazzy`)；S11 併入 T12 TSan。✅ PASS;S11 併入 T12 TSan。
 
 ---
 
@@ -254,12 +267,12 @@ graph LR
   查核:K11 預期(∈ [18, 22] @ 20 Hz)。✅ 同 T4.4;K11 ∈ [18,22]。
 - [x] **T5.5** Terminal seal 與收訊交錯:seal 勝出後不存訊息、不喚醒、不呼叫 callback；活動先勝出則取消本輪 terminal(K8/K16)。
   查核:與 §4.2 seal 語意及 §8.3 同 tick 註銷順序一致。✅ K8 / K16 兩交錯皆斷言(不存訊息、不喚醒、不呼叫 callback)。
-- [x] **T5.6** `test/r1/test_transport.cpp` Sink 部分:K1–K16(suite `SinkTest`)。
+- [x] **T5.6** `test/unit/test_transport.cpp` Sink 部分:K1–K16(suite `SinkTest`)。
   查核:16 案例與 §6.4 表逐列對應。✅ 16 案例 suite `SinkTest`;docker t5 PASS。
 
 **驗證**
 - 語意查核:K 表逐列對照——重點 K2(粒度語意非 bug 而是設計)、K8(seal 成功才 apply + 註銷)、K14(舊訊息不觸發)是否忠實。✅ K2 粒度、K8 seal 順序、K14 舊訊息不觸發皆忠實;K13/K14 補喚醒延遲上界。
-- 實際測試:`./todo_check.sh t5`(container:`r1_todo_t5_jazzy`)；K10 併入 T12 ASan、K12/K16 併入 TSan。✅ PASS;K10 併入 T12 ASan、K12/K16 併入 TSan。
+- 實際測試:`./r1_test_framework/todo_check.sh t5`(container:`r1_todo_t5_jazzy`)；K10 併入 T12 ASan、K12/K16 併入 TSan。✅ PASS;K10 併入 T12 ASan、K12/K16 併入 TSan。
 
 ---
 
@@ -274,12 +287,12 @@ graph LR
   查核:F3 之反查語意；macro 於 header 使用不產生 ODR 問題。✅ macro 以匿名 namespace TU-local static 註冊,header 使用無 ODR 問題;typeKey 反查(F3)。
 - [x] **T6.3** `src/r1/control_signal_factory.cpp` + `control_signal_types.cpp`:singleton 單一定義於 shared library、三型別註冊(topic 與 service 模式配套)。
   查核:F5(跨 TU 可見)之結構前提成立；service 模式配套 srv 與 T1.5 對齊。✅ singleton 定義於 shared library `r1_control_signal_transport`;三型別註冊,string topic-only(SrvT=void)。
-- [x] **T6.4** `test/r1/test_factory.cpp`:F1–F5。
+- [x] **T6.4** `test/unit/test_factory.cpp`:F1–F5。
   查核:5 案例與 §7.3 表逐列對應。✅ 5 案例;F2 同斷 nullptr 與不拋例外。
 
 **驗證**
 - 語意查核:F 表對照 §7.3；確認 F2 同時斷言「回 nullptr」與「不拋例外」兩件事。✅ 對抗式查核通過。
-- 實際測試:`./todo_check.sh t6`(container:`r1_todo_t6_jazzy`)。✅ PASS。
+- 實際測試:`./r1_test_framework/todo_check.sh t6`(container:`r1_todo_t6_jazzy`)。✅ PASS。
 
 ---
 
@@ -314,12 +327,12 @@ graph LR
   查核:register 與 _onManage 兩側都過濾(§8.3)。✅ 雙向套用、空白名單全擋(M11)。
 - [x] **T7.13** 執行緒模型:tick 於 MutuallyExclusive `tickGroup_`；manage / info_req / get_notifications servers 與 master clients、retry response callback 於 Manager 自建 Reentrant group(§2.6)。
   查核:與使用者 node 預設 group 隔離；同步 registerSource 於 callback 內呼叫之防護(M14)。✅ tick 於 MutuallyExclusive、management 於 Reentrant;tick 執行緒亦設 callback guard(M14 in-callback);解構 fence 防 in-flight callback UAF。
-- [x] **T7.14** `test/r1/test_manager.cpp` + `r1_test_utils.h`:M1–M26 全數實作(短週期參數壓縮時間,§8.4；mock master 以裸 service 實作)。
+- [x] **T7.14** `test/integration/test_manager.cpp` + `r1_test_utils.h`:M1–M26 全數實作(短週期參數壓縮時間,§8.4；mock master 以裸 service 實作)。
   查核:26 案例與 §8.4 表逐列對應；M4 以 16 執行緒實測。✅ 26 案例;mock master 裸 service;M4 16 執行緒跨 4 targets。
 
 **驗證**
 - 語意查核:M 表逐列對照 §8.3/§8.4,重點四處——M6(response 丟失之三層回收)、M8(四 kind 的「只做什麼、不做什麼」)、M20(D3 retry-until-success 含 disconnect=0 不承諾收斂)、M22(activity 與 seal 競合唯一結果)；另確認每個 public function 皆有測試覆蓋(§11.3 要求)。✅ 5-agent 查核 43 項發現、25 must-fix 全修並複核;M6 三層回收之整合部分留 I8。
-- 實際測試:`./todo_check.sh t7`(container:`r1_todo_t7_jazzy`,涵蓋 test_manager 與 test_transport)；M4 併入 TSan、M10 併入 ASan。✅ PASS;M4 併 TSan、M10 併 ASan。
+- 實際測試:`./r1_test_framework/todo_check.sh t7`(container:`r1_todo_t7_jazzy`,涵蓋 test_manager 與 test_transport)；M4 併入 TSan、M10 併入 ASan。✅ PASS;M4 併 TSan、M10 併 ASan。
 
 ---
 
@@ -334,12 +347,12 @@ graph LR
   查核:與 §10.2 介面一致。✅ read/state/waitForMessage 轉發(H2);erased wait 經 Base 虛擬。
 - [x] **T8.3** 失效語意與拷貝:erase / unregister 後全操作失效、拷貝共享失效狀態、in-flight response 不復活已銷毀 slot(H4/H5/H8)。
   查核:§10.3 slot 生命週期逐句對照。✅ H4/H5/H8;in-flight response 不復活以延遲 service 實測。
-- [x] **T8.4** `test/r1/test_handles.cpp`:H1–H8。
+- [x] **T8.4** `test/unit/test_handles.cpp`(H1–H6) 與 `test/integration/test_handles_lifecycle.cpp`(H7–H8)。
   查核:8 案例與 §10.4 表逐列對應。✅ 8 案例;H6 併 T12 ASan/TSan。
 
 **驗證**
 - 語意查核:H 表對照 §10.3/§10.4；重點 H7 的三段式(true→false→true)與「同一 Handle 換 endpoint 不換 Handle」承諾。✅ 對抗式查核;H7 三段式與「同 Handle 換 endpoint」逐項斷言。
-- 實際測試:`./todo_check.sh t8`(container:`r1_todo_t8_jazzy`)；H6 併入 T12 ASan/TSan。✅ PASS;H6 併入 T12 ASan/TSan。
+- 實際測試:`./r1_test_framework/todo_check.sh t8`(container:`r1_todo_t8_jazzy`)；H6 併入 T12 ASan/TSan。✅ PASS;H6 併入 T12 ASan/TSan。
 
 ---
 
@@ -364,12 +377,12 @@ graph LR
   查核:重送不阻塞 master tick 與 heartbeat polling。✅ per-CSM notify client、STATE best-effort、control event 非阻塞重送至 ACK、per-owner 取代、in-flight deadline(CM9/CM12)。
 - [x] **T9.8** `csm_master_node` 執行檔(`src/r1/csm_master.cpp`):參數載入 `MasterOptions`,host `CsmMaster`。
   查核:`ros2 run` 可啟動；參數與 §9.2 對齊。✅ csm_master_node 參數載入 MasterOptions,`ros2 run` 可啟動。
-- [x] **T9.9** `test/r1/test_csm_master.cpp`:CM1–CM13,mock CSM 以裸 node 實作(status publisher + get_notifications server + heartbeat / register clients,§9.4)。
+- [x] **T9.9** `test/integration/test_csm_master.cpp`:CM1–CM13,mock CSM 以裸 node 實作(status publisher + get_notifications server + heartbeat / register clients,§9.4)。
   查核:13 案例與 §9.4 表逐列對應,不依賴真 ControlSignalManager。✅ 13 案例,mock CSM 裸 node,不依賴真 Manager。
 
 **驗證**
 - 語意查核:CM 表逐列對照 §9.2/§9.3；重點 CM7(ready gate)、CM8(快速重啟 + 空 snapshot)、CM13(disconnect=0 不承諾收斂)三個曾在審核修正的行為。✅ 4-agent 查核 14 must-fix 全修並複核;CM7 ready gate、CM8 空 snapshot、CM13 不承諾收斂逐一確認。
-- 實際測試:`./todo_check.sh t9`(container:`r1_todo_t9_jazzy`)。✅ PASS。
+- 實際測試:`./r1_test_framework/todo_check.sh t9`(container:`r1_todo_t9_jazzy`)。✅ PASS。
 
 ---
 
@@ -378,8 +391,8 @@ graph LR
 **目標**:整合測試所需的可腳本化故障注入 nodes。獨立 package,置於 workspace(`ros2_ws/src/r1_test_mocks/`)。
 **依賴**:T1(介面)；與 T7–T9 平行開發可行。
 
-- [x] **T10.1** Package 骨架:ament_cmake、`test_depends.repos` 宣告(`r1_interfaces`)、以相對 symlink 使用 workspace sibling `r1_test_framework`(依 v0.2.0 layout 裁決,首次複用驗證)。
-  查核:`./todo_check.sh t10` 可 build；框架未經客製即可運作。✅ sibling framework 六支 symlink、local dependency 掛載與五個 executables 均於原框架流程 build 成功。
+- [x] **T10.1** Package 骨架:ament_cmake、`test_depends.repos` 宣告(`r1_interfaces`)、package 內嵌 `r1_test_framework` submodule。
+  查核:`./r1_test_framework/todo_check.sh t10` 可 build；框架未經客製即可運作。✅ 既有 local dependency 掛載與五個 executables 已於原框架流程 build 成功；v0.8.0 新布局重驗列 T0.2/T0.5/T0.6。
 - [x] **T10.2** `MockManagerNode`:`control_signal_manage` service 之可腳本化行為——接受、拒絕(指定 reason)、延遲 N ms、**不回覆**、回覆後立刻斷線。
   查核:五種行為逐一可由參數 / service 切換觸發(smoke test)。✅ 五種行為全覆蓋；reject code/reason 與不落 state、delay 先套用、service 真斷線/恢復均有斷言；no-reply REGISTER 先接受後抑制 response。
 - [x] **T10.3** `MockSourceNode` / `MockSinkNode`:裸 rclcpp pub / sub / client / server,可設定頻率、突發停止、亂序型別。
@@ -389,11 +402,11 @@ graph LR
 - [x] **T10.5** `StatusFaultNode`:以代理方式暫停 / 恢復 / 降頻某 CSM 的 status 發布。
   查核:三種操作逐一可觸發且可觀察(`ros2 topic hz`)。✅ pass/pause/resume/throttle 逐項驗證,forwarded/dropped 計數可觀察且跨執行緒安全。
 - [x] **T10.6** 各 mock 之 smoke tests(gtest 或 launch_testing)。
-  查核:`./todo_check.sh t10` 全綠。✅ 4 個 gtest targets、23 個 cases 全綠。
+  查核:`./r1_test_framework/todo_check.sh t10` 全綠。✅ 4 個 gtest targets、23 個 cases 全綠。
 
 **驗證**
 - 語意查核:mock 能力清單逐項對照 §11.1 表；確認 M5/M6 之整合版(I8)所需行為(接受但不回覆)確實可腳本化。✅ 多輪對抗式查核之 must-fix 全修,3-agent 最終複核 0 must-fix；ASan 定位並修復短生命週期 probe callback UAF,100 次 targeted regression 全綠。
-- 實際測試:`cd ~/Workspace/ros2_ws/src/r1_test_mocks && ./todo_check.sh t10`(container:`r1_todo_t10_jazzy`)。✅ PASS:23 個 gtests / 4 個 CTest targets,彙總 27 tests、0 error/failure/skip；container 自動卸載。
+- 實際測試:`cd ~/Workspace/ros2_ws/src/r1_test_mocks && ./r1_test_framework/todo_check.sh t10`(container:`r1_todo_t10_jazzy`)。✅ PASS:23 個 gtests / 4 個 CTest targets,彙總 27 tests、0 error/failure/skip；container 自動卸載。
 
 ---
 
@@ -415,7 +428,7 @@ graph LR
 
 **驗證**
 - 語意查核:I 表 18 列逐列對照 §11.2 之「步驟 / 驗證」欄；確認每列的驗證欄位全部轉為機器斷言,無「人工觀察」殘留。✅ 多輪對抗式查核修正 PENDING TTL 空洞、DDS arrival-time 偽時序、ready/startup gate、waiter pre-call race、late exact-one、stale status cache、門檻間暫態與 status/InfoReq partial compare；全部發現修正後由 3 agents 依 T11.1/I1–I6、I7–I12、I13–I18 分區重審，最終 0 must-fix。
-- 實際測試:`./todo_check.sh t11`(container:`r1_todo_t11_jazzy`；單 container 內多 node,ROS_DOMAIN_ID 隔離 + docker network 第二層保障)。✅ 最終 clean PASS:19 個 CTest launch targets、39 筆 xUnit 彙總,0 error/failure/skip；CTest parallel=2，I00 machine-assert 實際 overlap；container 自動卸載。受影響 I5/I6/I11/I12/I17 另以 `--repeat until-fail:3` 全綠；I10 startup gate另連跑 5 次全綠。另因 T11 擴充 mock crash/restart 與 producer timestamp，`./todo_check.sh t10` regression PASS(27 tests)。
+- 實際測試:`./r1_test_framework/todo_check.sh t11`(container:`r1_todo_t11_jazzy`；單 container 內多 node,ROS_DOMAIN_ID 隔離 + docker network 第二層保障)。✅ 最終 clean PASS:19 個 CTest launch targets、39 筆 xUnit 彙總,0 error/failure/skip；CTest parallel=2，I00 machine-assert 實際 overlap；container 自動卸載。受影響 I5/I6/I11/I12/I17 另以 `--repeat until-fail:3` 全綠；I10 startup gate另連跑 5 次全綠。另因 T11 擴充 mock crash/restart 與 producer timestamp，`./r1_test_framework/todo_check.sh t10` regression PASS(27 tests)。
 
 ---
 
@@ -425,15 +438,15 @@ graph LR
 **依賴**:T11。
 
 - [ ] **T12.1** ASan + LSan job:H6 / K10 / M10 / I10(UAF 與 leak 回歸)。
-  查核:`./todo_check.sh t12-asan` 全綠,無 leak 報告。
+  查核:`./r1_test_framework/todo_check.sh t12-asan` 全綠,無 leak 報告。
 - [ ] **T12.2** TSan job:LivenessState activity seal(L14)、Source / Sink hot path(S11/K12/K16)、tick commit(M22)、Handle replacement(H6)、M4 註冊風暴。
-  查核:`./todo_check.sh t12-tsan` 全綠,無 race 報告。
+  查核:`./r1_test_framework/todo_check.sh t12-tsan` 全綠,無 race 報告。
 - [ ] **T12.3** UBSan job:全部單元測試。
-  查核:`./todo_check.sh t12-ubsan` 全綠。
+  查核:`./r1_test_framework/todo_check.sh t12-ubsan` 全綠。
 - [ ] **T12.4** `.deb` 打包:`test_packages.sh` 產出命名符合 §11.5.3 規則(version 段附 timestamp + short hash)之套件,並於乾淨 container 內 `dpkg -i` 安裝驗證。
-  查核:`./todo_check.sh t12-pkg` 產出檔名匹配 `ros-<distro>-<pkg>_<version>.<YYYYMMDDHHMMSS>.<hash>_<arch>.deb`。
+  查核:`./r1_test_framework/todo_check.sh t12-pkg` 產出檔名匹配 `ros-<distro>-<pkg>_<version>.<YYYYMMDDHHMMSS>.<hash>_<arch>.deb`。
 - [ ] **T12.5** 全量迴歸:t2–t11 連續執行一輪全綠(CI 腳本鏈)。
-  查核:單一 shell 迴圈 `for i in t2 t3 ... t11; do ./todo_check.sh $i; done` 結束碼 0。
+  查核:單一 shell 迴圈 `for i in t2 t3 ... t11; do ./r1_test_framework/todo_check.sh $i; done` 結束碼 0。
 
 **驗證**
 - 語意查核:§11.4 矩陣三列的目標測試 ID 與 T12.1–T12.3 覆蓋集合一致。
@@ -445,16 +458,16 @@ graph LR
 
 | 大項 | 測試檔(§2.1) | ctest target | 案例 ID | 案例數 |
 |---|---|---|---|---|
-| T2 | `test/r1/test_liveness_state.cpp` | `test_liveness_state` | L1–L18 | 18 |
-| T3 | `test/r1/test_info_validation.cpp` | `test_info_validation` | V1–V11 | 11 |
-| T4 | `test/r1/test_transport.cpp`(suite `SourceTest`) | `test_transport` | S1–S16 | 16 |
-| T5 | `test/r1/test_transport.cpp`(suite `SinkTest`) | `test_transport` | K1–K16 | 16 |
-| T6 | `test/r1/test_factory.cpp` | `test_factory` | F1–F5 | 5 |
-| T7 | `test/r1/test_manager.cpp` | `test_manager` | M1–M26 | 26 |
-| T8 | `test/r1/test_handles.cpp` | `test_handles` | H1–H8 | 8 |
-| T9 | `test/r1/test_csm_master.cpp` | `test_csm_master` | CM1–CM13 | 13 |
-| T10 | `r1_test_mocks/test/test_mock_{manager,source_sink,master}.cpp`、`test_status_fault.cpp` | 4 smoke targets | — | 23 |
-| T11 | `r1_integration_tests`(launch_testing) | 19 launch targets | I1–I18(+I00 harness smoke) | 18(+1 framework smoke) |
+| T2 | `test/unit/test_liveness_state.cpp` | `test_liveness_state` | L1–L18 | 18 |
+| T3 | `test/unit/test_info_validation.cpp` | `test_info_validation` | V1–V11 | 11 |
+| T4 | `test/unit/test_transport.cpp`(suite `SourceTest`) | `test_transport` | S1–S16 | 16 |
+| T5 | `test/unit/test_transport.cpp`(suite `SinkTest`) | `test_transport` | K1–K16 | 16 |
+| T6 | `test/unit/test_factory.cpp` | `test_factory` | F1–F5 | 5 |
+| T7 | `test/integration/test_manager.cpp` | `test_manager` | M1–M26 | 26 |
+| T8 | `test/unit/test_handles.cpp`、`test/integration/test_handles_lifecycle.cpp` | `test_handles`、`test_handles_lifecycle` | H1–H8 | 8 |
+| T9 | `test/integration/test_csm_master.cpp` | `test_csm_master` | CM1–CM13 | 13 |
+| T10 | `r1_test_mocks/test/integration/test_mock_{manager,source_sink,master}.cpp`、`test/unit/test_status_fault.cpp` | 4 smoke targets | — | 23 |
+| T11 | `r1_integration_tests/test/integration/`(launch_testing) | 19 launch targets | I1–I18(+I00 harness smoke) | 18(+1 framework smoke) |
 
 單元 + 整合案例合計 154(不含 §11.3 之逐 function 補充案例)。
 

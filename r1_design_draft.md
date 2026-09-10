@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.2.2)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.0)
 
-> 狀態:正式版(v1.2.2)。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.0)。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.0 | **更新 Agent:`coco-codex`**。依使用者裁決統一測試布局：每個 R1 相關 package 均須於根目錄以 git submodule 引入 `r1_test_framework/` 並 pin commit，直接呼叫 `./r1_test_framework/*.sh`；取代 workspace sibling framework 與根目錄 symlink。所有測試依驗證邊界分入 `test/unit/`、`test/integration/`，單 function/class 合約屬 unit，CSM 註冊、heartbeat、callback 協作、生命週期與跨 package 場景屬 integration。同步更新 §2.1、§8.4、§9.4、§10.4、§11.3/§11.5；不更改既有協定或案例 ID。 |
 | v1.2.2 | 全文潤飾(humanizer):以「不失表達精確度」為前提,將壓縮式速記展開為完整敘述句、拆解長串接句、移除殘餘的機械式句式;技術 token(識別字、數值、章節引用、測試 ID、狀態名)經逐節 token-diff 比對零遺失,code 與 mermaid blocks 以原文 byte 級覆蓋保護(43 圖全數 render 驗證);內容與設計無變更 |
 | v1.2.1 | 最終架構審核(4 視角 15 項確認發現,全數驗證)修正:response-health 補 disconnect=0 停用語意；waitForMessage shutdown 喚醒協定修 lost-wakeup(flag 持鎖寫入 + 等待者計數)；§10.3 Handle 路由改以 RemovalReason 分類並補列 RESPONSE_FAILURE；重建震盪抑制(quarantine backoff,防單向資料面故障之註冊/註銷震盪)；EntryStatus 增 `source_csm_instance_id`(identity 三元組上線)；D3 conflict retry 明定不受 D7 旗標約束；UNREGISTER stale 回覆碼對齊 enum；master 對帳增**缺席 CSM absence clock**(補 master 重啟 × peer 死亡無 owner 缺口)；live-but-DISCONNECTED CSM 恢復路徑定義(STALE_INSTANCE → 同 ID register 視為全量重建)；heartbeat deadline < csm_timeout/2 驗證；retry commit point 統一為 completion queue；docker 測試增 `test_depends.repos` workspace-local 依賴掛載機制；附錄三處舊 instance disconnect 分支改對帳路徑；registration 支援型別提升至 source_registration.h 消除 header 循環相依 |
 | v1.2.0 | 依 my_note.md(R1 Testing):新增 §11.5 **r1_test_framework 與 docker 化測試環境**——全部測試於 docker 執行、base image 重用/test container 重建策略、`test_env/<distro>/` 產物一對一掛載、四支腳本規格(build/deps/run/packages)、`.deb` 命名規則(官方樣式 + timestamp + commit hash)、submodule + symlink 引入約定；§11.3 執行環境改寫(docker 化 + 逐 function unit test 要求)；§2.1 檔案布局補測試框架項 |
@@ -207,18 +208,20 @@ include/rv2_control_signal_transport/r1/
 src/r1/
     control_signal_factory.cpp # Factory singleton 定義(shared library 單一定義)
     control_signal_types.cpp   # 具體型別註冊(Joy / Twist / String)
-test/r1/
-    r1_test_utils.h
+test/unit/
+    r1_test_utils.h            # Source/Sink 隔離測試的 friend/helper
     test_liveness_state.cpp    # 純邏輯,無 rclcpp
     test_info_validation.cpp   # 純邏輯,無 rclcpp
     test_factory.cpp
     test_transport.cpp         # Source/Sink(經 Manager 之 friend 測試通道)
-    test_manager.cpp           # 跨 CSM 協定
-    test_csm_master.cpp        # CsmMaster(§9.4 CM1–CM13,mock CSM 裸 node)
-    test_handles.cpp           # Handle(§10.4 H1–H8)
+    test_handles.cpp           # Handle 單一合約(§10.4 H1–H6)
+test/integration/
+    test_manager.cpp           # 註冊、heartbeat、callback 與跨 CSM 協作(M1–M26)
+    test_csm_master.cpp        # master/status/notify/heartbeat 協作(CM1–CM13)
+    test_handles_lifecycle.cpp # Handle 與 Manager/retry 生命週期(H7–H8)
 ```
 
-測試框架方面(v1.2.0,§11.5),package 根目錄另外包含三類內容:以 git submodule 形式引入的 `r1_test_framework/`、四支 symlink 腳本(`test_build.sh` 等),以及腳本產物目錄 `test_env/<distro>/`；產物目錄已列入 `.gitignore` 排除。
+每個 R1 相關 package(包含 `r1_interfaces`、`r1_test_mocks` 與 `r1_integration_tests`)均於根目錄以 git submodule 引入 `r1_test_framework/`，由 package 根目錄直接執行 `./r1_test_framework/test_build.sh` 等腳本(§11.5)。測試檔案必須依 §11.3 分入 `test/unit/` 或 `test/integration/`；兩個目錄都須存在，尚無案例的一側可用 README 記錄用途，不加入假測試。產物 `test_env/<distro>/` 列入 `.gitignore`。
 
 介面定義暫時放置於 `rv2_interfaces`,待 migrate 時一併搬移:
 
@@ -1346,7 +1349,7 @@ private:
 - **Source CSM process crash** 會遺失 RAM 中的 slot 與 retry intent。process 重啟之後，必須由 App、靜態設定或上層 supervisor 再次呼叫 `registerSource()`；新的呼叫若撞到殘留的舊 Sink 世代，CSM 依 D3 進入 retry。除非未來另外加入持久化機制，否則文件不得宣稱 process crash 後 intent 能夠自行恢復。
 - **鎖規則**：map 的 shared lock 只用於讀取，任何對 table 或 phase 的寫入一律使用 unique lock。持有 map lock 期間禁止呼叫 `_applyStatus()`、`shutdown()`、任何 ROS 呼叫或使用者 callback。`retryMtx_`、slot lock 與 map lock 三者不巢狀持有；需要跨結構操作時，改以 identity snapshot 加上 re-check 的方式完成。Source 的 lifecycle 與 `lastStatus` 由 slot lock 保護；source map lock 只保護 controller→slot 的映射。以上規則與 sanitizer 及 re-entrancy 測試一併驗證。
 
-### 8.4 單元測試方法與流程
+### 8.4 Package 整合測試方法與流程
 
 - 測試以 gtest 撰寫，採用雙 node 搭配雙 Manager 的架構(r1TestBase)，並以 MultiThreadedExecutor 在背景 spin。
 - 由於 rclcpp timer 無法使用假時鐘，測試改以較短的週期參數(`ManagerOptions`)來壓縮測試時間。
@@ -1499,9 +1502,9 @@ struct MasterOptions {
 - **註冊**:先通過黑白名單與雙閾值驗證,再建立 statusSub + notifyCli。相同 name + instance 視為冪等更新；新 instance 則使舊 snapshot / heartbeat / pending target event 失效,並把被取代的 ID 放入該 name 的 `retiredInstanceIds`,清除 readiness 後等待首個完整 snapshot。master lifetime 內,retired instance 的遲到 register 一律回 STALE,不得取代新者。此取代規則要求部署 / supervisor 保證同一 `csm_name` 同時至多一個 live process；至於同名 split-brain,以及 master 重啟後仍要跨 epoch 防止極晚舊 REGISTER 的 durable fencing,屬 §12 #8 的範圍,本版不暗中宣稱已解決。
 - Master 自身重啟:CSM 會持續週期性呼叫 heartbeat,service 未 ready 時 CSM 進入 degraded mode。master 回線後,對未知 record 回 UNKNOWN_CSM,CSM 隨即 re-register；各 CSM 的第一個 ready snapshot 用於建立 STATE edge 基準,不觸發通知風暴。待相關 snapshots 齊備後,**立即執行 level reconciliation**,不可因「首輪僅作基準」而跳過配對缺失判定；crash 期間缺失的跨側註銷同步(D5)由此補發。
 
-### 9.4 單元測試方法與流程
+### 9.4 Package 整合測試方法與流程
 
-單元測試採用 gtest。mock CSM 以裸 node 實作,內含 status publisher + get_notifications server + heartbeat/register clients,不依賴真 ControlSignalManager,以便隔離測試 master 邏輯。
+測試採用 gtest。mock CSM 以裸 node 實作,內含 status publisher + get_notifications server + heartbeat/register clients,不依賴真 ControlSignalManager。由於驗證的是 master 與 CSM 控制面協作，CM1–CM13 歸入 `test/integration/`。
 
 | 案例 | 內容 | 預期 |
 |---|---|---|
@@ -1571,7 +1574,9 @@ public:
 - Handle 不延長 slot / endpoint 的生命週期(僅持 weak_ptr),Manager 移除後隨即失效,殭屍物件問題(§0.1)因此不會發生。
 - **Handle 與註銷原因**:路由判準是 **RemovalReason 分類**(§8.3 stage 3),而非「判定發生在本地與否」。INACTIVITY、FORCED、EXPLICIT_UNREGISTER 會移除 Source slot,Handle 隨之失效；**RESPONSE_FAILURE**、PEER_DISCONNECTED、PAIR_MISSING 則保留 slot 並進入 RETRY_WAIT,Handle 維持 valid 但 not ready。其中 RESPONSE_FAILURE 雖為本端 tick 判定,它是遠端 transport 故障的證據,依 D2/D4 必須自動重建。這使 D4 的自動重建涵蓋資料面恢復,App 不需取得新 Handle。至於 Manager process crash,則會摧毀所有 slots,仍需由 App/config 重建。
 
-### 10.4 單元測試方法與流程
+### 10.4 Handle 單元與生命週期整合測試
+
+H1–H6 驗證 Handle 的單一操作、型別、引用與並發安全合約，放入 `test/unit/`；H7–H8 驗證 Manager/retry 與 Handle 生命週期協作，放入 `test/integration/`。共用 fixture 可放在 `test/` 的 helper 標頭，但可執行測試案例必須位於上述兩類目錄。
 
 | 案例 | 內容 | 預期 |
 |---|---|---|
@@ -1622,14 +1627,15 @@ public:
 
 ### 11.3 執行環境(v1.2.0:全面 docker 化)
 
+- **測試分類以驗證邊界為準，不以 gtest/launch_testing、是否使用 ROS 或 mock 判定**。每個 package 的 `test/` 均分為 `unit/` 與 `integration/`：前者驗證單一 function/class 合約(例如 LivenessState、Info 驗證、Source、Sink、Factory)，後者驗證多元件協作(例如 CSM 註冊、heartbeat、callback 派送、master 對帳與 retry)。單一 package 內的系統性測試也屬 integration。
+- `r1_test_mocks` 的控制/資料通訊與腳本 smoke tests 放在 `test/integration/`；StatusFaultNode 單一代理行為、獨立命令 parser/純 helper 測試放在 `test/unit/`。`r1_integration_tests` 的 I00、I1–I18 與場景 helper 放在 `test/integration/`。共享 fixture 可置於 `test/`，但該層不可再放 executable test cases。CMake/CTest 必須依新路徑註冊全部既有案例，並以 `unit` / `integration` labels 支援分組執行。
 - **所有測試(unit 與 integration)一律於 docker 容器內執行**(my_note R1 Testing)。
   容器由 `r1_test_framework` 的腳本負責建置與管理(§11.5)。
 - 測試涵蓋要求如下:每個 class 的每個 function 均須有對應的 unit test 與 test case,
-  §3–§10 各章的案例表為最低集合。系統整合部分(多 CSM、多 Source/Sink 與 master
-  互動場景)以 §11.2 的場景集為準,必要時使用 §11.1 的 mock 與模擬節點。
+  §3–§10 各章的案例表為最低集合，既有 M/CM 與 H7–H8 依上述邊界歸為 package 整合測試，不因檔案搬移改寫既有斷言。跨 package 整合部分以 §11.2 的場景集為準，必要時使用 §11.1 的 mock 與模擬節點。
 - 每個場景使用獨立的 `ROS_DOMAIN_ID`(由 launch_testing 配發),避免互相干擾；
   容器之間的隔離另由 docker network 提供第二層保障。
-- CI 呼叫 §11.5 的腳本鏈(`test_build.sh` → `test_deps.sh` → `test_run.sh`),
+- CI 從目標 package 呼叫 §11.5 的腳本鏈(`./r1_test_framework/test_build.sh` → `./r1_test_framework/test_deps.sh` → `./r1_test_framework/test_run.sh`),
   單元與整合場景分屬不同的 job；產物打包則交由 `test_packages.sh` 處理。
 
 ### 11.4 Sanitizer 矩陣
@@ -1645,9 +1651,9 @@ public:
 
 #### 11.5.1 定位與引入方式
 
-`r1_test_framework` 是一個**通用測試框架 package**,以獨立 git repo 維護:所有
+`r1_test_framework` 是一個**通用測試框架 repo**,以獨立 git repo 維護:所有
 R1 相關 package 共用同一套測試流程與標準。各 package 以 **git submodule** 的形式
-引入,並於 package 根目錄建立 symlink 指向框架腳本:
+引入至各自的 package 根目錄，包含測試用與介面定義用 packages；Git 以 `.gitmodules` 與 mode `160000` 的 gitlink 固定框架 commit。直接執行 `./r1_test_framework/<script>.sh`，不再依賴根目錄腳本 symlink 或 workspace sibling framework。框架自身以 `COLCON_IGNORE` 避免被誤識別為待測 ROS package。
 
 ```
 rv2_control_signal_transport
@@ -1658,19 +1664,25 @@ rv2_control_signal_transport
 │   ├── test_build.sh
 │   ├── test_deps.sh
 │   ├── test_packages.sh
-│   └── test_run.sh
+│   ├── test_run.sh
+│   ├── test_clean.sh
+│   ├── todo_check.sh
+│   └── COLCON_IGNORE
 ├── src/
 ├── test/
+│   ├── unit/              <-- 單 function/class 合約
+│   └── integration/       <-- package 內系統協作與跨 package 場景
+├── test_depends.repos     <-- workspace-local 依賴宣告
+├── .gitmodules            <-- framework remote 與 submodule path
 ├── test_env/              <-- 腳本產生(per-distro 測試產物,加入 .gitignore)
 │   └── <ROS2_distro>/
 │       ├── install/
 │       ├── build/
 │       └── log/
-├── test_build.sh          <-- ln -s r1_test_framework/test_build.sh
-├── test_deps.sh           <-- ln -s r1_test_framework/test_deps.sh
-├── test_packages.sh       <-- ln -s r1_test_framework/test_packages.sh
-└── test_run.sh            <-- ln -s r1_test_framework/test_run.sh
+└── .gitignore
 ```
+
+首次 clone 後執行 `git submodule update --init --recursive`。腳本預設以自身所在的 framework 目錄之父層解析 package，不以目前 CWD 誤選其他 package；`R1_TEST_PKG_DIR` 保留作為明確覆寫。例：從 package 根目錄執行 `./r1_test_framework/test_build.sh` → `./r1_test_framework/test_deps.sh` → `./r1_test_framework/test_run.sh` → `./r1_test_framework/test_clean.sh`。一鍵查核則使用 `./r1_test_framework/todo_check.sh <item>`。
 
 #### 11.5.2 Docker 環境策略
 
@@ -1697,7 +1709,7 @@ ROS2 distro 與 base image 的對應關係如下(隨支援版本擴充):
 |---|---|
 | `test_build.sh` | 先解析目標 ROS2 distro(由參數或環境變數指定),識別對應的 base image(含 OS)並下載。接著清除既有同名 test container 後重建,在容器內建立 `~/ros2_ws/{src,install,build,log}`,將 package 原始碼掛載至 `~/ros2_ws/src/test_pkg/`,並於 package 路徑建立 `test_env/<distro>/{install,build,log}` 完成一對一掛載。 |
 | `test_deps.sh` | 在容器內以 `rosdep install --from-paths ~/ros2_ws/src --ignore-src` 安裝全部**外部**依賴；workspace-local 依賴已由掛載滿足,`--ignore-src` 則使 rosdep 跳過 src 內已存在的 packages。此步驟必須完整解決 dependency 問題,一旦失敗即中止,不進入 build。 |
-| `test_run.sh` | 先初始化容器內的 `install/`、`build/`、`log/`(清空前次產物),再執行 `colcon build` 與 `colcon test`。結束碼反映測試結果,作為 CI 的判定依據。 |
+| `test_run.sh` | 先初始化容器內的 `install/`、`build/`、`log/`(清空前次產物),再依 package 的 CMake 設定編譯 `test/unit/` 與 `test/integration/` 並執行 `colcon test`。預設執行兩類，可用 `-s unit` / `-s integration` 選擇 CTest label；保留案例名稱篩選，空匹配必須失敗。結束碼反映測試結果,作為 CI 的判定依據。 |
 | `test_packages.sh` | 在容器內將 package 打包為 `.deb`。檔名符合 ROS2 官方命名規則(distro、package name、version),並附加 **timestamp 與 commit hash** 以供開發測試辨識。 |
 
 `.deb` 命名規則如下:在官方樣式的 version 段附加辨識資訊:
@@ -1709,14 +1721,13 @@ ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch
 
 #### 11.5.4 一般化約定
 
-- 本框架是 R1 系列 package 的**共同測試標準**:新 package 只要引入 submodule
-  並建立 symlink,即獲得相同的 build / deps / run / packages 流程,不另行客製。
+- 本框架是 R1 系列 package 的**共同測試標準**:新 package 必須引入 submodule、建立 `test/unit/` 與 `test/integration/`，並直接呼叫框架腳本，即獲得相同的 build / deps / run / packages 流程，不另行複製或客製腳本。
   `test_depends.repos` 屬於**宣告式輸入**,每個 package 一份,列出其
   workspace-local 依賴,因此不算流程客製。`r1_integration_tests` 也以同一機制
   宣告其依賴(transport package、`r1_test_mocks`、`rv2_interfaces`),使 §11.2
-  的全部整合場景都能在同一容器模型內組出多 package workspace 並執行。
+  的全部整合場景都能在同一容器模型內組出多 package workspace 並執行。R1 介面定義以已裁決的獨立 `r1_interfaces` package 宣告。
 - 框架腳本的修訂在 `r1_test_framework` repo 內版控。各 package 以 submodule
-  pin 住版本,升級屬顯式操作(`git submodule update --remote`)。
+  pin 住版本；一般 clone/CI 使用 `git submodule update --init --recursive` 還原該 commit。升級時先在 framework repo 提交並 push 經驗證的版本，再於各 package 更新 gitlink 並提交；不可在測試流程中自動追蹤遠端 HEAD。workspace 可另有 framework 開發 checkout，但不得作為 package 的執行依賴。
 - `test_env/` 是腳本的產物目錄,各 package 的 `.gitignore` 須將其排除。
 
 ---
