@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.3)
+# R1 實作 TODO List(v0.8.4)
 
-> 依據:`r1_design_draft.md` v1.3.2(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.3(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.4 | **更新 Agent:`coco-codex`**。依使用者裁決排除 rv2 Doxyfile：transport 版本 commit 由 e99c59c amend 為 8b45662，只保留 package.xml 0.1.0；Doxyfile 還原既有 0.0.0，並依本次 amend 同步 transport 的未合併 PR/tag，其他 packages 與 framework tag 不動。§1.4 明訂只同步同一 R1 release 範圍的版本欄位，版本變更不得提早混入功能 commit；mocks/integration 的首次空 release commit 僅本次獲准例外，後續仍遵守 PR-ready 才附獨立版本 commit。 |
 | v0.8.3 | **更新 Agent:`coco-codex`**。framework v0.1.0 PR #4 經使用者 merge 後，四個 package 的 gitlink 更新為已發布 tag 所指 `12cc2dd`；GitHub rebase 後主線版本 commit 為 `0bb3228`，兩者 tree 完全相同，不移動既有 tag。transport 以獨立 release commit 同步 package.xml/Doxyfile 為 0.1.0；mocks/integration 的 package.xml 原已為 0.1.0，以空 release commit 記錄首次定版並各自加 v0.1.0 tag，與 gitlink 提交分開。interfaces 無 remote，僅本地更新 gitlink，release commit 依 §1.4 待 PR-ready。Docker 版本/XML、nested owner、shell 語法及框架路徑解析回歸通過；本輪未改腳本或測試、不重跑全功能測試。 |
 | v0.8.2 | **更新 Agent:`coco-codex`**。依使用者裁決新增各 package 獨立定版規範：首次 v0.1.0，ROS2 package 同步 package.xml 與既有版本欄位，framework 採 VERSION；準備 PR 時才附獨立版本 commit 並加 vX.Y.Z tag，目前手動、未來由 GitHub Actions 接手。framework 版本 PR 經使用者 merge 後，才允許各 package 更新至該版本 commit；文件修訂版本不重設。 |
 | v0.8.1 | **更新 Agent:`coco-codex`**。T0 布局修正完成：四個 package 的 framework gitlink 固定 `f436059`，移除 18 個根目錄腳本 symlink；測試分類、CMake labels 與 Handle H7–H8 拆分完成，既有案例 ID/斷言保留。framework 以實際 CTest discovery 防止 colcon 將空分類誤判成功。Docker T0 PASS、transport unit 84/integration 50 cases 全綠、T10 27-test/T11 39-test 彙總全綠、T1 build及10個介面解析通過；無 sibling framework 的 fresh clone 從其他 CWD 呼叫 nested 腳本亦完成 build。全部驗證容器卸載，T0.2/T0.5/T0.6 勾選；修正 helper 路徑與 T12.5 跨 package 指令。 |
@@ -84,8 +85,8 @@ git submodule update --init --recursive
 | 文件修訂紀錄 | 每次更動 `r1_todo.md` 或 `r1_design_draft.md` 時,必須同步更新該文件的版本號、於 §0「版本歷史」新增一筆紀錄,並在該筆說明或摘要開頭以 `更新 Agent:coco-<agent>` 明確標示實際更新者(例如 `coco-codex`、`coco-claude`)；不得只修改內文,也不得省略版本號、版本歷史或更新 Agent 中的任一項 |
 | 分支模型 | 每個階段(一個或連續數個 TODO 大項)之新增、修改、刪除一律開新 branch,不直接 commit 至主 branch。branch 命名 `<身分>/<項目>`,如 `coco-claude/T0-T1`、`coco-claude/T2` |
 | **Migrate 分支政策(v0.2.2)** | 既有 rv2 packages 處於 migrate 階段:R1 新版程式碼以 **`r1` branch 為新版主 branch**,rv2 既有版本(`master`)凍結不動。`rv2_control_signal_transport` 之階段 PR 一律以 `r1` 為 base;純 R1 新 repos(`r1_test_framework`、`r1_interfaces` 等)無 rv2 包袱,主 branch 即 `master` |
-| Package 版本 | 每個 R1 package 獨立管理版本，首次定版從 `v0.1.0` 開始，不要求 packages 同步升版。ROS2 package 以根目錄 `package.xml` 的 `<version>` 為來源，並同步其他既有版本欄位；非 ROS package 的 `r1_test_framework` 使用根目錄 `VERSION`，不為定版新增 ROS manifest，也不修改測試 fixture 版本。檔案內版本不含 `v` 前綴。文件自身的修訂版本沿用原序列，不屬 package release、不重設 |
-| 版本 commit 與 tag | 功能、測試、文件變更先提交；完成驗證、準備提出 PR 時才附獨立版本 commit，只含版本欄位變更，訊息包含 `vX.Y.Z`(如 `chore(release): v0.1.0`)，並建立同名 Git tag 指向該 commit。目前手動執行，未來才由 GitHub Actions 產生；本輪不實作 workflow。合併須保留該獨立 commit 與 tag SHA，使用 merge commit，不 squash/rebase 已標記的版本 commit；不得移動或覆寫 tag |
+| Package 版本 | 每個 R1 package 獨立管理版本，首次定版從 `v0.1.0` 開始，不要求 packages 同步升版。ROS2 package 以根目錄 `package.xml` 的 `<version>` 為來源，僅同步屬於同一 R1 release 範圍的其他版本欄位；`rv2_control_signal_transport/Doxyfile` 屬於 rv2，維持原內容，不隨 R1 定版修改。非 ROS package 的 `r1_test_framework` 使用根目錄 `VERSION`，不為定版新增 ROS manifest，也不修改測試 fixture 版本。檔案內版本不含 `v` 前綴。文件自身的修訂版本沿用原序列，不屬 package release、不重設 |
+| 版本 commit 與 tag | 功能、測試、文件變更先提交，版本欄位不得提前混入這些 commit；完成驗證、準備提出 PR 時才附獨立版本 commit，只含版本欄位變更，訊息包含 `vX.Y.Z`(如 `chore(release): v0.1.0`)，並建立同名 Git tag 指向該 commit。目前手動執行，未來才由 GitHub Actions 產生；本輪不實作 workflow。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者本次准許的首次定版例外，不作為後續慣例。合併須保留該獨立 commit 與 tag SHA，使用 merge commit，不 squash/rebase 已標記的版本 commit；不得自行移動或覆寫 tag |
 | 完成流程 | 階段完成(該大項查核與實測通過)後:附版本 commit/tag → push branch 與 tag → 對主 branch 提出 PR → 回報使用者。PR 合併由使用者裁決；無 remote 的 repo 暫存本地，待具備 PR 條件才附 release commit |
 | Framework 升版順序 | 先提交 framework 版本 PR，等待使用者 merge；確認 merge 後才將各 package 的 submodule gitlink 固定到該版本 tag 所指 commit，再推送各 package 的 PR。不得提前更新，也不得改 pin 任意開發 HEAD 或 merge commit |
 | Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`。`r1_interfaces` remote 待建立;建立前 branch 僅存本地 |

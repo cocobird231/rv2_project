@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.2)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.3)
 
-> 狀態:正式版(v1.3.2)。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.3)。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.3 | **更新 Agent:`coco-codex`**。依使用者裁決補充 §11.5.4：版本同步限同一 R1 release 範圍，rv2_control_signal_transport 的 Doxyfile 屬 rv2，不隨 R1 定版變更；版本欄位不得提前混入功能/測試/文件 commit。mocks/integration 的首次空 release commit 僅本次獲准例外，後續仍於 PR-ready 才附獨立版本 commit。 |
 | v1.3.2 | **更新 Agent:`coco-codex`**。依使用者裁決於 §11.5.4 新增各 package 獨立版本、首次 v0.1.0、ROS2 package.xml 與 framework VERSION 來源、PR 前獨立版本 commit/tag 及手動定版流程；framework 版本 PR 經使用者 merge 後，各 package 才更新 gitlink 至該版本 commit。文件修訂版本與 package release 分開管理。 |
 | v1.3.1 | **更新 Agent:`coco-codex`**。依布局實作與複核同步 §2.1：共用 fixture 位於 `test/`，Handle H7–H8 拆分；十個介面定義路徑採已裁決的獨立 `r1_interfaces`，消除舊 `rv2_interfaces/*/r1` 路徑與現行規範的矛盾。 |
 | v1.3.0 | **更新 Agent:`coco-codex`**。依使用者裁決統一測試布局：每個 R1 相關 package 均須於根目錄以 git submodule 引入 `r1_test_framework/` 並 pin commit，直接呼叫 `./r1_test_framework/*.sh`；取代 workspace sibling framework 與根目錄 symlink。所有測試依驗證邊界分入 `test/unit/`、`test/integration/`，單 function/class 合約屬 unit，CSM 註冊、heartbeat、callback 協作、生命週期與跨 package 場景屬 integration。同步更新 §2.1、§8.4、§9.4、§10.4、§11.3/§11.5；不更改既有協定或案例 ID。 |
@@ -1733,8 +1734,8 @@ ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch
   的全部整合場景都能在同一容器模型內組出多 package workspace 並執行。R1 介面定義以已裁決的獨立 `r1_interfaces` package 宣告。
 - 框架腳本的修訂在 `r1_test_framework` repo 內版控。各 package 以 submodule
   pin 住版本；一般 clone/CI 使用 `git submodule update --init --recursive` 還原該 commit。升級時先在 framework repo 提出版本 PR，經使用者 merge 後，才於各 package 將 gitlink 更新至版本 tag 所指的 commit 並提交，不採任意開發 HEAD 或 merge commit；不可在測試流程中自動追蹤遠端 HEAD。workspace 可另有 framework 開發 checkout，但不得作為 package 的執行依賴。
-- 各 R1 package **獨立管理版本**，首次定版從 `v0.1.0` 開始，不要求與 framework 同步升版。ROS2 package 以 `package.xml` 的 `<version>` 為來源，並同步其他既有版本欄位；framework 為非 ROS 腳本工具庫，以根目錄 `VERSION` 記錄版本，不新增 ROS manifest，測試 fixture 的版本不隨之變更。版本檔與 XML 欄位均不含 `v` 前綴；本設計稿與 TODO 的文件修訂版本沿用原序列，與 package release 分開管理。
-- 功能、測試與文件變更先各自提交；驗證完成且準備提出 PR 時，才附上**只含版本欄位變更的獨立 commit**(如 `chore(release): v0.1.0`)，並加 `vX.Y.Z` Git tag 指向該 commit。目前手動建立版本 commit/tag，GitHub Actions 自動化留待後續；無 remote 的 repo 待具備 PR 條件才附 release commit。合併使用 merge commit 保留版本 commit 與 tag SHA，不 squash/rebase 已標記的版本 commit，也不移動或覆寫 tag；PR 合併仍由使用者裁決。
+- 各 R1 package **獨立管理版本**，首次定版從 `v0.1.0` 開始，不要求與 framework 同步升版。ROS2 package 以 `package.xml` 的 `<version>` 為來源，僅同步同一 R1 release 範圍的其他版本欄位；`rv2_control_signal_transport/Doxyfile` 屬 rv2，維持既有內容，不隨 R1 定版修改。framework 為非 ROS 腳本工具庫，以根目錄 `VERSION` 記錄版本，不新增 ROS manifest，測試 fixture 的版本不隨之變更。版本檔與 XML 欄位均不含 `v` 前綴；本設計稿與 TODO 的文件修訂版本沿用原序列，與 package release 分開管理。
+- 功能、測試與文件變更先各自提交，版本欄位不得提前混入這些 commit；驗證完成且準備提出 PR 時，才附上**只含版本欄位變更的獨立 commit**(如 `chore(release): v0.1.0`)，並加 `vX.Y.Z` Git tag 指向該 commit。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者本次准許的首次定版例外，不作為後續慣例。目前手動建立版本 commit/tag，GitHub Actions 自動化留待後續；無 remote 的 repo 待具備 PR 條件才附 release commit。合併使用 merge commit 保留版本 commit 與 tag SHA，不 squash/rebase 已標記的版本 commit，也不自行移動或覆寫 tag；PR 合併仍由使用者裁決。
 - `test_env/` 是腳本的產物目錄,各 package 的 `.gitignore` 須將其排除。
 
 ---
