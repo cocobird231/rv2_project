@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.4)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.5)
 
-> 狀態:正式版(v1.3.4);新增 lint 格式為待使用者確認的候選。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.5);新增 lint 格式為待使用者確認的候選。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.5 | **更新 Agent:`coco-codex`**。§11.5.5 補充 C/C++ 行尾註解前兩格、不對齊註解欄、巢狀 namespace 同縮排與正確結尾名稱；使用者裁決全部強制 lint，新增補充詞法檢查涵蓋 block comment/空 namespace，不豁免 formatter-off，不能可靠判定則失敗；記憶體格式比對調和 clang-format 的 block comment 間距。沿用格式候選狀態，不定版或更新 package gitlink。 |
 | v1.3.4 | **更新 Agent:`coco-codex`**。§11.5 增加 PR 前獨立唯讀 Docker lint 候選：clang-format 18/LLVM+Allman 個人化格式、Ruff 的 PEP 8/Black 相容 Python 規則及 ShellCheck。格式範例先由使用者討論確認，本輪不定版、不改 package 版本/tag/gitlink，也不批次格式化或變動 integration 檔案布局。 |
 | v1.3.3 | **更新 Agent:`coco-codex`**。依使用者裁決補充 §11.5.4：版本同步限同一 R1 release 範圍，rv2_control_signal_transport 的 Doxyfile 屬 rv2，不隨 R1 定版變更；版本欄位不得提前混入功能/測試/文件 commit。mocks/integration 的首次空 release commit 僅本次獲准例外，後續仍於 PR-ready 才附獨立版本 commit。 |
 | v1.3.2 | **更新 Agent:`coco-codex`**。依使用者裁決於 §11.5.4 新增各 package 獨立版本、首次 v0.1.0、ROS2 package.xml 與 framework VERSION 來源、PR 前獨立版本 commit/tag 及手動定版流程；framework 版本 PR 經使用者 merge 後，各 package 才更新 gitlink 至該版本 commit。文件修訂版本與 package release 分開管理。 |
@@ -1747,9 +1748,23 @@ ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch
 `test_lint.sh` 自行以官方 `ros:jazzy-ros-base-noble` 建立並卸載 lint container，
 保持固定工具環境，不隨 package 的 build distro 切換；工具只在 container 內安裝。
 C/C++ 使用 clang-format 18 與 framework 根目錄的 `.clang-format`：LLVM 基底、
-Allman、4 spaces、namespace 不縮排，保留 include 順序與註解。120 欄與 class 內
+Allman、4 spaces、namespace 不縮排，保留 include 順序與一般註解文字。120 欄與 class 內
 短函式單行為待確認提案。Python 採 PEP 8/Black 相容格式，由 Ruff 0.15.7 執行
 format check 與 E4/E7/E9/F/I 檢查(88 欄、雙引號)；Shell 採語法檢查與 ShellCheck。
+
+C/C++ 行內 `//` 或 `/* */` 前若同一行已有非空白內容(含前一段註解)，必須恰好兩格，
+不對齊註解欄，也不在註解文字末尾加空白。
+巢狀 namespace 不增加縮排、不合併宣告，結尾註解按實際名稱由內到外標示；
+`FixNamespaceComments: true` 與 `ShortNamespaceLines: 0` 補正非空短 namespace。
+clang-format 18 不會替完全空的 namespace 加上名稱，也不保證處理跨條件編譯或
+停用格式化區段；`SpacesBeforeTrailingComments: 2` 亦不適用於 `/* */`。
+使用者裁決所有情況都須強制檢查，故 lint 增加詞法檢查，涵蓋空 namespace 與 block
+comment 間距，formatter-off 不豁免；直接宣告但無法可靠判定的 namespace 結構明確失敗。
+檢查不做 macro 展開或編譯；局部可見的 namespace/token-paste macro 會失敗，外部
+macro 的 namespace 展開語意無法驗證，namespace 應直接宣告。
+formatter 輸出只在記憶體將 inline block comment 間距
+恢復兩格後與來源比對，其餘差異照常失敗，不寫回檔案；開發者需手動補足 formatter
+不能修正的規則，再次執行 lint。
 
 這個 gate 不取代 C/C++ 編譯、語意分析或功能測試，也不新增自動修正開關。
 若違規，由開發者手動選檔執行 formatter、檢查 diff，再重跑 lint。正式定版後的
