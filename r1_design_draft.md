@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.3)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.4)
 
-> 狀態:正式版(v1.3.3)。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.4);新增 lint 格式為待使用者確認的候選。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.4 | **更新 Agent:`coco-codex`**。§11.5 增加 PR 前獨立唯讀 Docker lint 候選：clang-format 18/LLVM+Allman 個人化格式、Ruff 的 PEP 8/Black 相容 Python 規則及 ShellCheck。格式範例先由使用者討論確認，本輪不定版、不改 package 版本/tag/gitlink，也不批次格式化或變動 integration 檔案布局。 |
 | v1.3.3 | **更新 Agent:`coco-codex`**。依使用者裁決補充 §11.5.4：版本同步限同一 R1 release 範圍，rv2_control_signal_transport 的 Doxyfile 屬 rv2，不隨 R1 定版變更；版本欄位不得提前混入功能/測試/文件 commit。mocks/integration 的首次空 release commit 僅本次獲准例外，後續仍於 PR-ready 才附獨立版本 commit。 |
 | v1.3.2 | **更新 Agent:`coco-codex`**。依使用者裁決於 §11.5.4 新增各 package 獨立版本、首次 v0.1.0、ROS2 package.xml 與 framework VERSION 來源、PR 前獨立版本 commit/tag 及手動定版流程；framework 版本 PR 經使用者 merge 後，各 package 才更新 gitlink 至該版本 commit。文件修訂版本與 package release 分開管理。 |
 | v1.3.1 | **更新 Agent:`coco-codex`**。依布局實作與複核同步 §2.1：共用 fixture 位於 `test/`，Handle H7–H8 拆分；十個介面定義路徑採已裁決的獨立 `r1_interfaces`，消除舊 `rv2_interfaces/*/r1` 路徑與現行規範的矛盾。 |
@@ -1670,6 +1671,8 @@ rv2_control_signal_transport
 │   ├── test_deps.sh
 │   ├── test_packages.sh
 │   ├── test_run.sh
+│   ├── test_lint.sh      <-- PR 前唯讀 lint(候選,待格式確認)
+│   ├── .clang-format     <-- 共用 C/C++ 格式候選
 │   ├── test_clean.sh
 │   ├── todo_check.sh
 │   ├── VERSION           <-- framework 自身版本,不等同 owner package 版本
@@ -1716,6 +1719,7 @@ ROS2 distro 與 base image 的對應關係如下(隨支援版本擴充):
 | `test_build.sh` | 先解析目標 ROS2 distro(由參數或環境變數指定),識別對應的 base image(含 OS)並下載。接著清除既有同名 test container 後重建,在容器內建立 `~/ros2_ws/{src,install,build,log}`,將 package 原始碼掛載至 `~/ros2_ws/src/test_pkg/`,並於 package 路徑建立 `test_env/<distro>/{install,build,log}` 完成一對一掛載。 |
 | `test_deps.sh` | 在容器內以 `rosdep install --from-paths ~/ros2_ws/src --ignore-src` 安裝全部**外部**依賴；workspace-local 依賴已由掛載滿足,`--ignore-src` 則使 rosdep 跳過 src 內已存在的 packages。此步驟必須完整解決 dependency 問題,一旦失敗即中止,不進入 build。 |
 | `test_run.sh` | 先初始化容器內的 `install/`、`build/`、`log/`(清空前次產物),再依 package 的 CMake 設定編譯 `test/unit/` 與 `test/integration/` 並執行 `colcon test`。預設執行兩類，可用 `-s unit` / `-s integration` 選擇 CTest label；保留案例名稱篩選，空匹配必須失敗。結束碼反映測試結果,作為 CI 的判定依據。 |
+| `test_lint.sh`(候選) | 獨立短生命週期 Docker lint，不依賴既有測試容器、不 build、不自動修正。檢查目標 Git repo 工作樹的 C/C++ 格式、Python 格式/基本靜態問題及 Shell 語法/ShellCheck；框架與來源唯讀掛載，排除 generated/submodule/symlink，不掃 sibling dependencies。格式經使用者確認並定版後，PR 前必須通過。 |
 | `test_packages.sh` | 在容器內將 package 打包為 `.deb`。檔名符合 ROS2 官方命名規則(distro、package name、version),並附加 **timestamp 與 commit hash** 以供開發測試辨識。 |
 
 `.deb` 命名規則如下:在官方樣式的 version 段附加辨識資訊:
@@ -1737,6 +1741,22 @@ ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch
 - 各 R1 package **獨立管理版本**，首次定版從 `v0.1.0` 開始，不要求與 framework 同步升版。ROS2 package 以 `package.xml` 的 `<version>` 為來源，僅同步同一 R1 release 範圍的其他版本欄位；`rv2_control_signal_transport/Doxyfile` 屬 rv2，維持既有內容，不隨 R1 定版修改。framework 為非 ROS 腳本工具庫，以根目錄 `VERSION` 記錄版本，不新增 ROS manifest，測試 fixture 的版本不隨之變更。版本檔與 XML 欄位均不含 `v` 前綴；本設計稿與 TODO 的文件修訂版本沿用原序列，與 package release 分開管理。
 - 功能、測試與文件變更先各自提交，版本欄位不得提前混入這些 commit；驗證完成且準備提出 PR 時，才附上**只含版本欄位變更的獨立 commit**(如 `chore(release): v0.1.0`)，並加 `vX.Y.Z` Git tag 指向該 commit。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者本次准許的首次定版例外，不作為後續慣例。目前手動建立版本 commit/tag，GitHub Actions 自動化留待後續；無 remote 的 repo 待具備 PR 條件才附 release commit。合併使用 merge commit 保留版本 commit 與 tag SHA，不 squash/rebase 已標記的版本 commit，也不自行移動或覆寫 tag；PR 合併仍由使用者裁決。
 - `test_env/` 是腳本的產物目錄,各 package 的 `.gitignore` 須將其排除。
+
+#### 11.5.5 PR 前 lint 格式候選
+
+`test_lint.sh` 自行以官方 `ros:jazzy-ros-base-noble` 建立並卸載 lint container，
+保持固定工具環境，不隨 package 的 build distro 切換；工具只在 container 內安裝。
+C/C++ 使用 clang-format 18 與 framework 根目錄的 `.clang-format`：LLVM 基底、
+Allman、4 spaces、namespace 不縮排，保留 include 順序與註解。120 欄與 class 內
+短函式單行為待確認提案。Python 採 PEP 8/Black 相容格式，由 Ruff 0.15.7 執行
+format check 與 E4/E7/E9/F/I 檢查(88 欄、雙引號)；Shell 採語法檢查與 ShellCheck。
+
+這個 gate 不取代 C/C++ 編譯、語意分析或功能測試，也不新增自動修正開關。
+若違規，由開發者手動選檔執行 formatter、檢查 diff，再重跑 lint。正式定版後的
+提交順序為功能/測試/文件提交 → lint 與必要功能驗證 → 獨立版本 commit/tag → PR。
+目前須先向使用者提供 C/C++ 實際格式範例並討論，不附 release commit/tag、不改
+各 package gitlink、不批次格式化現有程式。integration package 原布局維持不變。
+權威來源、指令與檔案排除規則以 framework README 及 lint 設定為準。
 
 ---
 
