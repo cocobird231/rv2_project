@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.0)
+# R1 實作 TODO List(v0.8.1)
 
-> 依據:`r1_design_draft.md` v1.3.0(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.1(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.1 | **更新 Agent:`coco-codex`**。T0 布局修正完成：四個 package 的 framework gitlink 固定 `f436059`，移除 18 個根目錄腳本 symlink；測試分類、CMake labels 與 Handle H7–H8 拆分完成，既有案例 ID/斷言保留。framework 以實際 CTest discovery 防止 colcon 將空分類誤判成功。Docker T0 PASS、transport unit 84/integration 50 cases 全綠、T10 27-test/T11 39-test 彙總全綠、T1 build及10個介面解析通過；無 sibling framework 的 fresh clone 從其他 CWD 呼叫 nested 腳本亦完成 build。全部驗證容器卸載，T0.2/T0.5/T0.6 勾選；修正 helper 路徑與 T12.5 跨 package 指令。 |
 | v0.8.0 | **更新 Agent:`coco-codex`**。先行修訂 T0 規範：依使用者裁決，每個 R1 相關 package 必須於根目錄內嵌 `r1_test_framework` git submodule，直接使用 `./r1_test_framework/*.sh`，取代 v0.2.0 的 sibling/symlink 布局。`test/` 統一分為 `unit/` 與 `integration/`，依單一合約或系統協作分類；新增 T0.6 搬移驗收。既有 T1–T11 通過紀錄保留為歷史證據，新布局須另行 Docker 重驗後勾選 T0.2/T0.5/T0.6。同步依據設計稿 v1.3.0。 |
 | v0.7.0 | **更新 Agent:`coco-codex`**。T11.1–T11.5 完成:`r1_integration_tests` launch_testing 基架、I00 空場景/並行實證與 I1–I18 全場景；19 個 CTest targets 以獨立 ROS_DOMAIN_ID(可整段 relocation)及 parallel=2 執行。補齊 real-manager PENDING TTL、master lost-ACK 原 event 重送/冪等、manager/service readiness barrier、雙 ready snapshot gate、真 waiter armed barrier、MockMaster out-of-order/stale generation、process-model crash/restart、producer timestamp 週期/in-flight/backoff、fresh/raw status identity 證據。多輪對抗式查核發現全修，最終 3-agent 分區複核 0 must-fix；`./todo_check.sh t11` docker PASS(39-test 彙總,0 error/failure/skip,container 自動卸載)，受影響 I5/I6/I11/I12/I17 另各連跑 3 次全綠；mock 支援異動另經 t10 27-test regression 全綠。I10 sanitizer 組態依規劃保留至 T12。 |
 | v0.6.0 | **更新 Agent:`coco-codex`**。T10.1–T10.6 完成:`r1_test_mocks` 五個可腳本化 nodes、23 個 smoke gtests、嚴格 `<10%` rate 驗證、接受但不回覆、ACK 串接固定序列與四種 CsmNotify/亂序/舊世代注入；修正 callback lifetime 與跨執行緒計數 race。docker t10 PASS(27-test 彙總),3-agent 最終對抗式複核 0 must-fix。同步修正 §1.3 跨 package 執行位置、T10/T11 的 pre-T1 舊依賴/框架文字與附錄案例數 |
@@ -143,20 +144,20 @@ graph LR
 
 - [x] **T0.1** `r1_test_framework/` 腳本組:`test_build.sh`、`test_deps.sh`、`test_run.sh`、`test_packages.sh`(§11.5.3 四支標準腳本)加上 `test_clean.sh`(卸載)與 `todo_check.sh`(TODO 查核執行器),以獨立 git repo 版控。
   查核:`bash -n` 全數通過；每支腳本有用法說明；`git log` 存在初始 commit。
-- [ ] **T0.2** 各 R1 package 根目錄以 `.gitmodules` + gitlink 引入 `r1_test_framework/`；保留各自 `test_depends.repos` 的 local dependency 宣告，`.gitignore` 排除 `test_env/`，移除舊根目錄腳本 symlink。
-  查核：四個現有 R1 packages 的 `git ls-files --stage r1_test_framework` 均為 mode `160000` 且 pin 同一經驗證 commit；`git submodule status` 無未初始化/髒版本；由 package 內直接執行框架腳本可解析正確 PKG_DIR。
+- [x] **T0.2** 各 R1 package 根目錄以 `.gitmodules` + gitlink 引入 `r1_test_framework/`；保留各自 `test_depends.repos` 的 local dependency 宣告，`.gitignore` 排除 `test_env/`，移除舊根目錄腳本 symlink。
+  查核：四個現有 R1 packages 的 `git ls-files --stage r1_test_framework` 均為 mode `160000` 且 pin 同一經驗證 commit；`git submodule status` 無未初始化/髒版本；由 package 內直接執行框架腳本可解析正確 PKG_DIR。✅ 四者均固定 `f436059`，nested 入口、明確 override 與其他 CWD 均經驗證；18 個舊 symlink 已由 Git 追蹤移除。
 - [x] **T0.3** Container 生命週期驗證:base image 下載、container 建立、掛載(原始碼唯讀、`test_env` 一對一)、卸載。
   查核:`./r1_test_framework/test_build.sh` 後 `docker ps` 可見 container；container 內 `ls /root/ros2_ws/src/` 見本 package 與 `rv2_interfaces`；`./r1_test_framework/test_clean.sh` 後 `docker ps -a` 無殘留；host 上除 `test_env/` 外無任何新檔案。
 - [x] **T0.4** Baseline 全鏈:以現有 rv2 package 走完 build → deps → run,證明框架可獨立完成一次完整測試。
   查核:`./r1_test_framework/todo_check.sh t0` 結束碼 0,輸出含 `colcon test` 結果與 `PASS: t0`。
-- [ ] **T0.5** 框架獨立版控與可重現引入：framework 維持獨立 remote，各 package 以內嵌 submodule 固定 commit；`git clone` + `git submodule update --init --recursive` 後即可使用。
-  查核：在無 sibling framework 的驗證 checkout 中執行 nested 腳本，確認從 package 內及其他 CWD 均解析相同 package；Docker build/test 與測後卸載成功，不自動追遠端 HEAD。
-- [ ] **T0.6** 全 package 測試分層：依 §1.3.1 搬移測試與更新 CMake/include/helper/文件，保留既有案例覆蓋與 TODO filter；混合 Handle 檔拆分 unit H1–H6 與 integration H7–H8。
-  查核：`test/` 頂層無 executable test cases；CTest unit/integration labels、T0–T11 篩選與案例 ID 都保留；transport 兩類、mock 兩類、I00–I18 及 interfaces build/interface gate 均在 Docker 通過。
+- [x] **T0.5** 框架獨立版控與可重現引入：framework 維持獨立 remote，各 package 以內嵌 submodule 固定 commit；`git clone` + `git submodule update --init --recursive` 後即可使用。
+  查核：在無 sibling framework 的驗證 checkout 中執行 nested 腳本，確認從 package 內及其他 CWD 均解析相同 package；Docker build/test 與測後卸載成功，不自動追遠端 HEAD。✅ `r1_interfaces` fresh clone 從 GitHub 還原框架 gitlink，從 `r1_test_mocks` CWD 以絕對 nested 路徑執行 build→deps→run，容器只掛該 clone 與其 `test_env`；build PASS且測後卸載。
+- [x] **T0.6** 全 package 測試分層：依 §1.3.1 搬移測試與更新 CMake/include/helper/文件，保留既有案例覆蓋與 TODO filter；混合 Handle 檔拆分 unit H1–H6 與 integration H7–H8。
+  查核：`test/` 頂層無 executable test cases；CTest unit/integration labels、T0–T11 篩選與案例 ID 都保留；transport 兩類、mock 兩類、I00–I18 及 interfaces build/interface gate 均在 Docker 通過。✅ transport 6 unit targets/84 cases與4 integration targets/50 cases全綠；mocks 1 unit/3 integration targets、23 cases(T10彙總27)全綠；T11 19 integration targets(彙總39)全綠；T1 build及10個介面解析通過。框架自身Docker回歸涵蓋精確分類、名稱交集、無CTest與空CTest、失敗傳遞；實際 interfaces `-s unit` 明確拒絕空匹配。
 
 **驗證**
-- 語意查核:逐條對照 §11.5.3 腳本職責表(distro 解析、container 重建、`~/ros2_ws` 結構、唯讀掛載、rosdep `--ignore-src`、結束碼語意、`.deb` 命名)與 §11.5.2 環境策略表；確認 `test_depends.repos` 為宣告式輸入而非流程客製(§11.5.4)。
-- 實際測試:`./r1_test_framework/todo_check.sh t0`(container:`r1_todo_t0_jazzy`)。
+- 語意查核:逐條對照 §11.5.3 腳本職責表(distro 解析、container 重建、`~/ros2_ws` 結構、唯讀掛載、rosdep `--ignore-src`、結束碼語意、`.deb` 命名)與 §11.5.2 環境策略表；確認 `test_depends.repos` 為宣告式輸入而非流程客製(§11.5.4)。✅ 分區複核確認搬移未遺失案例，Handle斷言保留、跨binary前綴隔離、labels與文件引用一致；框架的空測試成功漏洞經回歸修正。
+- 實際測試:`./r1_test_framework/todo_check.sh t0`(container:`r1_todo_t0_jazzy`)。✅ 新布局 T0 PASS(21 gtests/彙總23)，另依 T0.6 執行全部受影響測試；本輪使用 `-k` 保留供分類及介面檢查，完成後均以 nested `test_clean.sh` 卸載，clone 驗證容器亦已卸載。
 
 ---
 
@@ -242,7 +243,7 @@ graph LR
 - [x] **T4.5** Shutdown 與 RAII:冪等 shutdown、解構釋放 transport entities(§1.5)。
   查核:S6 語意；shutdown 後無殭屍活動(§0.1 定義)。✅ 冪等 shutdown、解構呼叫 shutdown(S6)。
 - [x] **T4.6** 測試通道:`_calcStatus()` / `_applyStatus()` 經 `ManagerTestAccess` friend 暴露(§5.2、§8.2)。
-  查核:測試不必啟動真 Manager tick 即可驅動狀態轉移。✅ `ManagerTestAccess` 於 test/unit/r1_test_utils.h,僅編入測試 target。
+  查核:測試不必啟動真 Manager tick 即可驅動狀態轉移。✅ `ManagerTestAccess` 於 `test/r1_test_utils.h`,僅編入測試 target。
 - [x] **T4.7** `test/unit/test_transport.cpp` Source 部分:S1–S16(gtest suite 以 `SourceTest` 命名,與 Sink 區分)。
   查核:16 案例與 §5.4 表逐列對應；S5 涵蓋 NO_TRANSPORT 與 TIMEOUT 兩分支。✅ 16 案例 suite `SourceTest`;S5 三分支(NO_TRANSPORT / TIMEOUT / 遮蔽)全覆蓋。
 
@@ -446,7 +447,16 @@ graph LR
 - [ ] **T12.4** `.deb` 打包:`test_packages.sh` 產出命名符合 §11.5.3 規則(version 段附 timestamp + short hash)之套件,並於乾淨 container 內 `dpkg -i` 安裝驗證。
   查核:`./r1_test_framework/todo_check.sh t12-pkg` 產出檔名匹配 `ros-<distro>-<pkg>_<version>.<YYYYMMDDHHMMSS>.<hash>_<arch>.deb`。
 - [ ] **T12.5** 全量迴歸:t2–t11 連續執行一輪全綠(CI 腳本鏈)。
-  查核:單一 shell 迴圈 `for i in t2 t3 ... t11; do ./r1_test_framework/todo_check.sh $i; done` 結束碼 0。
+  查核:從 workspace 根目錄依目標 package 分派以下指令，全部結束碼為 0：
+
+  ```bash
+  (cd src/rv2_control_signal_transport &&
+    for i in t2 t3 t4 t5 t6 t7 t8 t9; do
+      ./r1_test_framework/todo_check.sh "$i" || exit
+    done) &&
+  (cd src/r1_test_mocks && ./r1_test_framework/todo_check.sh t10) &&
+  (cd src/r1_integration_tests && ./r1_test_framework/todo_check.sh t11)
+  ```
 
 **驗證**
 - 語意查核:§11.4 矩陣三列的目標測試 ID 與 T12.1–T12.3 覆蓋集合一致。

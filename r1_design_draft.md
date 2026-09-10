@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.0)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.1)
 
-> 狀態:正式版(v1.3.0)。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.1)。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.1 | **更新 Agent:`coco-codex`**。依布局實作與複核同步 §2.1：共用 fixture 位於 `test/`，Handle H7–H8 拆分；十個介面定義路徑採已裁決的獨立 `r1_interfaces`，消除舊 `rv2_interfaces/*/r1` 路徑與現行規範的矛盾。 |
 | v1.3.0 | **更新 Agent:`coco-codex`**。依使用者裁決統一測試布局：每個 R1 相關 package 均須於根目錄以 git submodule 引入 `r1_test_framework/` 並 pin commit，直接呼叫 `./r1_test_framework/*.sh`；取代 workspace sibling framework 與根目錄 symlink。所有測試依驗證邊界分入 `test/unit/`、`test/integration/`，單 function/class 合約屬 unit，CSM 註冊、heartbeat、callback 協作、生命週期與跨 package 場景屬 integration。同步更新 §2.1、§8.4、§9.4、§10.4、§11.3/§11.5；不更改既有協定或案例 ID。 |
 | v1.2.2 | 全文潤飾(humanizer):以「不失表達精確度」為前提,將壓縮式速記展開為完整敘述句、拆解長串接句、移除殘餘的機械式句式;技術 token(識別字、數值、章節引用、測試 ID、狀態名)經逐節 token-diff 比對零遺失,code 與 mermaid blocks 以原文 byte 級覆蓋保護(43 圖全數 render 驗證);內容與設計無變更 |
 | v1.2.1 | 最終架構審核(4 視角 15 項確認發現,全數驗證)修正:response-health 補 disconnect=0 停用語意；waitForMessage shutdown 喚醒協定修 lost-wakeup(flag 持鎖寫入 + 等待者計數)；§10.3 Handle 路由改以 RemovalReason 分類並補列 RESPONSE_FAILURE；重建震盪抑制(quarantine backoff,防單向資料面故障之註冊/註銷震盪)；EntryStatus 增 `source_csm_instance_id`(identity 三元組上線)；D3 conflict retry 明定不受 D7 旗標約束；UNREGISTER stale 回覆碼對齊 enum；master 對帳增**缺席 CSM absence clock**(補 master 重啟 × peer 死亡無 owner 缺口)；live-but-DISCONNECTED CSM 恢復路徑定義(STALE_INSTANCE → 同 ID register 視為全量重建)；heartbeat deadline < csm_timeout/2 驗證；retry commit point 統一為 completion queue；docker 測試增 `test_depends.repos` workspace-local 依賴掛載機制；附錄三處舊 instance disconnect 分支改對帳路徑；registration 支援型別提升至 source_registration.h 消除 header 循環相依 |
@@ -208,8 +209,10 @@ include/rv2_control_signal_transport/r1/
 src/r1/
     control_signal_factory.cpp # Factory singleton 定義(shared library 單一定義)
     control_signal_types.cpp   # 具體型別註冊(Joy / Twist / String)
+test/
+    r1_test_utils.h            # unit/integration 共用 friend/helper
+    r1_handle_test_utils.h     # Handle 合約與生命週期共用 fixture
 test/unit/
-    r1_test_utils.h            # Source/Sink 隔離測試的 friend/helper
     test_liveness_state.cpp    # 純邏輯,無 rclcpp
     test_info_validation.cpp   # 純邏輯,無 rclcpp
     test_factory.cpp
@@ -223,19 +226,19 @@ test/integration/
 
 每個 R1 相關 package(包含 `r1_interfaces`、`r1_test_mocks` 與 `r1_integration_tests`)均於根目錄以 git submodule 引入 `r1_test_framework/`，由 package 根目錄直接執行 `./r1_test_framework/test_build.sh` 等腳本(§11.5)。測試檔案必須依 §11.3 分入 `test/unit/` 或 `test/integration/`；兩個目錄都須存在，尚無案例的一側可用 README 記錄用途，不加入假測試。產物 `test_env/<distro>/` 列入 `.gitignore`。
 
-介面定義暫時放置於 `rv2_interfaces`,待 migrate 時一併搬移:
+依 T1 已裁決的布局，介面定義放在獨立 `r1_interfaces` package，避免 rosidl basename 與 legacy rv2 型別碰撞：
 
 ```
-rv2_interfaces/msg/r1/ControlSignalInfo.msg
-rv2_interfaces/msg/r1/ManagerStatus.msg          # 狀態發布;訂閱者 = CSM Master(§2.5.1)
-rv2_interfaces/msg/r1/EntryStatus.msg            # 含 manager_name(v0.5.0,master 配對/通知用)
-rv2_interfaces/srv/r1/ControlSignalManage.srv    # op = REGISTER | UNREGISTER(v0.5.0 移除 NOTIFY_ABNORMAL)
-rv2_interfaces/srv/r1/ControlSignalInfoReq.srv
-rv2_interfaces/srv/r1/CsmRegister.srv            # CSM → master 註冊(v0.5.0;v1.1.0 增列 CSM 級雙閾值欄位,D6)
-rv2_interfaces/srv/r1/CsmNotify.srv              # master → CSM 通知:預警/註銷/配對缺失(v1.1.0)
-rv2_interfaces/srv/r1/ControlSignalJoy.srv       # service 模式資料通道(隨型別註冊配套,§7)
-rv2_interfaces/srv/r1/ControlSignalTwist.srv
-rv2_interfaces/srv/r1/CsmHeartbeat.srv           # CSM → master 心跳(req 攜帶 csm_name;std_srvs/Trigger 之 request 為空,master 無法識別呼叫者,故自訂)
+r1_interfaces/msg/ControlSignalInfo.msg
+r1_interfaces/msg/ManagerStatus.msg          # 狀態發布;訂閱者 = CSM Master(§2.5.1)
+r1_interfaces/msg/EntryStatus.msg            # 含 manager_name(v0.5.0,master 配對/通知用)
+r1_interfaces/srv/ControlSignalManage.srv    # op = REGISTER | UNREGISTER(v0.5.0 移除 NOTIFY_ABNORMAL)
+r1_interfaces/srv/ControlSignalInfoReq.srv
+r1_interfaces/srv/CsmRegister.srv            # CSM → master 註冊(v0.5.0;v1.1.0 增列 CSM 級雙閾值欄位,D6)
+r1_interfaces/srv/CsmNotify.srv              # master → CSM 通知:預警/註銷/配對缺失(v1.1.0)
+r1_interfaces/srv/ControlSignalJoy.srv       # service 模式資料通道(隨型別註冊配套,§7)
+r1_interfaces/srv/ControlSignalTwist.srv
+r1_interfaces/srv/CsmHeartbeat.srv           # CSM → master 心跳(req 攜帶 csm_name;std_srvs/Trigger 之 request 為空,master 無法識別呼叫者,故自訂)
 ```
 
 v0.5.0 新增執行檔 `csm_master_node`:這是一個獨立的 node,負責 host `r1::CsmMaster`(§9)。
@@ -443,7 +446,7 @@ sequenceDiagram
 
 #### 2.5.1 ManagerStatus 訊息(my_note #4,新設計)
 
-`rv2_interfaces/msg/r1/ManagerStatus.msg` 取代 v0.2.0 的空 ManagerHeartbeat,定義如下:
+`r1_interfaces/msg/ManagerStatus.msg` 取代 v0.2.0 的空 ManagerHeartbeat,定義如下:
 
 ```
 # 每 status_interval 發布於 <manager_name>/status
@@ -456,7 +459,7 @@ r1/EntryStatus[] sources          # 完整 snapshot,含 PENDING/REGISTERED/RETRY
 r1/EntryStatus[] sinks            # 完整 snapshot,含 PENDING/REGISTERED
 ```
 
-`rv2_interfaces/msg/r1/EntryStatus.msg`:
+`r1_interfaces/msg/EntryStatus.msg`:
 
 ```
 string manager_name         # 所屬 CSM(v0.5.0;master 配對與通知定位用)
@@ -581,7 +584,7 @@ string reason
 
 ### 3.1 訊息欄位(8 欄)
 
-訊息定義檔為 `rv2_interfaces/msg/r1/ControlSignalInfo.msg`,各欄位說明如下:
+訊息定義檔為 `r1_interfaces/msg/ControlSignalInfo.msg`,各欄位說明如下:
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
@@ -1739,8 +1742,7 @@ ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch
 並升級為必要元件(§9.3)。原 #5(休眠 entry GC)則隨「DISCONNECTED 即註銷」消解,
 不再存在可回收的永久休眠 entry。現行未決事項如下:
 
-1. **msg/srv 放置**:應暫置於 `rv2_interfaces/msg/r1/`,還是直接新開 `r1_interfaces`
-   package?這是 migrate 成本與相依耦合之間的取捨。
+1. **msg/srv 放置——已裁決(T1)**：使用獨立 `r1_interfaces` package。rosidl 型別名稱取檔案 basename，無法以子目錄區分與 legacy rv2 同名的型別；實際布局見 §2.1。保留此編號供既有引用。
 2. **rate window 粒度**:`rateWindowNs` 目前是 Manager 全域設定(位於 ManagerOptions)。
    當高頻(50Hz joy)與低頻(1Hz)通道並存時,是否需要 per-entity 配置(作為 Info 欄位)?
 3. **`registerSource` 之 async 版本**:是否提供 future/callback 版本,以因應避免阻塞
