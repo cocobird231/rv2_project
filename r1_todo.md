@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.8.2)
+# R1 實作 TODO List(v0.8.3)
 
 > 依據:`r1_design_draft.md` v1.3.2(正式版)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
@@ -7,6 +7,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.3 | **更新 Agent:`coco-codex`**。framework v0.1.0 PR #4 經使用者 merge 後，四個 package 的 gitlink 更新為已發布 tag 所指 `12cc2dd`；GitHub rebase 後主線版本 commit 為 `0bb3228`，兩者 tree 完全相同，不移動既有 tag。transport 以獨立 release commit 同步 package.xml/Doxyfile 為 0.1.0；mocks/integration 的 package.xml 原已為 0.1.0，以空 release commit 記錄首次定版並各自加 v0.1.0 tag，與 gitlink 提交分開。interfaces 無 remote，僅本地更新 gitlink，release commit 依 §1.4 待 PR-ready。Docker 版本/XML、nested owner、shell 語法及框架路徑解析回歸通過；本輪未改腳本或測試、不重跑全功能測試。 |
 | v0.8.2 | **更新 Agent:`coco-codex`**。依使用者裁決新增各 package 獨立定版規範：首次 v0.1.0，ROS2 package 同步 package.xml 與既有版本欄位，framework 採 VERSION；準備 PR 時才附獨立版本 commit 並加 vX.Y.Z tag，目前手動、未來由 GitHub Actions 接手。framework 版本 PR 經使用者 merge 後，才允許各 package 更新至該版本 commit；文件修訂版本不重設。 |
 | v0.8.1 | **更新 Agent:`coco-codex`**。T0 布局修正完成：四個 package 的 framework gitlink 固定 `f436059`，移除 18 個根目錄腳本 symlink；測試分類、CMake labels 與 Handle H7–H8 拆分完成，既有案例 ID/斷言保留。framework 以實際 CTest discovery 防止 colcon 將空分類誤判成功。Docker T0 PASS、transport unit 84/integration 50 cases 全綠、T10 27-test/T11 39-test 彙總全綠、T1 build及10個介面解析通過；無 sibling framework 的 fresh clone 從其他 CWD 呼叫 nested 腳本亦完成 build。全部驗證容器卸載，T0.2/T0.5/T0.6 勾選；修正 helper 路徑與 T12.5 跨 package 指令。 |
 | v0.8.0 | **更新 Agent:`coco-codex`**。先行修訂 T0 規範：依使用者裁決，每個 R1 相關 package 必須於根目錄內嵌 `r1_test_framework` git submodule，直接使用 `./r1_test_framework/*.sh`，取代 v0.2.0 的 sibling/symlink 布局。`test/` 統一分為 `unit/` 與 `integration/`，依單一合約或系統協作分類；新增 T0.6 搬移驗收。既有 T1–T11 通過紀錄保留為歷史證據，新布局須另行 Docker 重驗後勾選 T0.2/T0.5/T0.6。同步依據設計稿 v1.3.0。 |
@@ -149,7 +150,7 @@ graph LR
 - [x] **T0.1** `r1_test_framework/` 腳本組:`test_build.sh`、`test_deps.sh`、`test_run.sh`、`test_packages.sh`(§11.5.3 四支標準腳本)加上 `test_clean.sh`(卸載)與 `todo_check.sh`(TODO 查核執行器),以獨立 git repo 版控。
   查核:`bash -n` 全數通過；每支腳本有用法說明；`git log` 存在初始 commit。
 - [x] **T0.2** 各 R1 package 根目錄以 `.gitmodules` + gitlink 引入 `r1_test_framework/`；保留各自 `test_depends.repos` 的 local dependency 宣告，`.gitignore` 排除 `test_env/`，移除舊根目錄腳本 symlink。
-  查核：四個現有 R1 packages 的 `git ls-files --stage r1_test_framework` 均為 mode `160000` 且 pin 同一經驗證 commit；`git submodule status` 無未初始化/髒版本；由 package 內直接執行框架腳本可解析正確 PKG_DIR。✅ 四者均固定 `f436059`，nested 入口、明確 override 與其他 CWD 均經驗證；18 個舊 symlink 已由 Git 追蹤移除。
+  查核：四個現有 R1 packages 的 `git ls-files --stage r1_test_framework` 均為 mode `160000` 且 pin 同一經驗證 commit；`git submodule status` 無未初始化/髒版本；由 package 內直接執行框架腳本可解析正確 PKG_DIR。✅ v0.8.3 四者均固定 framework `v0.1.0` tag 所指 `12cc2dd`，已核對與 merge 後主線 tree 相同；nested 入口、明確 override 與其他 CWD 均經驗證。v0.8.1 移除的 18 個舊 symlink 保留 Git 歷史可供還原。
 - [x] **T0.3** Container 生命週期驗證:base image 下載、container 建立、掛載(原始碼唯讀、`test_env` 一對一)、卸載。
   查核:`./r1_test_framework/test_build.sh` 後 `docker ps` 可見 container；container 內 `ls /root/ros2_ws/src/` 見本 package 與 `rv2_interfaces`；`./r1_test_framework/test_clean.sh` 後 `docker ps -a` 無殘留；host 上除 `test_env/` 外無任何新檔案。
 - [x] **T0.4** Baseline 全鏈:以現有 rv2 package 走完 build → deps → run,證明框架可獨立完成一次完整測試。
@@ -162,6 +163,7 @@ graph LR
 **驗證**
 - 語意查核:逐條對照 §11.5.3 腳本職責表(distro 解析、container 重建、`~/ros2_ws` 結構、唯讀掛載、rosdep `--ignore-src`、結束碼語意、`.deb` 命名)與 §11.5.2 環境策略表；確認 `test_depends.repos` 為宣告式輸入而非流程客製(§11.5.4)。✅ 分區複核確認搬移未遺失案例，Handle斷言保留、跨binary前綴隔離、labels與文件引用一致；框架的空測試成功漏洞經回歸修正。
 - 實際測試:`./r1_test_framework/todo_check.sh t0`(container:`r1_todo_t0_jazzy`)。✅ 新布局 T0 PASS(21 gtests/彙總23)，另依 T0.6 執行全部受影響測試；本輪使用 `-k` 保留供分類及介面檢查，完成後均以 nested `test_clean.sh` 卸載，clone 驗證容器亦已卸載。
+- v0.8.3 定版補驗：官方 Jazzy Docker 內驗證四個 package 的 XML 版本 `0.1.0`、transport Doxyfile 版本、四個 nested framework 的 VERSION 與不同 CWD 解析、全部框架腳本語法及路徑解析 unit regression；全數通過且驗證容器自動移除。與 v0.8.1 的 framework `f436059` 比對，版本 tag 只多 README/VERSION；各 package 僅變更 gitlink 與版本資料，因此沿用上述功能測試證據，本次未重跑完整功能測試。
 
 ---
 
