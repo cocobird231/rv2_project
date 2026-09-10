@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.7)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.8)
 
-> 狀態:正式版(v1.3.7);lint 格式已確認，framework v0.2.0 版本 PR 待 merge。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.8);framework v0.2.0 已合併，package 導入依驗證結果記錄。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.8 | **更新 Agent:`coco-codex`**。framework PR #5 經使用者 rebase merge，主線 release `5316f3e` 與 v0.2.0 tag commit `631a85b` tree 完全相同；consumer 升級固定既有 tag commit，不移動 tag。四個 package gitlink-only dependency commits 已留本地；Docker lint 三個 FAIL、interfaces 無支援來源而 SKIP，未 push、附 release commit/tag 或提出 PR。package 版本、rv2 Doxyfile 與 integration 布局保持不變，導入證據及後續 PR 條件記於 TODO T0.7。 |
 | v1.3.7 | **更新 Agent:`coco-codex`**。使用者同意以目前 lint 格式定版並提出 PR，§11.5 移除待確認標示，保留 120 欄/InlineOnly 與已討論的註解規範。framework 獨立版本 commit `631a85b`/annotated tag `v0.2.0` 已推送 [PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)；其他 package 須等待使用者以 merge commit 合併，再固定至該版本 SHA。本輪不更動其他 package gitlink、版本或 rv2 Doxyfile。 |
 | v1.3.6 | **更新 Agent:`coco-codex`**。§11.5.5 增加一般多行 block 與 Doxygen `/** */` API 文件註解候選：獨立 delimiter、對齊星號、非空內容與首個非空行 `@brief`；保留單行一般註解及 `/**<` 成員註解。說明官方支援語法與專案慣例的區別，lint 僅驗證結構、不驗證文件覆蓋率或參數描述語意；不修改 rv2 Doxyfile、不定版或更新 gitlink。 |
 | v1.3.5 | **更新 Agent:`coco-codex`**。§11.5.5 補充 C/C++ 行尾註解前兩格、不對齊註解欄、巢狀 namespace 同縮排與正確結尾名稱；使用者裁決全部強制 lint，新增補充詞法檢查涵蓋 block comment/空 namespace，不豁免 formatter-off，不能可靠判定則失敗；記憶體格式比對調和 clang-format 的 block comment 間距。沿用格式候選狀態，不定版或更新 package gitlink。 |
@@ -1784,9 +1785,14 @@ lint 透過既有詞法 token 檢查區塊結構與 `@brief` 基本形狀，form
 提交順序為功能/測試/文件提交 → lint 與必要功能驗證 → 獨立版本 commit/tag → PR。
 使用者已確認 C/C++ 範例與目前格式，framework v0.2.0 的獨立版本 commit
 `631a85bce7d4b6f1826b06244f9c77b33c6e6f8f` 與同名 annotated tag 已推送
-[PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)。須以 merge commit
-保留版本 SHA，待使用者 merge 後才更新各 package gitlink；不批次格式化現有程式，
-integration package 原布局維持不變。
+[PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)，已由使用者 rebase merge。
+主線 release commit 改為 `5316f3ebe5efc29ab9cb114138091638ac2c4014`，其 tree 與原 tag
+commit 完全一致；各 package 仍固定原 v0.2.0 tag 所指 `631a85b`，不移動或覆寫 tag。
+consumer 導入須實際跑新版 lint，失敗時如實記錄，不自行批次格式化或跳過 PR 閘門。
+本輪 transport、mocks、integration 的既有來源未通過 lint；interfaces 為無支援來源的
+SKIP，且無 remote。四個 dependency commits 留本地，未 push 或提出 PR，詳見 TODO T0.7；
+尚未附 package 版本 commit，integration 原布局不因 gitlink 升級改動。後續版本仍依 §11.5.4
+採 merge commit 保留版本 SHA。
 權威來源、指令與檔案排除規則以 framework README 及 lint 設定為準。
 
 ---
