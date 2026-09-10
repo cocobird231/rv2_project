@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.7)
+# R1 實作 TODO List(v0.8.8)
 
-> 依據:`r1_design_draft.md` v1.3.6(正式版;lint 格式候選待使用者確認)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.7(正式版;lint 格式已確認，framework 升版 PR 待 merge)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.8 | **更新 Agent:`coco-codex`**。使用者確認目前 lint 格式並要求 commit/PR；沿用 120 欄、class 內短函式單行、註解與 Doxygen 規則。framework 先提交格式確認文件，再以獨立 `chore(release): v0.2.0` commit `631a85b` 僅更新 VERSION 與 README 安裝範例的 tag，建立同名 annotated tag，推送並提出 [PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)。本輪全檔 Docker lint 與 release metadata 驗證通過；程式碼/測試未變，沿用 56 個回歸測試結果。T0.7 framework 驗收完成；待使用者以 merge commit 合併，才更新其他 package gitlink，本輪未改其他 package 或 rv2 Doxyfile。 |
 | v0.8.7 | **更新 Agent:`coco-codex`**。增加多行區塊註解與 Doxygen JavaDoc-style 文件註解候選：一般說明用 `/* */`、class/function API 說明用 `/** */`，delimiter 獨立成行、星號對齊且區塊不得空白；文件首個非空內容行為有文字的 `@brief`。明訂這些為選自 Doxygen 支援語法的專案慣例，不是 Doxygen 唯一合法格式；lint 驗證結構，不宣稱驗證所有 API 均有文件或參數/回傳描述語意。沿用唯讀 Docker、不碰 rv2 Doxyfile、不定版與不更新 gitlink。 |
 | v0.8.6 | **更新 Agent:`coco-codex`**。細化 C/C++ lint 候選：程式碼與行尾註解間兩格、不對齊註解欄；巢狀 namespace 同縮排且逐層標示正確結尾名稱。使用者裁決所有情況均需強制檢查，故增加 token-aware 補充檢查，涵蓋 `/* */` 與空 namespace，formatter-off 不豁免；formatter 的 block comment 間距衝突僅在記憶體比對時調整。120 欄與 class 內短函式單行仍待確認，不附 release commit/tag/PR、不改 package gitlink。 |
 | v0.8.5 | **更新 Agent:`coco-codex`**。新增 T0.7 與 PR 前 lint 候選規範：framework 提供唯讀 Docker test_lint.sh、LLVM 基底 Allman .clang-format 與 C/C++ 範例，Python 採 PEP 8/Black 相容 Ruff，Shell 採語法檢查/ShellCheck。使用者要求先討論格式再定版，本輪不附 package 版本 commit/tag、不開 PR、不更新各 package gitlink、不批次格式化舊碼；integration header/source 布局維持不變。 |
@@ -78,15 +79,15 @@ git submodule update --init --recursive
 - CMake 更新來源/include 路徑，CTest 標示 `unit` / `integration` labels；預設執行兩類，`./r1_test_framework/test_run.sh -s unit` 或 `-s integration` 可分開驗證，指定類別空匹配必須失敗。
 - 遷移先修文件，再改各 package；框架先完成版本 PR 並經使用者 merge，package 再 pin 該版本 tag 所指的 commit(§1.4)。workspace sibling framework 可保留作開發 checkout，但不可作 package 執行依賴。
 
-### 1.3.2 PR 前 lint(格式候選待確認)
+### 1.3.2 PR 前 lint(格式已確認)
 
-- 使用者確認候選格式並完成 framework 定版後，每次準備 PR 必須在目標 package 執行 `./r1_test_framework/test_lint.sh`，通過後才附獨立版本 commit；不得把版本欄位提早混入開發 commit。
+- 採用含 lint 的 framework 版本後，每次準備 PR 必須在目標 package 執行 `./r1_test_framework/test_lint.sh`，通過後才附獨立版本 commit；不得把版本欄位提早混入開發 commit。framework 版本 PR 須先經使用者 merge，各 package 才可更新 gitlink。
 - lint 為獨立 Docker 唯讀流程，不需先 build/deps，不重用或清除既有測試容器。固定官方 Jazzy base image 與 clang-format 18/Ruff 0.15.7/ShellCheck 工具環境；不安裝 host 依賴、不建客製 image、不自動修正來源。詳細命令與適用範圍見 framework README。
-- C/C++ 以 LLVM 為基底，採 Allman、4 spaces、namespace 不縮排、保留 include 順序；120 欄與 class 內短函式單行為待討論提案。Python 為 PEP 8/Black 相容 Ruff format/check；Bash/sh 為語法檢查與 ShellCheck。這不是 C/C++ 編譯或語意分析的替代。
+- C/C++ 以 LLVM 為基底，採 Allman、4 spaces、namespace 不縮排、保留 include 順序、120 欄與 class 內短函式單行。Python 為 PEP 8/Black 相容 Ruff format/check；Bash/sh 為語法檢查與 ShellCheck。這不是 C/C++ 編譯或語意分析的替代。
 - C/C++ 註解間距依使用者範例解讀為同一行已有非空白內容(含前一段註解)時，與後續 `//` 或 `/* */` 之間恰好兩格，不在註解文字尾端補空白；不對齊註解欄。巢狀 namespace 保持同縮排但不合併，每個結尾依內外層標示正確名稱，完全空的 namespace 也不可省略。使用者裁決全部須由 lint 強制檢查，因此 clang-format 18 未涵蓋的間距/名稱規則由補充詞法檢查執行，formatter-off 不豁免；直接宣告但不能可靠判定的 namespace 結構明確失敗。檢查不展開 macro；局部可見的 namespace/token-paste macro 會失敗，外部 macro 的 namespace 展開語意無法驗證，namespace 應直接宣告。formatter 原生會將 inline block comment 間距改回一格，比對時僅在記憶體恢復本案兩格規則，其餘差異照常失敗；開發者執行 clang-format 後仍須手動補足其不支援的規則。
 - lint 失敗時由開發者決定修正，例如明確指定檔案執行 `clang-format-18 --style=file:./r1_test_framework/.clang-format -i <file>`，檢查 diff 後重跑 lint。框架不得自行批次格式化、修改 legacy rv2 文件或改測試斷言。
 - 多行 block comment 統一採對齊星號的版型：`/*` 或 `/**` 開頭獨立成行，內文為同縮排加 ` * 文字`，空白內容行只留 ` *`，結尾為同縮排加 ` */` 且獨立成行；至少有一行非空內容。class/function API 說明採 Doxygen JavaDoc-style `/** */`，首個非空內容行使用 `@brief 文字`，參數與回傳說明依官方 `@param[in]`、`@param[out]`、`@param[in,out]`、`@return` 等語法撰寫。單行一般 `/* 文字 */` 與行內 `/**< 成員說明 */` 仍可使用，沿用前兩格規則。星號 margin 為一格，不套用行內註解前兩格；保留內文/code block 縮排，不自動 reflow。lint 強制區塊結構與 `@brief` 基本形狀，formatter-off 不豁免；API 是否都有文件、描述是否正確及參數與宣告對應屬語意 review，不在本輪詞法證明範圍。
-- 目前只交付候選與回歸測試，T0.7 不勾選；既有 package gitlink、版本與 integration header/source 布局保持原狀。等使用者看過 C/C++ 範例並確認後才將格式正式定版，本輪不新增 CI workflow。
+- 使用者已確認格式並同意提出 framework v0.2.0 PR，T0.7 framework 驗收完成。其他 package gitlink、版本與 integration header/source 布局保持原狀；等待 PR #5 merge 後，才可固定至 v0.2.0 tag 所指版本 commit。本輪不新增 CI workflow，也不自行合併 PR。
 
 ### 1.4 Git 版控規範(v0.2.1;v0.2.2 增列 migrate 分支政策;v0.5.1 增列文件修訂署名;v0.8.2 增列 package 定版)
 
@@ -173,10 +174,11 @@ graph LR
   查核：在無 sibling framework 的驗證 checkout 中執行 nested 腳本，確認從 package 內及其他 CWD 均解析相同 package；Docker build/test 與測後卸載成功，不自動追遠端 HEAD。✅ `r1_interfaces` fresh clone 從 GitHub 還原框架 gitlink，從 `r1_test_mocks` CWD 以絕對 nested 路徑執行 build→deps→run，容器只掛該 clone 與其 `test_env`；build PASS且測後卸載。
 - [x] **T0.6** 全 package 測試分層：依 §1.3.1 搬移測試與更新 CMake/include/helper/文件，保留既有案例覆蓋與 TODO filter；混合 Handle 檔拆分 unit H1–H6 與 integration H7–H8。
   查核：`test/` 頂層無 executable test cases；CTest unit/integration labels、T0–T11 篩選與案例 ID 都保留；transport 兩類、mock 兩類、I00–I18 及 interfaces build/interface gate 均在 Docker 通過。✅ transport 6 unit targets/84 cases與4 integration targets/50 cases全綠；mocks 1 unit/3 integration targets、23 cases(T10彙總27)全綠；T11 19 integration targets(彙總39)全綠；T1 build及10個介面解析通過。框架自身Docker回歸涵蓋精確分類、名稱交集、無CTest與空CTest、失敗傳遞；實際 interfaces `-s unit` 明確拒絕空匹配。
-- [ ] **T0.7** PR 前 lint gate 與格式定版：獨立 `test_lint.sh`、`.clang-format`、Python/Shell 規則與正反例回歸；使用者先檢視 C/C++ 範例並確認習慣差異。
-  查核：Docker 內證明合規 PASS、違規非零、來源唯讀不變、nested/standalone/override 路徑正確、generated/submodule/symlink 排除及工具失敗傳遞；使用者確認格式後才附 framework 版本 commit/tag 與 PR。候選階段不視為已正式啟用於所有 packages。候選實測：framework 自身 `./test_lint.sh` PASS(C/C++ 2、Python 2、Shell 13 files)；11 個 lint unit regressions、入口整合回歸與既有 package 路徑回歸全過。`.clang-format-ignore` 靜默跳過先實證失敗再以 stdin 修正；ShellCheck 共用來源解析及單一 source annotation 消除跨檔變數誤報，未關閉任何整體規則。仍待使用者確認格式，故保持未勾選。
+- [x] **T0.7** PR 前 lint gate 與格式定版：獨立 `test_lint.sh`、`.clang-format`、Python/Shell 規則與正反例回歸；使用者已檢視 C/C++ 範例並確認，framework PR #5 待 merge，其他 packages 尚未升級。
+  查核：Docker 內證明合規 PASS、違規非零、來源唯讀不變、nested/standalone/override 路徑正確、generated/submodule/symlink 排除及工具失敗傳遞；使用者確認格式後才附 framework 版本 commit/tag 與 PR。候選階段不視為已正式啟用於所有 packages。v0.8.5 候選實測：framework 自身 `./test_lint.sh` PASS(C/C++ 2、Python 2、Shell 13 files)；11 個 lint unit regressions、入口整合回歸與既有 package 路徑回歸全過。`.clang-format-ignore` 靜默跳過先實證失敗再以 stdin 修正；ShellCheck 共用來源解析及單一 source annotation 消除跨檔變數誤報，未關閉任何整體規則。當時仍待使用者確認格式，故未勾選。
   v0.8.6 補驗：Docker 內 33 個註解/namespace 詞法測試與 14 個 lint 回歸測試全過，入口整合與既有 package 路徑回歸通過；framework 全檔 lint PASS(C/C++ 2、Python 4、Shell 13 files)。涵蓋兩類註解、連續註解、empty/nested/inline/anonymous namespace、字串/raw string、formatter-off、條件分支、line splice 與可見 token-paste macro；格式違規/名稱缺漏回傳非零，唯讀來源不變。外部 macro 展開語意不在詞法證明範圍。
   v0.8.7 補驗：Docker 內 41 個註解/namespace 測試、15 個 lint 回歸測試、入口整合及 framework 全檔 lint 通過。新增多行 block/Doxygen 正反例、星號縮排、CRLF、空 placeholder、缺少/偽造摘要、inline member doc、formatter-off 與保留 code/list 縮排；空區塊/錯位星號先實證未被舊 lint 攔下，再補規則通過。既有 normalizer 仍只處理行內間距，不掩蓋 block 結構違規；獨立複核無 must-fix。
+  v0.8.8 定版：本輪重新執行 framework `./test_lint.sh` PASS(C/C++ 2、Python 4、Shell 13 files)；格式確認只改文件/註解，lint 程式與測試仍為 v0.8.7 已驗證內容，沿用 56 個回歸結果。Docker release metadata 驗證通過。獨立版本 commit/tag `v0.2.0` 指向 `631a85bce7d4b6f1826b06244f9c77b33c6e6f8f`，已推送 [PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)；使用 merge commit 保留 SHA，不 squash/rebase、不移動 tag。各 package 仍 pin 原有 v0.1.0，待使用者 merge 後才升級。
 
 **驗證**
 - 語意查核:逐條對照 §11.5.3 腳本職責表(distro 解析、container 重建、`~/ros2_ws` 結構、唯讀掛載、rosdep `--ignore-src`、結束碼語意、`.deb` 命名)與 §11.5.2 環境策略表；確認 `test_depends.repos` 為宣告式輸入而非流程客製(§11.5.4)。✅ 分區複核確認搬移未遺失案例，Handle斷言保留、跨binary前綴隔離、labels與文件引用一致；框架的空測試成功漏洞經回歸修正。

@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.6)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.7)
 
-> 狀態:正式版(v1.3.6);新增 lint 格式為待使用者確認的候選。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.7);lint 格式已確認，framework v0.2.0 版本 PR 待 merge。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.7 | **更新 Agent:`coco-codex`**。使用者同意以目前 lint 格式定版並提出 PR，§11.5 移除待確認標示，保留 120 欄/InlineOnly 與已討論的註解規範。framework 獨立版本 commit `631a85b`/annotated tag `v0.2.0` 已推送 [PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)；其他 package 須等待使用者以 merge commit 合併，再固定至該版本 SHA。本輪不更動其他 package gitlink、版本或 rv2 Doxyfile。 |
 | v1.3.6 | **更新 Agent:`coco-codex`**。§11.5.5 增加一般多行 block 與 Doxygen `/** */` API 文件註解候選：獨立 delimiter、對齊星號、非空內容與首個非空行 `@brief`；保留單行一般註解及 `/**<` 成員註解。說明官方支援語法與專案慣例的區別，lint 僅驗證結構、不驗證文件覆蓋率或參數描述語意；不修改 rv2 Doxyfile、不定版或更新 gitlink。 |
 | v1.3.5 | **更新 Agent:`coco-codex`**。§11.5.5 補充 C/C++ 行尾註解前兩格、不對齊註解欄、巢狀 namespace 同縮排與正確結尾名稱；使用者裁決全部強制 lint，新增補充詞法檢查涵蓋 block comment/空 namespace，不豁免 formatter-off，不能可靠判定則失敗；記憶體格式比對調和 clang-format 的 block comment 間距。沿用格式候選狀態，不定版或更新 package gitlink。 |
 | v1.3.4 | **更新 Agent:`coco-codex`**。§11.5 增加 PR 前獨立唯讀 Docker lint 候選：clang-format 18/LLVM+Allman 個人化格式、Ruff 的 PEP 8/Black 相容 Python 規則及 ShellCheck。格式範例先由使用者討論確認，本輪不定版、不改 package 版本/tag/gitlink，也不批次格式化或變動 integration 檔案布局。 |
@@ -1673,8 +1674,8 @@ rv2_control_signal_transport
 │   ├── test_deps.sh
 │   ├── test_packages.sh
 │   ├── test_run.sh
-│   ├── test_lint.sh      <-- PR 前唯讀 lint(候選,待格式確認)
-│   ├── .clang-format     <-- 共用 C/C++ 格式候選
+│   ├── test_lint.sh      <-- PR 前唯讀 lint
+│   ├── .clang-format     <-- 共用 C/C++ 格式
 │   ├── test_clean.sh
 │   ├── todo_check.sh
 │   ├── VERSION           <-- framework 自身版本,不等同 owner package 版本
@@ -1721,7 +1722,7 @@ ROS2 distro 與 base image 的對應關係如下(隨支援版本擴充):
 | `test_build.sh` | 先解析目標 ROS2 distro(由參數或環境變數指定),識別對應的 base image(含 OS)並下載。接著清除既有同名 test container 後重建,在容器內建立 `~/ros2_ws/{src,install,build,log}`,將 package 原始碼掛載至 `~/ros2_ws/src/test_pkg/`,並於 package 路徑建立 `test_env/<distro>/{install,build,log}` 完成一對一掛載。 |
 | `test_deps.sh` | 在容器內以 `rosdep install --from-paths ~/ros2_ws/src --ignore-src` 安裝全部**外部**依賴；workspace-local 依賴已由掛載滿足,`--ignore-src` 則使 rosdep 跳過 src 內已存在的 packages。此步驟必須完整解決 dependency 問題,一旦失敗即中止,不進入 build。 |
 | `test_run.sh` | 先初始化容器內的 `install/`、`build/`、`log/`(清空前次產物),再依 package 的 CMake 設定編譯 `test/unit/` 與 `test/integration/` 並執行 `colcon test`。預設執行兩類，可用 `-s unit` / `-s integration` 選擇 CTest label；保留案例名稱篩選，空匹配必須失敗。結束碼反映測試結果,作為 CI 的判定依據。 |
-| `test_lint.sh`(候選) | 獨立短生命週期 Docker lint，不依賴既有測試容器、不 build、不自動修正。檢查目標 Git repo 工作樹的 C/C++ 格式、Python 格式/基本靜態問題及 Shell 語法/ShellCheck；框架與來源唯讀掛載，排除 generated/submodule/symlink，不掃 sibling dependencies。格式經使用者確認並定版後，PR 前必須通過。 |
+| `test_lint.sh` | 獨立短生命週期 Docker lint，不依賴既有測試容器、不 build、不自動修正。檢查目標 Git repo 工作樹的 C/C++ 格式、Python 格式/基本靜態問題及 Shell 語法/ShellCheck；框架與來源唯讀掛載，排除 generated/submodule/symlink，不掃 sibling dependencies。採用含 lint 的 framework 版本後，PR 前必須通過。 |
 | `test_packages.sh` | 在容器內將 package 打包為 `.deb`。檔名符合 ROS2 官方命名規則(distro、package name、version),並附加 **timestamp 與 commit hash** 以供開發測試辨識。 |
 
 `.deb` 命名規則如下:在官方樣式的 version 段附加辨識資訊:
@@ -1744,13 +1745,13 @@ ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch
 - 功能、測試與文件變更先各自提交，版本欄位不得提前混入這些 commit；驗證完成且準備提出 PR 時，才附上**只含版本欄位變更的獨立 commit**(如 `chore(release): v0.1.0`)，並加 `vX.Y.Z` Git tag 指向該 commit。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者本次准許的首次定版例外，不作為後續慣例。目前手動建立版本 commit/tag，GitHub Actions 自動化留待後續；無 remote 的 repo 待具備 PR 條件才附 release commit。合併使用 merge commit 保留版本 commit 與 tag SHA，不 squash/rebase 已標記的版本 commit，也不自行移動或覆寫 tag；PR 合併仍由使用者裁決。
 - `test_env/` 是腳本的產物目錄,各 package 的 `.gitignore` 須將其排除。
 
-#### 11.5.5 PR 前 lint 格式候選
+#### 11.5.5 PR 前 lint 格式
 
 `test_lint.sh` 自行以官方 `ros:jazzy-ros-base-noble` 建立並卸載 lint container，
 保持固定工具環境，不隨 package 的 build distro 切換；工具只在 container 內安裝。
 C/C++ 使用 clang-format 18 與 framework 根目錄的 `.clang-format`：LLVM 基底、
-Allman、4 spaces、namespace 不縮排，保留 include 順序與一般註解文字。120 欄與 class 內
-短函式單行為待確認提案。Python 採 PEP 8/Black 相容格式，由 Ruff 0.15.7 執行
+Allman、4 spaces、namespace 不縮排，保留 include 順序與一般註解文字；採用 120 欄與 class 內
+短函式單行。Python 採 PEP 8/Black 相容格式，由 Ruff 0.15.7 執行
 format check 與 E4/E7/E9/F/I 檢查(88 欄、雙引號)；Shell 採語法檢查與 ShellCheck。
 
 C/C++ 行內 `//` 或 `/* */` 前若同一行已有非空白內容(含前一段註解)，必須恰好兩格，
@@ -1781,8 +1782,11 @@ lint 透過既有詞法 token 檢查區塊結構與 `@brief` 基本形狀，form
 這個 gate 不取代 C/C++ 編譯、語意分析或功能測試，也不新增自動修正開關。
 若違規，由開發者手動選檔執行 formatter、檢查 diff，再重跑 lint。正式定版後的
 提交順序為功能/測試/文件提交 → lint 與必要功能驗證 → 獨立版本 commit/tag → PR。
-目前須先向使用者提供 C/C++ 實際格式範例並討論，不附 release commit/tag、不改
-各 package gitlink、不批次格式化現有程式。integration package 原布局維持不變。
+使用者已確認 C/C++ 範例與目前格式，framework v0.2.0 的獨立版本 commit
+`631a85bce7d4b6f1826b06244f9c77b33c6e6f8f` 與同名 annotated tag 已推送
+[PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)。須以 merge commit
+保留版本 SHA，待使用者 merge 後才更新各 package gitlink；不批次格式化現有程式，
+integration package 原布局維持不變。
 權威來源、指令與檔案排除規則以 framework README 及 lint 設定為準。
 
 ---
