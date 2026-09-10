@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.5)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.6)
 
-> 狀態:正式版(v1.3.5);新增 lint 格式為待使用者確認的候選。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.6);新增 lint 格式為待使用者確認的候選。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.6 | **更新 Agent:`coco-codex`**。§11.5.5 增加一般多行 block 與 Doxygen `/** */` API 文件註解候選：獨立 delimiter、對齊星號、非空內容與首個非空行 `@brief`；保留單行一般註解及 `/**<` 成員註解。說明官方支援語法與專案慣例的區別，lint 僅驗證結構、不驗證文件覆蓋率或參數描述語意；不修改 rv2 Doxyfile、不定版或更新 gitlink。 |
 | v1.3.5 | **更新 Agent:`coco-codex`**。§11.5.5 補充 C/C++ 行尾註解前兩格、不對齊註解欄、巢狀 namespace 同縮排與正確結尾名稱；使用者裁決全部強制 lint，新增補充詞法檢查涵蓋 block comment/空 namespace，不豁免 formatter-off，不能可靠判定則失敗；記憶體格式比對調和 clang-format 的 block comment 間距。沿用格式候選狀態，不定版或更新 package gitlink。 |
 | v1.3.4 | **更新 Agent:`coco-codex`**。§11.5 增加 PR 前獨立唯讀 Docker lint 候選：clang-format 18/LLVM+Allman 個人化格式、Ruff 的 PEP 8/Black 相容 Python 規則及 ShellCheck。格式範例先由使用者討論確認，本輪不定版、不改 package 版本/tag/gitlink，也不批次格式化或變動 integration 檔案布局。 |
 | v1.3.3 | **更新 Agent:`coco-codex`**。依使用者裁決補充 §11.5.4：版本同步限同一 R1 release 範圍，rv2_control_signal_transport 的 Doxyfile 屬 rv2，不隨 R1 定版變更；版本欄位不得提前混入功能/測試/文件 commit。mocks/integration 的首次空 release commit 僅本次獲准例外，後續仍於 PR-ready 才附獨立版本 commit。 |
@@ -1765,6 +1766,17 @@ macro 的 namespace 展開語意無法驗證，namespace 應直接宣告。
 formatter 輸出只在記憶體將 inline block comment 間距
 恢復兩格後與來源比對，其餘差異照常失敗，不寫回檔案；開發者需手動補足 formatter
 不能修正的規則，再次執行 lint。
+
+多行一般說明採 `/* */`，class/function API 說明採 Doxygen 官方支援的 JavaDoc-style
+`/** */`；本案統一開頭獨立成行、內文每行為同縮排加 ` * 文字`、空白內容行只留
+` *`、結尾同縮排加 ` */` 且獨立成行，區塊不得空白。文件首個非空內容行為
+`@brief 文字`；`@param[in]`、`@param[out]`、`@param[in,out]` 與 `@return` 等依實際 API 撰寫，非每個
+函式都強制存在回傳或參數標籤。單行一般 `/* 文字 */` 與行內 `/**< 成員說明 */`
+保留，仍依行內註解前兩格規則。星號 margin 使用一格，不能誤套為兩格。
+強制星號/`@brief` 是選自 Doxygen 支援語法的專案慣例，不是 Doxygen 唯一合法形式。
+lint 透過既有詞法 token 檢查區塊結構與 `@brief` 基本形狀，formatter-off 不豁免；
+不修改文件內文、不自動 reflow，不判斷是否每個 API 都有文件，也不核對參數或
+回傳描述與宣告的語意。本輪不執行 Doxygen 產生文件，不更動 rv2 Doxyfile。
 
 這個 gate 不取代 C/C++ 編譯、語意分析或功能測試，也不新增自動修正開關。
 若違規，由開發者手動選檔執行 formatter、檢查 diff，再重跑 lint。正式定版後的

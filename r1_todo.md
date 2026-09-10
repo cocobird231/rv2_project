@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.6)
+# R1 實作 TODO List(v0.8.7)
 
-> 依據:`r1_design_draft.md` v1.3.5(正式版;lint 格式候選待使用者確認)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.6(正式版;lint 格式候選待使用者確認)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.7 | **更新 Agent:`coco-codex`**。增加多行區塊註解與 Doxygen JavaDoc-style 文件註解候選：一般說明用 `/* */`、class/function API 說明用 `/** */`，delimiter 獨立成行、星號對齊且區塊不得空白；文件首個非空內容行為有文字的 `@brief`。明訂這些為選自 Doxygen 支援語法的專案慣例，不是 Doxygen 唯一合法格式；lint 驗證結構，不宣稱驗證所有 API 均有文件或參數/回傳描述語意。沿用唯讀 Docker、不碰 rv2 Doxyfile、不定版與不更新 gitlink。 |
 | v0.8.6 | **更新 Agent:`coco-codex`**。細化 C/C++ lint 候選：程式碼與行尾註解間兩格、不對齊註解欄；巢狀 namespace 同縮排且逐層標示正確結尾名稱。使用者裁決所有情況均需強制檢查，故增加 token-aware 補充檢查，涵蓋 `/* */` 與空 namespace，formatter-off 不豁免；formatter 的 block comment 間距衝突僅在記憶體比對時調整。120 欄與 class 內短函式單行仍待確認，不附 release commit/tag/PR、不改 package gitlink。 |
 | v0.8.5 | **更新 Agent:`coco-codex`**。新增 T0.7 與 PR 前 lint 候選規範：framework 提供唯讀 Docker test_lint.sh、LLVM 基底 Allman .clang-format 與 C/C++ 範例，Python 採 PEP 8/Black 相容 Ruff，Shell 採語法檢查/ShellCheck。使用者要求先討論格式再定版，本輪不附 package 版本 commit/tag、不開 PR、不更新各 package gitlink、不批次格式化舊碼；integration header/source 布局維持不變。 |
 | v0.8.4 | **更新 Agent:`coco-codex`**。依使用者裁決排除 rv2 Doxyfile：transport 版本 commit 由 e99c59c amend 為 8b45662，只保留 package.xml 0.1.0；Doxyfile 還原既有 0.0.0，並依本次 amend 同步 transport 的未合併 PR/tag，其他 packages 與 framework tag 不動。§1.4 明訂只同步同一 R1 release 範圍的版本欄位，版本變更不得提早混入功能 commit；mocks/integration 的首次空 release commit 僅本次獲准例外，後續仍遵守 PR-ready 才附獨立版本 commit。 |
@@ -84,6 +85,7 @@ git submodule update --init --recursive
 - C/C++ 以 LLVM 為基底，採 Allman、4 spaces、namespace 不縮排、保留 include 順序；120 欄與 class 內短函式單行為待討論提案。Python 為 PEP 8/Black 相容 Ruff format/check；Bash/sh 為語法檢查與 ShellCheck。這不是 C/C++ 編譯或語意分析的替代。
 - C/C++ 註解間距依使用者範例解讀為同一行已有非空白內容(含前一段註解)時，與後續 `//` 或 `/* */` 之間恰好兩格，不在註解文字尾端補空白；不對齊註解欄。巢狀 namespace 保持同縮排但不合併，每個結尾依內外層標示正確名稱，完全空的 namespace 也不可省略。使用者裁決全部須由 lint 強制檢查，因此 clang-format 18 未涵蓋的間距/名稱規則由補充詞法檢查執行，formatter-off 不豁免；直接宣告但不能可靠判定的 namespace 結構明確失敗。檢查不展開 macro；局部可見的 namespace/token-paste macro 會失敗，外部 macro 的 namespace 展開語意無法驗證，namespace 應直接宣告。formatter 原生會將 inline block comment 間距改回一格，比對時僅在記憶體恢復本案兩格規則，其餘差異照常失敗；開發者執行 clang-format 後仍須手動補足其不支援的規則。
 - lint 失敗時由開發者決定修正，例如明確指定檔案執行 `clang-format-18 --style=file:./r1_test_framework/.clang-format -i <file>`，檢查 diff 後重跑 lint。框架不得自行批次格式化、修改 legacy rv2 文件或改測試斷言。
+- 多行 block comment 統一採對齊星號的版型：`/*` 或 `/**` 開頭獨立成行，內文為同縮排加 ` * 文字`，空白內容行只留 ` *`，結尾為同縮排加 ` */` 且獨立成行；至少有一行非空內容。class/function API 說明採 Doxygen JavaDoc-style `/** */`，首個非空內容行使用 `@brief 文字`，參數與回傳說明依官方 `@param[in]`、`@param[out]`、`@param[in,out]`、`@return` 等語法撰寫。單行一般 `/* 文字 */` 與行內 `/**< 成員說明 */` 仍可使用，沿用前兩格規則。星號 margin 為一格，不套用行內註解前兩格；保留內文/code block 縮排，不自動 reflow。lint 強制區塊結構與 `@brief` 基本形狀，formatter-off 不豁免；API 是否都有文件、描述是否正確及參數與宣告對應屬語意 review，不在本輪詞法證明範圍。
 - 目前只交付候選與回歸測試，T0.7 不勾選；既有 package gitlink、版本與 integration header/source 布局保持原狀。等使用者看過 C/C++ 範例並確認後才將格式正式定版，本輪不新增 CI workflow。
 
 ### 1.4 Git 版控規範(v0.2.1;v0.2.2 增列 migrate 分支政策;v0.5.1 增列文件修訂署名;v0.8.2 增列 package 定版)
@@ -174,6 +176,7 @@ graph LR
 - [ ] **T0.7** PR 前 lint gate 與格式定版：獨立 `test_lint.sh`、`.clang-format`、Python/Shell 規則與正反例回歸；使用者先檢視 C/C++ 範例並確認習慣差異。
   查核：Docker 內證明合規 PASS、違規非零、來源唯讀不變、nested/standalone/override 路徑正確、generated/submodule/symlink 排除及工具失敗傳遞；使用者確認格式後才附 framework 版本 commit/tag 與 PR。候選階段不視為已正式啟用於所有 packages。候選實測：framework 自身 `./test_lint.sh` PASS(C/C++ 2、Python 2、Shell 13 files)；11 個 lint unit regressions、入口整合回歸與既有 package 路徑回歸全過。`.clang-format-ignore` 靜默跳過先實證失敗再以 stdin 修正；ShellCheck 共用來源解析及單一 source annotation 消除跨檔變數誤報，未關閉任何整體規則。仍待使用者確認格式，故保持未勾選。
   v0.8.6 補驗：Docker 內 33 個註解/namespace 詞法測試與 14 個 lint 回歸測試全過，入口整合與既有 package 路徑回歸通過；framework 全檔 lint PASS(C/C++ 2、Python 4、Shell 13 files)。涵蓋兩類註解、連續註解、empty/nested/inline/anonymous namespace、字串/raw string、formatter-off、條件分支、line splice 與可見 token-paste macro；格式違規/名稱缺漏回傳非零，唯讀來源不變。外部 macro 展開語意不在詞法證明範圍。
+  v0.8.7 補驗：Docker 內 41 個註解/namespace 測試、15 個 lint 回歸測試、入口整合及 framework 全檔 lint 通過。新增多行 block/Doxygen 正反例、星號縮排、CRLF、空 placeholder、缺少/偽造摘要、inline member doc、formatter-off 與保留 code/list 縮排；空區塊/錯位星號先實證未被舊 lint 攔下，再補規則通過。既有 normalizer 仍只處理行內間距，不掩蓋 block 結構違規；獨立複核無 must-fix。
 
 **驗證**
 - 語意查核:逐條對照 §11.5.3 腳本職責表(distro 解析、container 重建、`~/ros2_ws` 結構、唯讀掛載、rosdep `--ignore-src`、結束碼語意、`.deb` 命名)與 §11.5.2 環境策略表；確認 `test_depends.repos` 為宣告式輸入而非流程客製(§11.5.4)。✅ 分區複核確認搬移未遺失案例，Handle斷言保留、跨binary前綴隔離、labels與文件引用一致；框架的空測試成功漏洞經回歸修正。
