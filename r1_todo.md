@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.10)
+# R1 實作 TODO List(v0.8.11)
 
-> 依據:`r1_design_draft.md` v1.3.9(正式版;C/C++ lint 改以 clang-format 原生能力為界)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.10(正式版;framework v0.2.1 已合併，consumer 導入結果另記)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.11 | **更新 Agent:`coco-codex`**。使用者已合併 framework PR #6，主線 release SHA 重寫為 `f86fcd9`，其 tree 與既有 v0.2.1 tag commit `3dd3c27` 完全相同；不移動 tag，各 consumer 固定既有版本 commit。本輪保留前次本地 dependency commits 開新分支，四個 gitlink-only commits 已留本地，package.xml、來源與 rv2 Doxyfile 不動。Docker metadata PASS；實際 nested lint：transport 35、mocks 11、integration 26 個 failed checks，interfaces 無支援來源而 SKIP。未 push、附 release commit/tag 或提出 PR；證據及後續條件記於 T0.7。 |
 | v0.8.10 | **更新 Agent:`coco-codex`**。依使用者新裁決，C/C++ lint 僅比對 clang-format 18 原生輸出，排除無法由 formatter 自動偵測/修正的額外規則：block comment 強制兩格、空 namespace 缺名、macro/條件編譯名稱推論、formatter-off 強制檢查及 Doxygen/多行註解結構。移除補充詞法檢查與記憶體間距正規化，以原生 formatter 正反例取代專屬回歸；一般格式、可修正 namespace 名稱、Python/Ruff、ShellCheck 與唯讀/錯誤傳遞不變。先修規範再改 framework，Docker 18 tests/入口/路徑與全檔 lint PASS；功能 commit `d3007d4` 後獨立版本 commit/tag v0.2.1 `3dd3c27`，已提出 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6)。consumer gitlink 與既有來源不動，transport override 預驗證仍有 35 個格式失敗，證據見 T0.7。 |
 | v0.8.9 | **更新 Agent:`coco-codex`**。使用者已 rebase merge framework PR #5，並要求各 package 升級 framework。主線 release commit 為 `5316f3e`，既有 v0.2.0 tag 仍指向 `631a85b`，兩者 tree 完全一致；不移動 tag，四個 consumers 固定原 tag 的版本 commit。三個遠端 package 舊 PR 均已合併，本輪從最新 base 建新分支；interfaces 無 remote，維持本地流程。四個 gitlink-only dependency commits 已留本地；Docker lint 三個 package FAIL、interfaces 無支援來源而 SKIP，未 push、附 release commit/tag 或提出 PR。不批次格式化、修改 rv2 Doxyfile 或提前改 package.xml；結果與後續 PR 條件另記於 T0.7。 |
 | v0.8.8 | **更新 Agent:`coco-codex`**。使用者確認目前 lint 格式並要求 commit/PR；沿用 120 欄、class 內短函式單行、註解與 Doxygen 規則。framework 先提交格式確認文件，再以獨立 `chore(release): v0.2.0` commit `631a85b` 僅更新 VERSION 與 README 安裝範例的 tag，建立同名 annotated tag，推送並提出 [PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)。本輪全檔 Docker lint 與 release metadata 驗證通過；程式碼/測試未變，沿用 56 個回歸測試結果。T0.7 framework 驗收完成；待使用者以 merge commit 合併，才更新其他 package gitlink，本輪未改其他 package 或 rv2 Doxyfile。 |
@@ -91,7 +92,7 @@ git submodule update --init --recursive
 - lint 失敗時由開發者決定修正，例如明確指定檔案執行 `clang-format-18 --style=file:./r1_test_framework/.clang-format -i <file>`，檢查 diff 後重跑 lint。框架不得自行批次格式化、修改 legacy rv2 文件或改測試斷言。
 - 多行說明仍建議使用對齊星號的 `/* */`，class/function API 文件仍建議 Doxygen JavaDoc-style `/** */` 與 `@brief`、`@param`、`@return`；這些 formatter 無法保證的文件慣例暫不作 lint gate。`ReflowComments: false` 保留，不產生或改寫文件內容。API 文件覆蓋與描述正確性仍由 review 判斷，不修改 rv2 Doxyfile。
 - Framework PR #5 已由使用者 rebase merge，T0.7 framework 驗收完成。已驗證主線 `5316f3e` 與 v0.2.0 tag 所指 `631a85b` 內容一致；consumer gitlink 使用原 tag commit，不重打 tag。package 自身版本與 integration header/source 布局不因本輪 gitlink 升級改動；新版 lint 必須如實回報，未通過時不得自行批次格式化或跳過 PR 閘門。本輪不新增 CI workflow，也不自行合併 PR。
-- 本版能力限縮已在 framework v0.2.1 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6) 提出，等待使用者 merge 後才可更新 consumers 至該 tag commit。各 package 現有 v0.2.0 gitlink 尚未包含新規則；可用 framework 開發 checkout 的 `R1_TEST_PKG_DIR` 覆寫作唯讀預驗證，但不能據此宣稱現有 nested 入口已改版或 package 已通過 lint。
+- 本版能力限縮的 framework v0.2.1 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6) 已由使用者 merge；驗證主線 `f86fcd9` 與既有 tag commit `3dd3c27` tree 相同後，consumer 固定後者，不重打 tag。各 package 必須使用自己的 nested 入口重新驗證，不能用 framework 自身 PASS 或先前 override 預驗證替代；導入結果見 T0.7。
 
 ### 1.4 Git 版控規範(v0.2.1;v0.2.2 增列 migrate 分支政策;v0.5.1 增列文件修訂署名;v0.8.2 增列 package 定版)
 
@@ -202,6 +203,19 @@ graph LR
   transport 以 `R1_TEST_PKG_DIR` 指向原 package、使用 framework 開發 checkout 的 `test_lint.sh` 唯讀預驗證，gitlink 不動：仍 FAIL(exit 1)，C/C++ 32、Python 3、Shell 1 files，35 failed checks(原 v0.2.0 為 66)。已無補充 comment/macro 診斷，剩下 clang-format 與 Ruff 格式差異；本地 log 為 transport `test_env/jazzy/lint-native-framework.383BiG.log`。其他 consumers 不重跑，不能推論已通過；四者來源/版本/gitlink 均未改，本輪未重跑完整功能測試。
 
   framework 功能 commit `d3007d4` 後，才以獨立 `chore(release): v0.2.1` commit `3dd3c27d1147e96b0c902ffdfa04fff3244a8fab` 更新 VERSION 與 README 安裝 tag，並加同名 annotated tag；已推送 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6)。Docker release metadata 驗證通過，測試 fixture 維持原有 `0.0.0`，未新增 ROS manifest。所有驗證容器已卸載；等待使用者 merge，才可更新 consumer gitlinks，既有 PR 前 lint 與獨立版本 commit 條件不變。
+
+  v0.8.11 consumer 導入：PR #6 經使用者合併後，四個 package 在新分支 `coco-codex/framework-v0.2.1`，保留前次 v0.2.0 dependency commit，再將 gitlink 由 `631a85b` 更新為 v0.2.1 的 `3dd3c27`。各 package 根目錄實際執行 `env -u R1_TEST_PKG_DIR ./r1_test_framework/test_lint.sh`，確定新版 nested 入口解析自身 package；結果如下，failed checks 不等於檔案數或功能測試案例數。
+
+  | Package | 本地 dependency commit | Docker lint 結果 | 本地 log(相對各 package 根目錄) |
+  |---|---|---|---|
+  | `rv2_control_signal_transport` | `45c2444` | FAIL(exit 1)：C/C++ 32、Python 3、Shell 1 files；35 failed checks | `test_env/jazzy/lint-framework-v0.2.1.EROzb5.log` |
+  | `r1_test_mocks` | `608f2ee` | FAIL(exit 1)：C/C++ 16 files；11 failed checks | `test_env/jazzy/lint-framework-v0.2.1.GYus6B.log` |
+  | `r1_integration_tests` | `e2ea1b0` | FAIL(exit 1)：C/C++ 4、Python 20 files；26 failed checks | `test_env/jazzy/lint-framework-v0.2.1.ey24Ov.log` |
+  | `r1_interfaces` | `ccfe565` | SKIP(exit 0)：無支援來源，不代表 msg/srv、XML 或 CMake 已通過 lint | `test_env/jazzy/lint-framework-v0.2.1.knzjdC.log` |
+
+  舊補充 comment/namespace gate 已不再啟用，剩餘失敗為既有 C/C++ 格式及 Python/Ruff 格式、import 排序與 unused import；不批次修正來源、不跳過既有 gate。三個 FAIL packages 未達 PR-ready，interfaces 另無 remote，故四者均未 push、附 package release commit/tag 或提出 PR，需使用者裁決後續修正範圍。
+
+  官方 Jazzy Docker metadata PASS：四個 nested framework 的 `VERSION=0.2.1`、lint 入口存在且補充 checker 已移除，四個 `package.xml=0.1.0`。唯讀 audit 確認 consumer 僅此四個、既有 build/deps/run/clean/packages/todo_check/_common 腳本在兩版間內容相同；本輪不重跑完整功能測試。各 dependency commit 僅更動 gitlink，所有來源、Doxyfile 與布局保留，驗證容器均自動卸載。可獨立 revert 本輪 gitlink commit 回原 v0.2.0 pin，不改動既有開發紀錄。
 
 **驗證**
 - 語意查核:逐條對照 §11.5.3 腳本職責表(distro 解析、container 重建、`~/ros2_ws` 結構、唯讀掛載、rosdep `--ignore-src`、結束碼語意、`.deb` 命名)與 §11.5.2 環境策略表；確認 `test_depends.repos` 為宣告式輸入而非流程客製(§11.5.4)。✅ 分區複核確認搬移未遺失案例，Handle斷言保留、跨binary前綴隔離、labels與文件引用一致；框架的空測試成功漏洞經回歸修正。

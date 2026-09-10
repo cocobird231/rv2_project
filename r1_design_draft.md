@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.9)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.10)
 
-> 狀態:正式版(v1.3.9);C/C++ lint 改以 clang-format 原生能力為界。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.10);framework v0.2.1 已合併，consumer 導入結果另記。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.10 | **更新 Agent:`coco-codex`**。framework PR #6 已由使用者 merge，主線 release SHA `f86fcd9` 與 v0.2.1 tag commit `3dd3c27` tree 完全相同；四個 consumer pin 既有 tag，不覆寫 tag。gitlink-only dependency commits 已留本地；Docker metadata PASS，nested lint 三個 FAIL、interfaces 無支援來源而 SKIP，證據及後續 PR 條件見 TODO T0.7。package 版本、來源、rv2 Doxyfile 與 integration 布局不變，未 push、附 release commit/tag 或提出 PR。 |
 | v1.3.9 | **更新 Agent:`coco-codex`**。依使用者裁決，§11.5.5 的 C/C++ lint 改為只比對 clang-format 18 原生輸出；排除無法自動修正的 block 兩格、空 namespace 缺名、macro/條件編譯語意推論、formatter-off 額外檢查與 Doxygen/多行註解結構要求。文件樣式保留為建議，不再以補充詞法檢查或輸出正規化擋 PR；一般格式、可修正 namespace、Python/Shell 與版本/merge 順序不變。framework Docker 回歸及全檔 lint 通過，獨立版本 commit/tag v0.2.1 `3dd3c27` 已提出 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6)；consumer gitlink 與 rv2 Doxyfile 不動，證據記於 TODO T0.7。 |
 | v1.3.8 | **更新 Agent:`coco-codex`**。framework PR #5 經使用者 rebase merge，主線 release `5316f3e` 與 v0.2.0 tag commit `631a85b` tree 完全相同；consumer 升級固定既有 tag commit，不移動 tag。四個 package gitlink-only dependency commits 已留本地；Docker lint 三個 FAIL、interfaces 無支援來源而 SKIP，未 push、附 release commit/tag 或提出 PR。package 版本、rv2 Doxyfile 與 integration 布局保持不變，導入證據及後續 PR 條件記於 TODO T0.7。 |
 | v1.3.7 | **更新 Agent:`coco-codex`**。使用者同意以目前 lint 格式定版並提出 PR，§11.5 移除待確認標示，保留 120 欄/InlineOnly 與已討論的註解規範。framework 獨立版本 commit `631a85b`/annotated tag `v0.2.0` 已推送 [PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)；其他 package 須等待使用者以 merge commit 合併，再固定至該版本 SHA。本輪不更動其他 package gitlink、版本或 rv2 Doxyfile。 |
@@ -1792,10 +1793,16 @@ v1.3.8 導入驗證中 transport、mocks、integration 的既有來源未通過 
 SKIP，且無 remote。四個 dependency commits 留本地，未 push 或提出 PR，詳見 TODO T0.7；
 尚未附 package 版本 commit，integration 原布局不因 gitlink 升級改動。後續版本仍依 §11.5.4
 採 merge commit 保留版本 SHA。
-本版原生能力邊界調整已經 Docker 回歸與 framework 全檔 lint 通過，獨立版本
-commit/tag v0.2.1 `3dd3c27` 已提出 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6)；
-等使用者 merge 後才更新 consumers。transport 以開發 checkout 唯讀 override
-預驗證仍有 35 個格式失敗，不代表目前 pin v0.2.0 的 nested 入口已改版或通過。
+原生能力邊界調整已經 Docker 回歸與 framework 全檔 lint 通過；獨立版本
+commit/tag v0.2.1 `3dd3c27` 的 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6)
+已由使用者 merge。主線 release SHA 重寫為 `f86fcd94123271e853066fdb746417ec4acabda0`，
+其 tree 與 tag commit 完全相同；consumer 固定既有 `3dd3c27`，不移動或覆寫 tag。
+各 package 須用自己的 nested 入口實際驗證，結果見 TODO T0.7；不能將 framework
+自身 PASS 或先前 transport override 預驗證當作 consumer 通過，也不自行修來源來過 gate。
+本版四個 consumers 已在本地 commit 更新至 v0.2.1，實際 nested lint 結果為
+transport 35、mocks 11、integration 26 個 failed checks；interfaces 無支援來源而 SKIP。
+consumer package.xml 均維持 0.1.0，未 push、附 release commit/tag 或提出 PR；
+剩餘格式與 Ruff 違規的修正範圍待使用者裁決，interfaces 另仍無 remote。
 權威來源、指令與檔案排除規則以 framework README 及 lint 設定為準。
 
 ---
