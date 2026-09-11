@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.15)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.16)
 
-> 狀態:正式版(v1.3.15);T12 framework 支援與開發預驗證。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.16);T12 已發布 framework 導入與正式驗收。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.16 | **更新 Agent:`coco-codex`**。framework PR #7 已經使用者合併，主線 `6a04bfe` 與原 v0.3.0 tag `67755d6` tree 相同；consumer 依序固定原版本 commit，不移動 tag。正式驗收改用各 owner nested 入口，補 M22 calc→activity→commit 決定性交錯並重跑 sanitizer/打包/t2–t11 鏈；沿用 fail-closed、Docker 隔離與 PR-ready 獨立版本 commit 規則。前輪結果保留為歷史預驗證，不提前宣稱新矩陣完成，不改 rv2 Doxyfile 或自動放寬 TSan 安全設定。 |
 | v1.3.15 | **更新 Agent:`coco-codex`**。T12 framework 支援完成並提出 v0.3.0 [PR #7](https://github.com/cocobird231/r1_test_framework/pull/7)，獨立版本 commit/tag `67755d6`；consumer pin 保持 v0.2.1，須等 merge 再正式驗收。開發 Docker 的 ASan/LSan、UBSan、framework 回歸/lint與三包 Debian 乾淨安裝通過，TSan 在 GCC/Clang 皆有平台阻塞，詳見 TODO T12 證據。測試補強 L14/S11/K12/K15/K16/I10；乾淨下游失敗實證後修正 transport r1_interfaces export，保留 consumer diff，不改 runtime/版本/Doxyfile/gitlink。M22 決定性交錯證據、正式矩陣與完整 t2–t11 鏈仍待完成，不以預驗證或部分結果宣稱 T12 全綠。 |
 | v1.3.14 | **更新 Agent:`coco-codex`**。T12 開工校準：§11.4 依現行 package/測試分層補齊 K15 ASan、K10/I10 TSan 與 UBSan unit owner，規範 instrument 範圍、子程序退出/diagnostic 非零與獨立產物，不把空集合或平台失敗當通過。§11.5.3 補 Debian 內部版本、local dependency 閉包與乾淨安裝/downstream smoke；測試產物版本不改來源 release。框架先 PR/merge 後 consumer pin，開發預驗證與正式驗收分開，既有版本、gitlink、rv2 Doxyfile 與前輪格式化 diff 保留。 |
 | v1.3.13 | **更新 Agent:`coco-codex`**。transport lint 修正：僅以既定 clang-format gate 取代 uncrustify；保留 flake8/pep257 的額外檢查，flake8 沿用 Jazzy 設定並只對齊雙引號。直接修正三份 launch module docstring 與 CMake 縮排，保留 cppcheck/lint_cmake/xmllint、全部功能案例與分類。先修文件再改 transport；Docker framework lint、完整 test_run、unit 84/84、integration 50/50 均 PASS，cppcheck 32 SKIP 保留揭露。證據另記 TODO T0.7；不改 runtime 邏輯、framework、Doxyfile、package 版本或 gitlink。 |
@@ -1757,6 +1758,8 @@ T12 打包驗收使用新的官方 base container，僅帶入產出 deb 與驗�
 v1.3.15 開發實證：三個 local deb 的內外版本/檔名、安裝與 discovery 正確，但第一次乾淨下游 `find_package(rv2_control_signal_transport)` 因缺少 `r1_interfaces` 匯出而失敗。修正 transport 的 `ament_export_dependencies`，不在 smoke 額外手動 find 介面 package；一般全量回歸再次通過，重新建置三包並於另一全新官方容器驗證下游 compile/link 與 master 正常啟停通過。這是一行 package export 修正，不改 runtime、package.xml 或 rv2 Doxyfile；consumer 更動保留待 framework 合併後接續正式導入。
 
 #### 11.5.4 一般化約定
+
+v1.3.16 導入紀錄：framework PR #7 已合併。主線 release `6a04bfe913f9a07862020e270d263b8db7d6f08f` 與既有 v0.3.0 tag commit `67755d663922c55a15d50933ef083def4d92c964` tree 一致，consumer 固定後者；先前 v1.3.15「待合併」說明為歷史狀態。接續各 package nested 正式查核，結果與阻塞依 TODO T12 逐項紀錄，不能沿用 sibling override 預驗證替代。
 
 - 本框架是 R1 系列 package 的**共同測試標準**:新 package 必須引入 submodule、建立 `test/unit/` 與 `test/integration/`，並直接呼叫框架腳本，即獲得相同的 build / deps / run / packages 流程，不另行複製或客製腳本。
   `test_depends.repos` 屬於**宣告式輸入**,每個 package 一份,列出其

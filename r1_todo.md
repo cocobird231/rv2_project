@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.16)
+# R1 實作 TODO List(v0.8.17)
 
-> 依據:`r1_design_draft.md` v1.3.15(正式版;T12 framework 支援與開發預驗證)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.16(正式版;T12 已發布 framework 導入與正式驗收)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.17 | **更新 Agent:`coco-codex`**。使用者已合併 framework PR #7，主線 release `6a04bfe` 與原 v0.3.0 tag `67755d6` tree 完全相同；保留原 tag，四個 consumer 將固定其版本 commit。接續從各自 nested 入口正式執行 sanitizer、打包與 t2–t11 連續鏈，補 M22 決定性交錯測試；既有 diff 保留、package 版本待 PR-ready 才獨立提交、rv2 Doxyfile 不動。TSan 仍需重新證實 runtime 能力，不放寬安全設定、不將平台阻塞當 PASS；尚未取得本輪結果的小項不勾選。 |
 | v0.8.16 | **更新 Agent:`coco-codex`**。T12 framework 已實作隔離 run/mount 防護、sanitizer compile/link/ELF 與精確案例 gate、Debian dependency closure/內部版本與乾淨安裝；21 sanitizer unit、16 packaging unit、入口/CMake/既有回歸與全檔 lint PASS。開發預驗證：transport ASan 64、UBSan 84、mocks UBSan 3、I10 ASan 2 cases PASS；transport 完整 134 功能案例 PASS(cppcheck 原生 32 SKIP)。乾淨安裝先抓出缺少 r1_interfaces export，補 CMake 一行後三包 deb/discovery/downstream compile/link/node 啟停 PASS。L14/S11/K12/K15/K16 與 I10 shutdown 測試補強保留 consumer diff；M22 決定性交錯證據仍待補。GCC/Clang TSan 均遇平台啟動阻塞，不放寬安全設定、不勾選正式 T12。framework 功能 commits 後獨立 v0.3.0 commit/tag `67755d6`，已提出 [PR #7](https://github.com/cocobird231/r1_test_framework/pull/7)；待使用者 merge 才可更新 consumer pin，版本/Doxyfile/gitlink 未動。 |
 | v0.8.15 | **更新 Agent:`coco-codex`**。T12 開工前核對現行 unit/integration 布局、framework v0.2.1 與 transport v0.1.1；補齊跨 package I10、K15 ASan、K10/I10 TSan、UBSan unit 分類、sanitizer fail-closed/子程序退出與隔離產物要求。打包須使內部 Debian Version 與檔名一致，處理 workspace-local 依賴並在無來源/build overlay 的乾淨容器驗證安裝與下游使用。先實作 framework 並預驗證，待 framework PR 經使用者 merge 才更新 consumer pin、正式驗收；不提前勾選或更改 package 版本、gitlink、rv2 Doxyfile。 |
 | v0.8.14 | **更新 Agent:`coco-codex`**。使用者要求修正 transport lint 並確認 unit/integration 通過。先同步規範；複核後保留 flake8/pep257 的非重複檢查，flake8 相容設定只將 Jazzy 原設定的 inline-quotes 對齊 Ruff 雙引號，直接修正三份 launch module docstring 與 CMake 縮排。僅排除由既定 clang-format gate 取代的 uncrustify 註冊；保留 cppcheck/lint_cmake/xmllint、全部 10 個 gtest targets/134 案例與 labels。Docker framework lint、完整 test_run、unit 84/84、integration 50/50 均 PASS；cppcheck 原生 32 SKIP 仍揭露。不改 runtime 邏輯、Doxyfile、package 版本或 gitlink；證據見 T0.7，保留未提交 diff。 |
@@ -549,6 +550,8 @@ graph LR
 
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
+
+**正式導入開工(v0.8.17)**：framework PR #7 已合併；主線 `6a04bfe913f9a07862020e270d263b8db7d6f08f` 與原 tag commit `67755d663922c55a15d50933ef083def4d92c964` 的 tree 同為 `e50f516813aa5701cb5137ae360db259be85ff67`。依既有 rebase 處理方式，四個 consumer pin 原 tag commit，不移動 tag。以下 v0.8.15–v0.8.16 為歷史預驗證紀錄，不代表目前仍待 framework 合併。本輪從各 owner nested 入口重跑並保留獨立產物；先補 M22 calc→activity→commit 的確定性交錯，再執行 transport 矩陣/完整鏈。不得把前輪預驗證當本輪結果；TSan 平台阻塞如實保留。前輪 mocks/integration 格式化差異不因 pin 升級自行丟棄或混入 gitlink-only commit。
 
 **現況校準(v0.8.15)**：transport PR #7 已合併，來源版本為 0.1.1；各 consumer 仍 pin framework v0.2.1 tag `3dd3c27`，不移動既有 tag。舊 T12 入口只有 CXX/EXE flags，沒有跨 package I10、runtime fail-closed、隔離產物或乾淨安裝驗證，故不可視為已實作。mocks/integration 前輪格式化 diff 保留，不混入框架變更。
 
