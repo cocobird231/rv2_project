@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.13)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.15)
 
-> 狀態:正式版(v1.3.13);transport lint gate 對齊與分類測試驗證。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.15);T12 framework 支援與開發預驗證。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,8 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.15 | **更新 Agent:`coco-codex`**。T12 framework 支援完成並提出 v0.3.0 [PR #7](https://github.com/cocobird231/r1_test_framework/pull/7)，獨立版本 commit/tag `67755d6`；consumer pin 保持 v0.2.1，須等 merge 再正式驗收。開發 Docker 的 ASan/LSan、UBSan、framework 回歸/lint與三包 Debian 乾淨安裝通過，TSan 在 GCC/Clang 皆有平台阻塞，詳見 TODO T12 證據。測試補強 L14/S11/K12/K15/K16/I10；乾淨下游失敗實證後修正 transport r1_interfaces export，保留 consumer diff，不改 runtime/版本/Doxyfile/gitlink。M22 決定性交錯證據、正式矩陣與完整 t2–t11 鏈仍待完成，不以預驗證或部分結果宣稱 T12 全綠。 |
+| v1.3.14 | **更新 Agent:`coco-codex`**。T12 開工校準：§11.4 依現行 package/測試分層補齊 K15 ASan、K10/I10 TSan 與 UBSan unit owner，規範 instrument 範圍、子程序退出/diagnostic 非零與獨立產物，不把空集合或平台失敗當通過。§11.5.3 補 Debian 內部版本、local dependency 閉包與乾淨安裝/downstream smoke；測試產物版本不改來源 release。框架先 PR/merge 後 consumer pin，開發預驗證與正式驗收分開，既有版本、gitlink、rv2 Doxyfile 與前輪格式化 diff 保留。 |
 | v1.3.13 | **更新 Agent:`coco-codex`**。transport lint 修正：僅以既定 clang-format gate 取代 uncrustify；保留 flake8/pep257 的額外檢查，flake8 沿用 Jazzy 設定並只對齊雙引號。直接修正三份 launch module docstring 與 CMake 縮排，保留 cppcheck/lint_cmake/xmllint、全部功能案例與分類。先修文件再改 transport；Docker framework lint、完整 test_run、unit 84/84、integration 50/50 均 PASS，cppcheck 32 SKIP 保留揭露。證據另記 TODO T0.7；不改 runtime 邏輯、framework、Doxyfile、package 版本或 gitlink。 |
 | v1.3.12 | **更新 Agent:`coco-codex`**。使用者授權接續 Ruff 修正 Python lint，明訂共用設定為各 package 的 `r1_test_framework/lint/ruff.toml`，沿用固定 0.15.7 與既有規則。Docker 內執行安全 fix 與 format，保留 owner UID/GID、前輪 C/C++ diff、版本、Doxyfile 及 submodule；23 Python 的 AST 僅 I04 unused `re` import 移除，非 Python 內容保留。對齊 gate cwd 後 transport/mocks/integration lint PASS，interfaces SKIP；本輪保留未提交 diff，不升版/PR，證據另記 TODO T0.7。 |
 | v1.3.11 | **更新 Agent:`coco-codex`**。使用者授權以 Docker clang-format 18 對 owner lint 選中 C/C++ 修正一輪，包含 transport legacy，沿用 v0.2.1 設定且保持檔案 UID/GID/mode。52 檔各處理一次、47 檔產生 diff；C/C++ 全過，mocks 整包 lint PASS，transport/integration 分別剩 3/22 個 Ruff 檢查，interfaces SKIP。此為開發者主動修正，框架 lint 仍唯讀；Python/Ruff、Doxyfile、package 版本與 submodule 不動。先同步規範，試行後保留 diff 供檢視，不 commit、升版或開 PR；證據記於 TODO T0.7。 |
@@ -1657,9 +1659,19 @@ H1–H6 驗證 Handle 的單一操作、型別、引用與並發安全合約，�
 
 | Build | 目標 |
 |---|---|
-| ASan + LSan | H6 / K10 / M10 / I10(UAF 與 leak 回歸) |
-| TSan | LivenessState activity seal、Source/Sink hot path、tick commit、Handle replacement、M4 註冊風暴 |
-| UBSan | 所有單元測試 |
+| ASan + LSan | transport H6 / K10 / K15 / M10；integration owner I10(UAF、shutdown 與 leak 回歸) |
+| TSan | transport L14–L18(activity/terminal seal)、S11/K10/K12/K16(hot path)、M22(tick commit)、H6(Handle replacement)、M4(註冊風暴)；integration owner I10 |
+| UBSan | transport 與 mocks 的全部 `unit` label 測試；無 unit 的 interfaces/integration 明示不適用 |
+
+矩陣為最低案例集合，允許執行包含它們的完整 CTest targets；案例仍保留既有 unit/integration 分類。ASan/TSan 在 transport 與 `r1_integration_tests` 的 owner 各執行同名 TODO item，不能因 transport 成功而聲稱 I10 已涵蓋。UBSan 精確選 unit，空匹配失敗。
+
+每種 sanitizer 以獨立乾淨 build/install/log 建置與連結，啟用符號與 frame pointers；ASan 保持 leak detection，UBSan diagnostic 不得 recover 成成功，TSan report 非零。instrument 範圍須列明：R1 C++ 實作、測試與 I10 場景 nodes 必須 instrument；distro 預編譯 ROS/DDS、純介面生成物與 Python orchestration 不宣稱涵蓋。I10 需驗證子程序正常 shutdown/exit，並使 sanitizer diagnostic 造成失敗，不可只依 Python 場景 assertions。
+
+runtime 不支援、空選集、diagnostics 或異常退出均回非零，保留原始 log 並記為失敗或平台阻塞；不自動更改 host sysctl、安全設定、關閉 leak detection 或加入 suppressions。第三方 diagnostics 亦不得隱藏，需依證據另行處理。每個 run 在 owner `test_env/<distro>/` 下隔離並保留選集、工具/來源 metadata 與結果，不覆蓋既有一般或其他 sanitizer 產物。
+
+導入仍依 §11.5.4：framework 開發 checkout 可透過明確 owner override 預驗證，但不修改 consumer nested checkout/gitlink，不視為正式驗收；framework PR 先經使用者 merge，再 pin 原 tag 的版本 commit，從 owner nested 入口重驗後才勾選 TODO。
+
+實作進度(v1.3.15)：framework v0.3.0 的 [PR #7](https://github.com/cocobird231/r1_test_framework/pull/7) 待合併，原 tag commit `67755d663922c55a15d50933ef083def4d92c964` 不得因 merge 改寫而移動。開發預驗證 ASan/LSan(transport 64、I10 2 cases)、UBSan(transport 84、mocks 3 cases)、framework 回歸/lint 均通過；TSan 的最小正常程式在 GCC/Clang runtime 仍無法可靠啟動，不調整 host/container 安全設定來掩蓋失敗。L14 與 K16 增加實際雙執行緒 seal 競爭，S11/K12/K15 補非空流量/收斂/waiter fence，I10 新增逐 node shutdown/diagnostic gate。M22 既有週期並發不可冒稱 calc→activity→commit 的決定性 barrier 證據，正式 TSan 驗收前仍須補足。詳情與原始 log 位置見 TODO T12；consumer 新 nested 入口矩陣及 t2–t11 完整鏈尚未驗收。
 
 
 ### 11.5 r1_test_framework 與 docker 化測試環境(v1.2.0)
@@ -1737,6 +1749,12 @@ ROS2 distro 與 base image 的對應關係如下(隨支援版本擴充):
 ros-<distro>-<package-name>_<version>.<YYYYMMDDHHMMSS>.<short-commit-hash>_<arch>.deb
 例:ros-jazzy-rv2-control-signal-transport_1.2.0.20260901143000.a1b2c3d_amd64.deb
 ```
+
+檔名的 Package/Version/Architecture 必須與 `dpkg-deb -f` metadata 相同；stamp/hash 寫入容器內的 Debian build 版本，不修改來源 package.xml 或 Git tag，也不代替 PR-ready 的獨立 release commit。打包需處理 `test_depends.repos` 的 workspace-local 依賴閉包與對應 Debian dependency names，依拓撲建置；不能只挑第一個 deb 或改檔名。複製來源須排除 Git metadata、submodules、test_env/build/install/log，保留建置必要檔案。
+
+T12 打包驗收使用新的官方 base container，僅帶入產出 deb 與驗證程式，不掛載原始碼或 workspace overlay；安裝外部依賴及 local deb 後，驗證 dpkg 狀態、ROS package discovery、公開 R1 header 的下游編譯/連結及 node 啟動。缺少依賴、export 或 shared library 均應使驗證失敗；測後卸載驗證容器，保留 log 與 artifacts。
+
+v1.3.15 開發實證：三個 local deb 的內外版本/檔名、安裝與 discovery 正確，但第一次乾淨下游 `find_package(rv2_control_signal_transport)` 因缺少 `r1_interfaces` 匯出而失敗。修正 transport 的 `ament_export_dependencies`，不在 smoke 額外手動 find 介面 package；一般全量回歸再次通過，重新建置三包並於另一全新官方容器驗證下游 compile/link 與 master 正常啟停通過。這是一行 package export 修正，不改 runtime、package.xml 或 rv2 Doxyfile；consumer 更動保留待 framework 合併後接續正式導入。
 
 #### 11.5.4 一般化約定
 
