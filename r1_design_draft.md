@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.10)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.13)
 
-> 狀態:正式版(v1.3.10);framework v0.2.1 已合併，consumer 導入結果另記。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.13);transport lint gate 對齊與分類測試驗證。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,9 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.13 | **更新 Agent:`coco-codex`**。transport lint 修正：僅以既定 clang-format gate 取代 uncrustify；保留 flake8/pep257 的額外檢查，flake8 沿用 Jazzy 設定並只對齊雙引號。直接修正三份 launch module docstring 與 CMake 縮排，保留 cppcheck/lint_cmake/xmllint、全部功能案例與分類。先修文件再改 transport；Docker framework lint、完整 test_run、unit 84/84、integration 50/50 均 PASS，cppcheck 32 SKIP 保留揭露。證據另記 TODO T0.7；不改 runtime 邏輯、framework、Doxyfile、package 版本或 gitlink。 |
+| v1.3.12 | **更新 Agent:`coco-codex`**。使用者授權接續 Ruff 修正 Python lint，明訂共用設定為各 package 的 `r1_test_framework/lint/ruff.toml`，沿用固定 0.15.7 與既有規則。Docker 內執行安全 fix 與 format，保留 owner UID/GID、前輪 C/C++ diff、版本、Doxyfile 及 submodule；23 Python 的 AST 僅 I04 unused `re` import 移除，非 Python 內容保留。對齊 gate cwd 後 transport/mocks/integration lint PASS，interfaces SKIP；本輪保留未提交 diff，不升版/PR，證據另記 TODO T0.7。 |
+| v1.3.11 | **更新 Agent:`coco-codex`**。使用者授權以 Docker clang-format 18 對 owner lint 選中 C/C++ 修正一輪，包含 transport legacy，沿用 v0.2.1 設定且保持檔案 UID/GID/mode。52 檔各處理一次、47 檔產生 diff；C/C++ 全過，mocks 整包 lint PASS，transport/integration 分別剩 3/22 個 Ruff 檢查，interfaces SKIP。此為開發者主動修正，框架 lint 仍唯讀；Python/Ruff、Doxyfile、package 版本與 submodule 不動。先同步規範，試行後保留 diff 供檢視，不 commit、升版或開 PR；證據記於 TODO T0.7。 |
 | v1.3.10 | **更新 Agent:`coco-codex`**。framework PR #6 已由使用者 merge，主線 release SHA `f86fcd9` 與 v0.2.1 tag commit `3dd3c27` tree 完全相同；四個 consumer pin 既有 tag，不覆寫 tag。gitlink-only dependency commits 已留本地；Docker metadata PASS，nested lint 三個 FAIL、interfaces 無支援來源而 SKIP，證據及後續 PR 條件見 TODO T0.7。package 版本、來源、rv2 Doxyfile 與 integration 布局不變，未 push、附 release commit/tag 或提出 PR。 |
 | v1.3.9 | **更新 Agent:`coco-codex`**。依使用者裁決，§11.5.5 的 C/C++ lint 改為只比對 clang-format 18 原生輸出；排除無法自動修正的 block 兩格、空 namespace 缺名、macro/條件編譯語意推論、formatter-off 額外檢查與 Doxygen/多行註解結構要求。文件樣式保留為建議，不再以補充詞法檢查或輸出正規化擋 PR；一般格式、可修正 namespace、Python/Shell 與版本/merge 順序不變。framework Docker 回歸及全檔 lint 通過，獨立版本 commit/tag v0.2.1 `3dd3c27` 已提出 [PR #6](https://github.com/cocobird231/r1_test_framework/pull/6)；consumer gitlink 與 rv2 Doxyfile 不動，證據記於 TODO T0.7。 |
 | v1.3.8 | **更新 Agent:`coco-codex`**。framework PR #5 經使用者 rebase merge，主線 release `5316f3e` 與 v0.2.0 tag commit `631a85b` tree 完全相同；consumer 升級固定既有 tag commit，不移動 tag。四個 package gitlink-only dependency commits 已留本地；Docker lint 三個 FAIL、interfaces 無支援來源而 SKIP，未 push、附 release commit/tag 或提出 PR。package 版本、rv2 Doxyfile 與 integration 布局保持不變，導入證據及後續 PR 條件記於 TODO T0.7。 |
@@ -1756,6 +1759,22 @@ C/C++ 使用 clang-format 18 與 framework 根目錄的 `.clang-format`：LLVM �
 Allman、4 spaces、namespace 不縮排，保留 include 順序與一般註解文字；採用 120 欄與 class 內
 短函式單行。Python 採 PEP 8/Black 相容格式，由 Ruff 0.15.7 執行
 format check 與 E4/E7/E9/F/I 檢查(88 欄、雙引號)；Shell 採語法檢查與 ShellCheck。
+Python 共用設定檔為 `<package>/r1_test_framework/lint/ruff.toml`，角色類似 C/C++
+的 `.clang-format`，同時設定 formatter 與 lint 規則；`target-version = "py310"`
+是語法目標，不代表 container 安裝的 Python 版本。工具版本另由
+`lint/requirements.txt` 固定，owner 的其他 Ruff 設定不覆蓋此明確指定的共用檔案。
+
+transport 經 v1.3.13 對齊後，在 `ament_lint_auto` 僅排除
+`ament_cmake_uncrustify`，C/C++ 格式由既定 clang-format gate 負責。
+flake8/pep257 繼續保留，因 Ruff E4/E7/E9/F/I 未涵蓋所有既有 Python 檢查；
+`ament_cmake_flake8_CONFIG_FILE` 指定 `test/ament_flake8.ini`，沿用 Jazzy
+原有設定並只增加 `inline-quotes = double`，不新增 rule ignores，避免
+與共用 Ruff 雙引號要求衝突。三份 launch module docstring 直接修正 raw string
+與句尾標點，保留原範例中的 shell 續行字元；不更動 launch runtime 邏輯。
+保留 `cppcheck`、`lint_cmake`、`xmllint` 與全部 unit/integration 測項；
+CMake 縮排違規直接修正。cppcheck 若依工具版本原生 SKIP，必須明示而非
+宣稱靜態分析通過。完整驗收仍須同時通過 `test_run.sh` 與獨立
+`test_lint.sh`，不在 CTest 容器內嵌套 Docker 或修改框架。
 
 C/C++ lint 依本版使用者裁決，僅比較來源與 clang-format 18 原生輸出，
 取代先前「所有情況強制檢查」規則；不另做註解/namespace 詞法檢查，
@@ -1783,6 +1802,17 @@ formatter 執行失敗仍回傳非零，Python/Ruff 與 ShellCheck 不受本裁�
 這個 gate 不取代 C/C++ 編譯、語意分析或功能測試，也不新增自動修正開關。
 若違規，由開發者手動選檔執行 formatter、檢查 diff，再重跑 lint。正式定版後的
 提交順序為功能/測試/文件提交 → lint 與必要功能驗證 → 獨立版本 commit/tag → PR。
+v1.3.11 使用者授權一次 clang-format 修正試行，僅處理 owner lint 清單內 C/C++，
+包含 transport legacy；使用 Docker clang-format 18 及既有 v0.2.1 設定，以 owner
+UID/GID 寫回。排除 generated、vendored、symlink、nested repo/submodule，不改
+Python/Shell、rv2 Doxyfile、package.xml 或 gitlink；試行後重跑 lint 並保留 diff，
+不在本輪 commit、升版或提出 PR。這不改變 framework lint 入口的唯讀合約。
+v1.3.12 使用者再授權 Python 修正，對 owner 選中的 Python 檔案在 Docker 內執行
+`ruff check --fix --no-unsafe-fixes` 與 `ruff format`，均明確指定上述共用設定。
+執行 cwd 固定為與現有 gate 相同的 container `/`，設定與來源皆用絕對路徑，
+並加 `--no-cache`；避免 owner 根目錄的 `launch/` 影響 Ruff 預設 first-party import 分組。
+只處理來源中的既有違規，不更改規則；保留前輪 C/C++ diff、owner UID/GID、
+package 版本、Doxyfile 及 gitlink，重跑唯讀 lint 後先保留 diff 供檢視。
 使用者已確認 C/C++ 範例與目前格式，framework v0.2.0 的獨立版本 commit
 `631a85bce7d4b6f1826b06244f9c77b33c6e6f8f` 與同名 annotated tag 已推送
 [PR #5](https://github.com/cocobird231/r1_test_framework/pull/5)，已由使用者 rebase merge。
@@ -1799,10 +1829,24 @@ commit/tag v0.2.1 `3dd3c27` 的 [PR #6](https://github.com/cocobird231/r1_test_f
 其 tree 與 tag commit 完全相同；consumer 固定既有 `3dd3c27`，不移動或覆寫 tag。
 各 package 須用自己的 nested 入口實際驗證，結果見 TODO T0.7；不能將 framework
 自身 PASS 或先前 transport override 預驗證當作 consumer 通過，也不自行修來源來過 gate。
-本版四個 consumers 已在本地 commit 更新至 v0.2.1，實際 nested lint 結果為
+v1.3.10 導入時四個 consumers 已在本地 commit 更新至 v0.2.1，當時 nested lint 結果為
 transport 35、mocks 11、integration 26 個 failed checks；interfaces 無支援來源而 SKIP。
 consumer package.xml 均維持 0.1.0，未 push、附 release commit/tag 或提出 PR；
 剩餘格式與 Ruff 違規的修正範圍待使用者裁決，interfaces 另仍無 remote。
+v1.3.11 單輪 clang-format 試行後，52 個 C/C++ 全部通過，mocks 整包 lint PASS；
+transport 剩 3 個 Ruff 格式檢查，integration 剩 22 個 Ruff 檢查，interfaces 仍為 SKIP。
+實際產生 47 個 C/C++ 檔案 diff，包含 formatter 原生的部分 `using` 排序，
+不是只改空白。該輪尚未修正 Python，未重跑編譯/功能測試；保留未提交 diff 供檢視。
+v1.3.12 接續以 Ruff 修正 23 個 Python：22 檔 AST 完全保留，I04 僅移除 unused
+`import re`；其餘字串、斷言、控制流程與前輪 C/C++ diff 均保留。實際 nested lint
+transport/mocks/integration 全 PASS，interfaces 無支援來源仍為 SKIP，詳見 TODO T0.7。
+本輪未重跑 ROS 編譯/功能測試，未 commit/push、升版/tag 或提出 PR。
+v1.3.13 transport gate 修正後，以全新官方 Jazzy container 乾淨編譯，獨立
+framework lint 與預設 test_run 皆 exit 0；另逐一執行 unit 84/84、integration
+50/50 全過。CTest 僅移除 uncrustify，全部功能案例名稱與 labels 保留；
+flake8/pep257/lint_cmake/xmllint 全 PASS，cppcheck 仍因既有工具問題 32 SKIP。
+Config/AST 與 C/C++ diff 保留比對通過，日誌與分類執行證據見 TODO T0.7。
+本輪保留未提交 diff，不變更 framework、package 版本、Doxyfile 或 gitlink。
 權威來源、指令與檔案排除規則以 framework README 及 lint 設定為準。
 
 ---
