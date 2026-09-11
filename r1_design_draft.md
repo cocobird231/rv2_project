@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.16)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.17)
 
-> 狀態:正式版(v1.3.16);T12 已發布 framework 導入與正式驗收。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.17);T12 DDS 隔離查證與串行驗收。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.17 | **更新 Agent:`coco-codex`**。修正 Docker default bridge 自帶測試隔離的錯誤假設：正式 UBSan K11 與 t5 的同名 topic 重疊 265 ms，獨立容器探針證實 domain 0 跨 bridge 容器通訊。§11.3 明訂未驗證獨立 domain/network 的 ROS jobs 全域串行，不能只靠 container 名稱或 host env 宣稱隔離。本輪不改 K11 斷言/runtime 或已發布 framework，保留失敗證據後串行重驗；M22 已以 test-only forwarding probe 補兩種真實交錯，ASan 矩陣及五次複測通過，TSan runtime 仍阻塞。 |
 | v1.3.16 | **更新 Agent:`coco-codex`**。framework PR #7 已經使用者合併，主線 `6a04bfe` 與原 v0.3.0 tag `67755d6` tree 相同；consumer 依序固定原版本 commit，不移動 tag。正式驗收改用各 owner nested 入口，補 M22 calc→activity→commit 決定性交錯並重跑 sanitizer/打包/t2–t11 鏈；沿用 fail-closed、Docker 隔離與 PR-ready 獨立版本 commit 規則。前輪結果保留為歷史預驗證，不提前宣稱新矩陣完成，不改 rv2 Doxyfile 或自動放寬 TSan 安全設定。 |
 | v1.3.15 | **更新 Agent:`coco-codex`**。T12 framework 支援完成並提出 v0.3.0 [PR #7](https://github.com/cocobird231/r1_test_framework/pull/7)，獨立版本 commit/tag `67755d6`；consumer pin 保持 v0.2.1，須等 merge 再正式驗收。開發 Docker 的 ASan/LSan、UBSan、framework 回歸/lint與三包 Debian 乾淨安裝通過，TSan 在 GCC/Clang 皆有平台阻塞，詳見 TODO T12 證據。測試補強 L14/S11/K12/K15/K16/I10；乾淨下游失敗實證後修正 transport r1_interfaces export，保留 consumer diff，不改 runtime/版本/Doxyfile/gitlink。M22 決定性交錯證據、正式矩陣與完整 t2–t11 鏈仍待完成，不以預驗證或部分結果宣稱 T12 全綠。 |
 | v1.3.14 | **更新 Agent:`coco-codex`**。T12 開工校準：§11.4 依現行 package/測試分層補齊 K15 ASan、K10/I10 TSan 與 UBSan unit owner，規範 instrument 範圍、子程序退出/diagnostic 非零與獨立產物，不把空集合或平台失敗當通過。§11.5.3 補 Debian 內部版本、local dependency 閉包與乾淨安裝/downstream smoke；測試產物版本不改來源 release。框架先 PR/merge 後 consumer pin，開發預驗證與正式驗收分開，既有版本、gitlink、rv2 Doxyfile 與前輪格式化 diff 保留。 |
@@ -1651,8 +1652,11 @@ H1–H6 驗證 Handle 的單一操作、型別、引用與並發安全合約，�
   容器由 `r1_test_framework` 的腳本負責建置與管理(§11.5)。
 - 測試涵蓋要求如下:每個 class 的每個 function 均須有對應的 unit test 與 test case,
   §3–§10 各章的案例表為最低集合，既有 M/CM 與 H7–H8 依上述邊界歸為 package 整合測試，不因檔案搬移改寫既有斷言。跨 package 整合部分以 §11.2 的場景集為準，必要時使用 §11.1 的 mock 與模擬節點。
-- 每個場景使用獨立的 `ROS_DOMAIN_ID`(由 launch_testing 配發),避免互相干擾；
-  容器之間的隔離另由 docker network 提供第二層保障。
+- 每個場景使用獨立的 `ROS_DOMAIN_ID`(由場景框架配置),避免同一 job 內互相干擾。
+  Docker 預設 bridge **不提供跨 job DDS 隔離**：相同 domain 的容器可互通同名 topic。
+  在尚未提供且實測獨立 ROS domain 或 network 前，會啟動 ROS nodes 的 jobs 必須全域串行，
+  不能只靠不同 container 名稱、owner/run 目錄或 host ROS_DOMAIN_ID 宣稱隔離。
+  現行 test_build.sh 未將 host domain 變數傳入容器；lint／純靜態查核可並行。
 - CI 從目標 package 呼叫 §11.5 的腳本鏈(`./r1_test_framework/test_build.sh` → `./r1_test_framework/test_deps.sh` → `./r1_test_framework/test_run.sh`),
   單元與整合場景分屬不同的 job；產物打包則交由 `test_packages.sh` 處理。
 
