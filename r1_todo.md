@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.21)
+# R1 實作 TODO List(v0.8.22)
 
-> 依據:`r1_design_draft.md` v1.3.20(正式版;四步測試流程與 TSan 預設關閉)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.21(正式版;I18 啟動診斷與 interfaces 權限恢復)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.22 | **更新 Agent:`coco-codex`**。使用者授權診斷並修正 I18；先保留原失敗與未重現診斷，收集實際註冊回覆/重試事件，區分啟動註冊與 service-response-failure 驗收。受控初始 client-not-ready 證實 code=10 後可合法背景成功；修正前 FAIL、修正後 PASS，保持 ACTIVE、matching identity、G/G+1、恰一次 terminal/mandatory retry 及 late-event 去重，不放寬 timeout 或修改 runtime。完整 test_run 的 I18 PASS，但另有 I15 初始註冊等待 FAIL，整體 20/21；lint 與另跑 I10 ASan 2 cases PASS。PR #8 改為 I15 validation pending，下一版定版繼續暫緩。r1_interfaces API 權限已恢復並提出 PR #1，維持 0.1.0、不新增 release commit/tag；新版 framework merge 前不更新 consumer gitlink。 |
 | v0.8.21 | **更新 Agent:`coco-codex`**。依使用者新裁決，TSan 預設 off，正式使用流程為 test_build→test_deps→無參數 test_run→test_clean，lint 維持獨立入口。test_run 在既有依賴就緒容器內串行完成一般 unit/integration 與 owner 適用 sanitizer，按 run/profile 隔離並保留產物、逐項狀態/log；特殊 selectors 保留單項模式，不呼叫 todo_check 重建環境或重裝依賴。關閉的 TSan 明示 SKIP，不能掩蓋其他失敗或勾選 T12.2；保留既有 ament 非重複檢查。r1_interfaces SSH remote 已確認可用，但 API 404 仍阻塞 PR；使用者已裁決保持 package.xml 0.1.0，本次不新增 release commit/tag。framework PR 經使用者 merge 後才更新所有 consumer pins/PR，既有 v0.4.0 tag 不移動。 |
 | v0.8.20 | **更新 Agent:`coco-codex`**。依使用者要求查詢 TSan unexpected memory mapping；官方 LLVM 說明高 ASLR entropy 與固定 shadow mapping 衝突，本機官方容器確認 mmap_rnd_bits=32，GCC clean probe 仍阻塞，既有 Clang 18 證據亦有 personality CHECK。維持主機/容器安全設定，先規範 framework 的顯式 `-t on\|off`（預設 on）：off 只略過選定 TSan job，stdout 明示 SKIP、exit 77，不建立/清除容器或產物、不降級成未 instrument 的測試。非法參數仍失敗、其他測試不受影響、T12.2 不勾選。框架先開發驗證，consumer gitlink/版本與 rv2 Doxyfile 不動；實測結果見 T12 補充。 |
 | v0.8.19 | **更新 Agent:`coco-codex`**。四個 consumer 已以 gitlink-only commits 固定 framework v0.3.0 原 tag `67755d6`。正式 nested 串行 ASan 64/I10 2、UBSan 84/mocks 3、三包 Debian 乾淨安裝與 t2–t11 完整鏈全過，勾選 T12.1/T12.3/T12.4/T12.5；transport 完整 134 cases、T11 21 cases，cppcheck 原生 32 SKIP 如實保留。M22 真實 calc/activity/seal 交錯與 terminal 順序已補，ASan 額外五次亦通過。原 K11 平行 DDS 干擾失敗與探針證據保留，原斷言/runtime 不改。T12.2 仍因兩 owner 的 TSan clean probe unexpected memory mapping 阻塞；不附 package release/PR、不提前改版本，來源與既有格式化 diff 保留，容器已卸載，詳見 T12 正式結果。 |
@@ -148,7 +149,7 @@ TSan 的人工停用規範另見 §1.3.3，不得將其 SKIP 當成 lint 或 T12
 | 版本 commit 與 tag | 功能、測試、文件變更先提交，版本欄位不得提前混入這些 commit；完成驗證、準備提出 PR 時才附獨立版本 commit，只含版本欄位變更，訊息包含 `vX.Y.Z`(如 `chore(release): v0.1.0`)，並建立同名 Git tag 指向該 commit。目前手動執行，未來才由 GitHub Actions 產生；本輪不實作 workflow。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者本次准許的首次定版例外，不作為後續慣例。合併須保留該獨立 commit 與 tag SHA，使用 merge commit，不 squash/rebase 已標記的版本 commit；不得自行移動或覆寫 tag |
 | 完成流程 | 階段完成(該大項查核與實測通過)後:附版本 commit/tag → push branch 與 tag → 對主 branch 提出 PR → 回報使用者。PR 合併由使用者裁決；無 remote 的 repo 暫存本地，待具備 PR 條件才附 release commit |
 | Framework 升版順序 | 先提交 framework 版本 PR，等待使用者 merge；確認 merge 後才將各 package 的 submodule gitlink 固定到該版本 tag 所指 commit，再推送各 package 的 PR。不得提前更新，也不得改 pin 任意開發 HEAD 或 merge commit |
-| Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`；`r1_interfaces`:`git@github.com:cocobird231/r1_interfaces.git`（SSH 已確認可用，當前 GitHub API 404 仍阻塞 PR）。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag；本次 PR 不附版本提交，不捏造版本回退/升版。 |
+| Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`；`r1_interfaces`:`git@github.com:cocobird231/r1_interfaces.git`（v0.8.22 已確認 SSH/API 權限恢復）。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag；本次 PR 不附版本提交，不捏造版本回退/升版。 |
 
 ### 1.5 前置裁決(開工前決定)
 
@@ -580,6 +581,16 @@ graph LR
 
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
+
+**I18 診斷與修正(v0.8.22)**：依使用者授權先修訂文件，再只修改 `r1_integration_tests/test/integration/scenario_i18_service_response_failure.py` 的啟動前置條件與診斷輸出。初始同步回覆精確接受 SUCCESS(0)／RETRY_SCHEDULED(10)，但兩者皆須唯一 wire REGISTER 與 matching identity、endpoint ready 的 REGISTERED status；10 另須 matching-generation RETRY_SUCCEEDED(kind=7)。ACTIVE、response-failure epoch、matching UNREGISTER、恰一次 terminal／G+1 mandatory retry、late-event 去重斷言均保留，未修改 runtime 或 timeout。teardown 輸出既有 timed events 與最後 status，使往後失敗留下實際事件。
+
+原未修改 I18 連續 5 次一般診斷皆 PASS；app-only 的初次 manage-client-not-ready 受控注入，在相同 C++ binaries 下證實舊測試因 code=10（其後已收到 kind=7／G=2 成功）而 FAIL，新測試 PASS 且完成故障後 G=3 retry。原歷史失敗缺少事件，不能以此次受控結果反推其確切根因。首次廣域 LD_PRELOAD 注入碰到 Python dynamic-symbol 問題，該工具失敗明示 INVALID，不計入產品驗收；所有原始 logs 均保留。
+
+無參數完整入口本輪 `full-20260912T152358.7p2n8Z`：19 個 launch targets／21 個案例，I18 PASS，另有 **I15 FAIL**，故一般測試 20 PASS／1 FAIL，整體 exit 1、ASan NOT_RUN、UBSan N/A、TSan SKIP/77。I15 在首次 `_register_and_activate` 等待 code=0 失敗，尚未開始 send／terminal-activity 斷言；log 未記實際回覆碼，不能定因，本輪不擴大修正 I15。integration nested lint PASS（C/C++ 4、Python 20）。完整流程失敗不以單項通過取代；framework PR #8 保持 DO NOT MERGE，下一版 release/tag 繼續暫緩。
+
+另外以獨立隔離 run `i18_fix_i10_asan_20260912_1531` 補跑 `test_run.sh -a asan -f '^scenario_i10_stress_extended$' -j 1`：I10 壓力與子程序 shutdown 共 2 cases PASS，ASan clean/defect controls、build instrumentation 與 results gate PASS；此單項結果不改寫前述完整流程 ASan NOT_RUN／整體 FAIL。本輪 build/deps 均成功，兩個測試容器皆已由 test_clean 卸載，logs/build/install 保留。
+
+本輪不改任何 consumer gitlink／package.xml 或 rv2 Doxyfile；integration 其他既有未提交差異經 SHA256 比對完全保留，I18 修正亦先保留 diff。interfaces API 權限已恢復並已提出 [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1)，保持 0.1.0、不新增 release commit/tag；新版 framework merge 後才更新各 owner submodule。診斷與逐項原始證據：[I18-fix-report.md](../../r1_integration_tests/test_env/jazzy/I18-fix.Sz2iPl/I18-fix-report.md)。
 
 **四步完整入口開發驗證(v0.8.21)**：framework 功能 commit `976007b` 將無參數 test_run 串接一般完整測試與 owner 適用 sanitizer，TSan 預設 off；沿用既有 runtime/build/results gate，按 run/profile 隔離，失敗不繼續後續已啟用階段。使用官方 Jazzy Docker，以明確 owner override 依序跑四個 packages，未更新 nested v0.3.0 gitlink。transport 一般 134（unit 84／integration 50）、ASan 64、UBSan 84 PASS；mocks 一般 23、UBSan 3 PASS；interfaces build PASS、0 cases。transport 既有 cppcheck 32 SKIP 仍揭露。
 

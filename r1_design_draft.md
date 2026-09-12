@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.20)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.21)
 
-> 狀態:正式版(v1.3.20);四步測試流程與 TSan 預設關閉。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.21);I18 啟動診斷與 interfaces 權限恢復。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.21 | **更新 Agent:`coco-codex`**。使用者授權 I18 診斷/修正；補充合法初始 code=10 背景成功路徑，啟動 service discovery 與同步初始註冊不應取代最終 REGISTERED/ACTIVE 與 identity 證據。受控 RED/GREEN 與修正後完整流程的 I18 通過，保留原失敗；service response failure、matching UNREGISTER、恰一次 G+1 mandatory retry/late-event 去重要求不變。完整流程另有 I15 初始註冊等待失敗，framework 定版繼續暫緩。r1_interfaces API 權限已恢復並提出 PR #1，維持 0.1.0 且本次不新增 release commit/tag；保留 framework 先 merge 再更新 consumer pins 的順序。 |
 | v1.3.20 | **更新 Agent:`coco-codex`**。依使用者新裁決改 TSan 預設 off，無參數 test_run 在既有 Docker 環境完成全部一般 unit/integration 與適用 sanitizer；build/deps/run/clean 各自負責一個生命週期步驟，lint 保持獨立。沿用精確案例/非空/diagnostic gate，以新持久 run-root 掛載隔離 profile 產物並記錄各階段狀態。單項參數與 TODO 除錯入口保留，SKIP 不滿足 T12.2；不改來源安全設定/已發布 tag，不提前更新 consumer pin。r1_interfaces SSH remote 已確認可用，但 API 404 仍阻塞 PR；使用者已裁決保持 package.xml 0.1.0，本次不新增 release commit/tag。 |
 | v1.3.19 | **更新 Agent:`coco-codex`**。依使用者要求查詢 TSan 啟動錯誤並規範明確開關：本機 mmap_rnd_bits=32 與既有 GCC/Clang 啟動失敗符合 LLVM 的 ASLR/shadow mapping 問題；不變更 host/容器安全設定。§11.4 新增兩個框架入口的 `-t on\|off`，預設 on、明確 off 才 SKIP/exit 77，不啟動/清除容器或產物、不影響其他 sanitizer、不將 SKIP 當驗收。文件先行；framework 開發與 consumer pin/release 分離，T12.2 保持未完成。 |
 | v1.3.18 | **更新 Agent:`coco-codex`**。四個 consumer 已固定 framework v0.3.0 原 tag `67755d6`。nested 串行 ASan/LSan、UBSan、Debian 乾淨安裝與完整 t2–t11 鏈通過，TODO T12.1/T12.3/T12.4/T12.5 完成。M22 補真實 calc/activity/seal 兩種交錯、恰一次 terminal 順序與 ASan 五次複測；原 K11 平行 DDS 干擾以串行原樣重驗解決，不改 runtime/門檻。TSan 兩 owner 的 clean probe 仍平台阻塞，T12.2 未完成，未附 consumer release/PR。package 版本、rv2 Doxyfile 與既有差異保留；完整測試/產物證據及案例數區分見 TODO T12。 |
@@ -1647,6 +1648,8 @@ H1–H6 驗證 Handle 的單一操作、型別、引用與並發安全合約，�
 | I17 retry 非阻塞與 storm 控制 | 多個 target 同時 crash/restart。 | status 與 heartbeat 週期不中斷；bounded in-flight、backoff+jitter 與 per-intent 去重皆成立。 |
 | I18 service response failure 先於 master | 暫停 target 的 service 回覆但讓 heartbeat 繼續,同時 Source 高頻 send。 | failure streak elapsed 越過 disconnect 後,以 epoch guard 提交 Source terminal,並產生 matching UNREGISTER 與單筆 mandatory retry。其後持續失敗的 send 不會取消終出；稍後抵達的 master event 亦不重複 enqueue。 |
 
+I18 啟動前置條件(v1.3.21)：初次 `registerSource` 可同步 SUCCESS(0)，也可在 lazy client 尚未 ready 時回 RETRY_SCHEDULED(10)。不能把「本次同步呼叫必須回 0」當成已建立 pair 的必要條件；測試須精確解析完整回覆碼，其他錯誤仍失敗。兩種路徑皆須取得唯一 wire REGISTER 的實際 registration ID／generation，並等待匹配 identity、endpoint ready 的 REGISTERED status；10 路徑另須匹配 generation 的 RETRY_SUCCEEDED(kind=7)。其後才送資料並確認 ACTIVE，再注入 response failure。以實際建立的 generation 為 G，原有 matching UNREGISTER、恰一次 terminal、唯一 G+1 mandatory retry 與 late-event 去重斷言不變；啟動 retry 納入故障前基線，不混算成故障後 retry。測試結束時將既有事件與最後 status 輸出到 launch log，失敗也保留；不修改 runtime、延長 timeout 或隱藏失敗。受控初始 client-not-ready 對照已重現並修正此前置條件缺口，但原歷史失敗缺事件資料，不能宣稱已證實其唯一根因。
+
 ### 11.3 執行環境(v1.2.0:全面 docker 化)
 
 - **測試分類以驗證邊界為準，不以 gtest/launch_testing、是否使用 ROS 或 mock 判定**。每個 package 的 `test/` 均分為 `unit/` 與 `integration/`：前者驗證單一 function/class 合約(例如 LivenessState、Info 驗證、Source、Sink、Factory)，後者驗證多元件協作(例如 CSM 註冊、heartbeat、callback 派送、master 對帳與 retry)。單一 package 內的系統性測試也屬 integration。
@@ -1681,7 +1684,7 @@ runtime 不支援、空選集、diagnostics 或異常退出均回非零，保留
 
 使用者完整測試入口為 `test_build.sh`（建立 Docker/唯讀來源與產物 mounts）→`test_deps.sh`（安裝依賴）→無參數 `test_run.sh`（同一容器內串行一般完整 CTest、適用 ASan/UBSan、可選 TSan）→`test_clean.sh`（卸載、預設保留產物）。不讓使用者逐一呼叫 TODO item，也不從 test_run 重新建容器或安裝依賴。新增持久 run-root mount，每次新 run/profile 的 build/install/log 與摘要 log 都保留；mount 必須實查、來源保持唯讀，既有 checker 的 workspace 參數與精確矩陣重用。
 
-transport sanitizer 矩陣為 ASan/UBSan/可選 TSan；mocks 僅 UBSan；integration 僅 I10 ASan/可選 TSan；interfaces 無測試與 sanitizer，不新增空案例。完整流程逐階段記 PASS/FAIL/SKIP/N/A/NOT_RUN 與 exit/log；任何已啟用階段失敗仍非零。指定 `-p/-s/-f/-c/-j/-k/-a` 時保留特殊單項模式，只有 `-d/-t` 時仍為完整流程。lint 仍以 `test_lint.sh` 獨立 Docker 執行；既有 ament 非重複檢查保留在一般 CTest，不把 clang-format/Ruff/ShellCheck 說成涵蓋全部 CMake/XML 檢查。Debian 打包/乾淨安裝暫仍獨立 test_packages，是否預設包含待使用者回覆。framework PR 先經使用者 merge，再更新所有 consumers；r1_interfaces SSH remote 已確認可用，當前 API 404 仍阻塞 PR。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag，不再等待首次空版本 commit 例外（TODO §1.4）。
+transport sanitizer 矩陣為 ASan/UBSan/可選 TSan；mocks 僅 UBSan；integration 僅 I10 ASan/可選 TSan；interfaces 無測試與 sanitizer，不新增空案例。完整流程逐階段記 PASS/FAIL/SKIP/N/A/NOT_RUN 與 exit/log；任何已啟用階段失敗仍非零。指定 `-p/-s/-f/-c/-j/-k/-a` 時保留特殊單項模式，只有 `-d/-t` 時仍為完整流程。lint 仍以 `test_lint.sh` 獨立 Docker 執行；既有 ament 非重複檢查保留在一般 CTest，不把 clang-format/Ruff/ShellCheck 說成涵蓋全部 CMake/XML 檢查。Debian 打包/乾淨安裝暫仍獨立 test_packages，是否預設包含待使用者回覆。framework PR 先經使用者 merge，再更新所有 consumers；r1_interfaces SSH/API 權限已恢復，已提出 [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1)，現有 pin 仍為已合併 v0.3.0。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag，不再等待首次空版本 commit 例外（TODO §1.4）。I18 修正後完整流程的 I18 通過，但 I15 在初始註冊等待失敗；framework PR #8 仍維持 DO NOT MERGE，不新增下一版 release/tag，不提前更新 consumers，詳見 TODO T12 v0.8.22 證據。
 
 平台查證：官方 Jazzy 容器讀得 Linux 6.17.0-35、mmap_rnd_bits=32、ASLR=2；既有 GCC mapping failure 與 Clang 18 personality CHECK 符合 [LLVM #78351](https://github.com/llvm/llvm-project/pull/78351) 的固定 shadow mapping／高 entropy 限制及 re-exec 恢復機制；[Docker seccomp](https://docs.docker.com/engine/security/seccomp/) 對 personality 有參數限制。這是證據支持的診斷，未更改安全設定作 A/B 實驗。新 probe 仍 BLOCKED，不宣稱工具鏈更新已解決。開關不是 runtime 修復，正式導入仍須先 framework PR/merge 再 pin；詳細 log 與開關驗證見 TODO v0.8.20。
 
