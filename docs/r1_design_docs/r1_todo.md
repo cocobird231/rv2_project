@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.31)
+# R1 實作 TODO List(v0.8.32)
 
-> 依據:`r1_design_draft.md` v1.3.30(正式版;project v0.1.1 候選驗證完成)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.31(正式版;project v0.1.1／framework v0.5.1 已提出 PR，R1-only 正式導入待 merge)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.32 | **更新 Agent:`coco-codex`**。Project v0.1.1 版本 commit/tag fddcccd 已推 PR #1，乾淨 release nested 四步及 lint 通過。src 全面唯讀盤點 9 份 .gitmodules／14 個 gitlinks 皆為最新已合併版本。乾淨 transport 分支分開提交 legacy 移除 664a1a4、T12/export 423ff10；integration 分開提交 I15/I18 6a36157、依賴清理 58e167d，原工作樹 dirty bytes 不動。Framework R1-only UBSan/T0 相容性 e690efa、README rebase/pin 17a9a0a 與只改 VERSION 的 v0.5.1 a058498 分開提交；84 Python 回歸、四套 shell 查核、lint 全過，已推 PR #9/tag。正式 consumer pin／定版仍待使用者 merge 與重新 pull；開發預驗證另記 T14，不將 TSan SKIP 算入 T12.2。 |
 | v0.8.31 | **更新 Agent:`coco-codex`**。T14.1 的五個 project checkout 均實際 pull，HEAD／origin／即時遠端及原 release tag tree 全一致；transport 固定 cc7cec2，所有四個 ROS consumers 的 nested framework 均 f5952a8/v0.5.0。v0.1.0 snapshot bytes 不變，新 v0.1.1 資料 commit 907ff3d、gitlink commit 5d1c44f。只有 package.xml 進版的 PR-ready 候選以官方 Docker nested 四步前三級及 lint 通過：unit131/integration9、CMake/XML 全 PASS，sanitizers N/A；準備獨立 version commit/tag 與 project PR。原 T14.2–T14.4、TSan／legacy 依賴缺口不提前勾選，逐項 logs 保留。 |
 | v0.8.30 | **更新 Agent:`coco-codex`**。使用者確認 transport merge 並要求 project 新 snapshot／PR／tag，後續移除 transport legacy、提交 I15/I18 與 T12/export，最後同步 framework README。遠端核對 transport v0.1.2 主線 cc7cec2 與原 tag 8f56a55 tree 相同；project master 已有 30afa23，可正常提出 PR，不需 bootstrap 空主線。先規劃 v0.1.1 snapshot 並保留 v0.1.0，再按順序實作 T14；legacy 移除尚不在已合併 v0.1.2，禁止誤記已解決依賴。Framework v0.5.0 的 UBSan／T0 硬性 legacy target 需相容修正，必須維持 fail-closed、先 merge 新框架再正式導入，不改既有發布 tree／tag；TSan runtime 仍未完成。 |
 | v0.8.29 | **更新 Agent:`coco-codex`**。T13 完成：使用者同意以 merge 2ee952c 納入原 docs 歷史，保留完整 bundle／Git metadata（含 stash reflog）及原 staged workspace。五包乾淨 checkout 實際 pull 後固定已合併 release SHA，原 tags/tree 核對不移動；根目錄 framework v0.5.0，既有五個 workspace gitlinks 保留。rv2_project v0.1.0 功能 commit 3ba0b4d，官方 Docker nested 四步、lint、乾淨 clone unit 131／integration 9 與 CMake/XML 全 PASS；sanitizers N/A，容器已卸載。首輪缺 rebase 前 tags／一份 Ruff 格式失敗與修正 log 皆保留；後續文件完成紀錄不冒充重跑 ROS。T12.2、待 merge／未提交補強及 legacy dirty dependency 缺口不勾消；新 project 空 remote 尚無 PR base，本次提交留本地、不自建空主線／release tag。 |
@@ -227,11 +228,11 @@ graph LR
 | 項目 | 狀態／完成條件 |
 |---|---|
 | transport PR #8／新 snapshot | 已確認合併，主線 `r1` 為 cc7cec22043f80b1a4179ae9acdf5a0e6b98105e／v0.1.2；與原 tag 8f56a55 tree 相同。T14.1 實際 pull 後納入 project v0.1.1，其他四包仍為最新已合併版本，不混入後續尚未合併 PR。 |
-| transport T12/export 補強 | 原開發 checkout 的 CMakeLists.txt 與四個 test 檔仍未提交：r1_interfaces export、L14/S11/K12/K15/K16/M22。尚不屬 v0.1.2 PR，後續需獨立提交、驗證、release。 |
-| integration I15/I18 | 兩份啟動 ready／identity／code=10 retry gate 修正仍未提交，須另行驗證、提交及定版；I10 shutdown 補強已隨 v0.1.1 合併，不重複列為欠項。 |
-| legacy rv2_interfaces | 使用者本輪要求由 transport 移除舊 rv2 library／keyboard／tests／launch/config 與依賴，以 R1-only 解決來源缺口；目前已合併 v0.1.2 尚未做。同步刪 integration 的多餘 local dependency，保留 master／舊 tags／legacy repo 原使用者改動。須乾淨 R1 dependencies 實測才可結案。 |
+| transport T12/export 補強 | 已在乾淨分支獨立提交 423ff10：r1_interfaces export、L14/S11/K12/K15/K16/M22；原工作樹保持不動。尚不屬已合併 v0.1.2，正式新版 nested 驗證／定版／PR 待 framework #9 merge。 |
+| integration I15/I18 | 已在乾淨分支原樣提交 6a36157；移除 legacy local dependency 另作 58e167d。尚待本輪 clean-dependency 驗證與定版；I10 shutdown 已隨 v0.1.1 合併，不重複列為欠項。 |
+| legacy rv2_interfaces | Transport 664a1a4 已移除 17 份 legacy 檔案與對應 build/install/dependencies；R1 production/API、Doxyfile、master／舊 tags／legacy repo 原使用者改動皆保留。新測試 workspace 只有 R1 dependencies，未掛載 legacy repo；正式 release 與 closure 驗收仍待 T14.2。 |
 | T12.2 | TSan runtime 平台阻塞；須在支援環境由兩個 owner 明確 `-t on` 通過。預設 SKIP/77 不算完成，不更動主機安全設定。 |
-| framework README／R1-only 相容性 | 原 tag-only／禁止 rebase 說明最後同步為 §1.4；另需修 UBSan 精確 target 集合與 T0 對 legacy 的假設，維持新舊 owner 相容與 R1 最低案例 gate，不跳過失敗或修改已固定的 release tree。正式導入仍待使用者 merge。 |
+| framework README／R1-only 相容性 | 已完成並發布 v0.5.1／[PR #9](https://github.com/cocobird231/r1_test_framework/pull/9)，版本 commit/tag a058498；README 對齊 §1.4。UBSan 保留五個 R1 floor，未篩選 CTest discovery 的全部 unit 必須實跑；legacy 若仍註冊或建出亦必須跑。T0 改為全部功能 targets，正反例／既有回歸與 lint 通過。Consumer 正式導入仍待使用者 merge、literal pull／新 SHA 核對。 |
 | 總驗收 | T13 snapshot metadata 自身驗收已完成，不代表整體 R1 完成。上述已提交版本、依賴缺口與待發布補強收斂後，才對精確 snapshot 串行跑各 owner 四步／lint 及另列的打包、TSan；現有 dirty PASS 不代替最終驗收。 |
 
 §12 的 HA、async API、adapter、durable fencing 等未來政策不自動擴張成此次 v0.1.0 的必做實作。
@@ -757,11 +758,14 @@ v0.8.16 當時尚未完成：framework merge 後的 consumer pin/新 nested 入�
 
 ## T14 總驗收前版本與來源收斂(v0.8.30)
 
-- [ ] **T14.1** Project 五個 workspace submodules 與 root framework 實際 pull／核對最新已合併版本；新增 v0.1.1 snapshot，保留 v0.1.0 bytes。獨立版本 commit／annotated tag、lint、unit/integration／安裝一致性通過後提出 PR 至 project master。
-  候選驗證：`full-20260912T200125.qaqv1q` normal PASS/0；unit131／integration9、CMake/XML 各1＋CTest wrappers4=146 colcon records，無 error/failure/skip。Lint 三份 Python PASS。精確來源為 907ff3d 加上唯一 package.xml 0.1.0→0.1.1 候選差異，不把 source_dirty=1 隱藏；版本 commit 後再重驗。證據目录：`rv2_project/test_env/jazzy/snapshot-v0.1.1.FzqtBB/`。
+- [x] **T14.1** Project 五個 workspace submodules 與 root framework 實際 pull／核對最新已合併版本；新增 v0.1.1 snapshot，保留 v0.1.0 bytes。獨立版本 commit／annotated tag、lint、unit/integration／安裝一致性通過後提出 PR 至 project master。
+  已推 [PR #1](https://github.com/cocobird231/rv2_project/pull/1) 與 v0.1.1 tag；fddcccd 只改 package.xml。候選 `full-20260912T200125.qaqv1q` 與乾淨 release `full-20260912T200305.dEK5vQ` 皆 PASS/0：unit131／integration9、CMake/XML 各1＋CTest wrappers4=146 colcon records，無 error/failure/skip；lint 三份 Python PASS，cleanup 已卸載容器。證據目錄：`rv2_project/test_env/jazzy/snapshot-v0.1.1.FzqtBB/`。本輪後續文件另在工作分支，不修改已發布 v0.1.1 tree/tag；元件合併後另做新 snapshot。
 - [ ] **T14.2** Transport 只在新 `r1` 工作分支移除 legacy 程式、測試、keyboard launch/config 與 rv2_interfaces／rclcpp_components 依賴，保留 R1 namespace／API／113 cases 與 master。既有 T12/export 補強另外 commit；乾淨依賴 normal 113／ASan 64／UBSan 72 及 Debian downstream export 證據齊備才定版／PR。若 framework 相容版本尚未 merge，先保留開發預驗證與待導入狀態。
+  開發預驗證已 PASS：乾淨 source 423ff10／framework a058498，明確 owner override，run `full-20260912T201802.B6Q82f` 一般 unit72／integration41、ASan64、UBSan72 及 runtime/build/results gates 通過；TSan SKIP/77。功能案例零 skip，cppcheck 另有22原生 SKIP，不能算靜態分析 PASS。Lint C/C++22／Shell1 PASS。`packages/run.xs0sLd` 只建 interfaces c25fcc1 與 transport 423ff10 兩包，來源與 framework 均 clean；新官方容器只 RO 掛載 deb artifacts，dpkg／discovery／公開 headers/link／node 啟停全 PASS，來源 package.xml 版本未動。build/deps/clean exit0，驗證及 owner 容器均卸載。完整 logs／逐案例位置見 [R1-closure-report.md](../../../rv2_control_signal_transport/test_env/jazzy/r1-only.HmGv6E/R1-closure-report.md)。尚非新 nested pin 的正式驗收，不提前定版。
 - [ ] **T14.3** Integration 以 merged clean base 原樣移入 I15/I18 ready／identity／code=10 補強，保留原場景本體與 timeout；移除僅供 legacy transport 的 local dependency。Focused I15/I18＋normal 21／I10 ASan 2、lint 及 clean-dependency 證據通過後獨立進版／PR。
-- [ ] **T14.4** 最後更新 framework README 的 rebase／pull／merged SHA／舊 tag tree 規範；必要的 R1-only 相容性實作另外 commit，不降低原 sanitizer gate。Docker 正反例／既有回歸與 lint 過後独立版本 commit／tag／PR；等待使用者 merge 才導入。
+  乾淨 source 58e167d、nested framework f5952a8 四步與 lint 均 PASS；dependencies 為 clean interfaces c25fcc1／mocks de847ef／transport 423ff10，無 legacy repo。Focused I15/I18 各1 PASS；無參數 `full-20260912T202647.yqG8vk` 一般19 targets／21 cases、I10 ASan2（含子程序 clean shutdown）與 controls/instrumentation/results gates 全過，零 error/failure/skip；UBSan N/A，TSan SKIP/77。Lint C/C++4／Python20 PASS。Focused 本輪初始 code0，另在同一 normal overlay 以既有 scoped shim 重建四組 code10 正反證據：原 merged-master 測試 I15 RED／I18 RED 均因舊 code0 gate FAIL/1，log 已證明 code10 後 kind7 背景成功；新測試兩組 GREEN 均 PASS/0，I15 live gen2、I18 gen2→3，原完整場景不放寬。Fixture／raw logs 位於同 owner runs/controlled.1Tkddi、i15-red.Q00ZXy、i15-green.FXHXQb、i18-red.0V8Oqx、i18-green.q6N2Ny；僅 app_a 首次 manage readiness 注入，不對 Python 全域 preload、不改 tracked source。Owner container 已卸載，logs 保留且可由使用者讀取。因新 transport／framework 尚未正式合併／導入，版本及 PR 留待 T14.2 收斂，不把此 clean candidate 充作已發布依賴。
+- [x] **T14.4** 最後更新 framework README 的 rebase／pull／merged SHA／舊 tag tree 規範；必要的 R1-only 相容性實作另外 commit，不降低原 sanitizer gate。Docker 正反例／既有回歸與 lint 過後獨立版本 commit／tag／PR；等待使用者 merge 才導入。
+  v0.5.1／PR #9 已推，consumer 尚未提前 pin。官方 Jazzy Docker：sanitizer unit32、packaging unit16、lint unit18、TSan toggle8、full orchestration6、T0 integration4 全 PASS；另 owner/selector/lint wrapper/sanitizer instrumentation 四套 shell PASS，含真實 ASan/UBSan clean/defect controls。Lint C/C++3／Python11／Shell14 PASS，獨立複核無 must-fix。初次 packaging 自測因誤用 Ruff venv Python 缺 yaml，改用容器 system Python 後 16 全過；兩份 log 均保留，未因此改產品。版本 commit 後 sanitizer32 再驗 PASS。證據：transport `test_env/jazzy/r1-only.HmGv6E/framework-*.log`；完整 submodule 盤點見同目錄 `submodule-audit.md`。
 
 TSan 預設 off 不變；T12.2 仍須支援平台實測。T14 不自行合併任何 PR；project 後續版本只能納入已合併、重新 pull 核對的 releases。
 
