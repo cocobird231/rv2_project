@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rv2_project</name>
+  <version>0.1.0</version>
+  <description>RV2 project snapshots, pinned R1 releases and design documentation.</description>
+  <maintainer email="cocobird231@gmail.com">cocobird231</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_xmllint</test_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>git</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
