@@ -1,0 +1,15 @@
+[submodule "ros2_ws/src/r1_test_framework"]
+	path = ros2_ws/src/r1_test_framework
+	url = git@github.com:cocobird231/r1_test_framework.git
+[submodule "ros2_ws/src/r1_test_mocks"]
+	path = ros2_ws/src/r1_test_mocks
+	url = git@github.com:cocobird231/r1_test_mocks.git
+[submodule "ros2_ws/src/r1_integration_tests"]
+	path = ros2_ws/src/r1_integration_tests
+	url = git@github.com:cocobird231/r1_integration_tests.git
+[submodule "ros2_ws/src/rv2_control_signal_transport"]
+	path = ros2_ws/src/rv2_control_signal_transport
+	url = git@github.com:cocobird231/rv2_control_signal_transport.git
+[submodule "ros2_ws/src/r1_interfaces"]
+	path = ros2_ws/src/r1_interfaces
+	url = git@github.com:cocobird231/r1_interfaces.git
