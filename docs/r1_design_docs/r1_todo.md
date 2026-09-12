@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.29)
+# R1 實作 TODO List(v0.8.30)
 
-> 依據:`r1_design_draft.md` v1.3.28(正式版;rv2_project v0.1.0 snapshot metadata 驗收完成)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.29(正式版;合併後 snapshot 更新、R1-only transport 與待提交補強)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.30 | **更新 Agent:`coco-codex`**。使用者確認 transport merge 並要求 project 新 snapshot／PR／tag，後續移除 transport legacy、提交 I15/I18 與 T12/export，最後同步 framework README。遠端核對 transport v0.1.2 主線 cc7cec2 與原 tag 8f56a55 tree 相同；project master 已有 30afa23，可正常提出 PR，不需 bootstrap 空主線。先規劃 v0.1.1 snapshot 並保留 v0.1.0，再按順序實作 T14；legacy 移除尚不在已合併 v0.1.2，禁止誤記已解決依賴。Framework v0.5.0 的 UBSan／T0 硬性 legacy target 需相容修正，必須維持 fail-closed、先 merge 新框架再正式導入，不改既有發布 tree／tag；TSan runtime 仍未完成。 |
 | v0.8.29 | **更新 Agent:`coco-codex`**。T13 完成：使用者同意以 merge 2ee952c 納入原 docs 歷史，保留完整 bundle／Git metadata（含 stash reflog）及原 staged workspace。五包乾淨 checkout 實際 pull 後固定已合併 release SHA，原 tags/tree 核對不移動；根目錄 framework v0.5.0，既有五個 workspace gitlinks 保留。rv2_project v0.1.0 功能 commit 3ba0b4d，官方 Docker nested 四步、lint、乾淨 clone unit 131／integration 9 與 CMake/XML 全 PASS；sanitizers N/A，容器已卸載。首輪缺 rebase 前 tags／一份 Ruff 格式失敗與修正 log 皆保留；後續文件完成紀錄不冒充重跑 ROS。T12.2、待 merge／未提交補強及 legacy dirty dependency 缺口不勾消；新 project 空 remote 尚無 PR base，本次提交留本地、不自建空主線／release tag。 |
 | v0.8.28 | **更新 Agent:`coco-codex`**。依使用者要求先同步搬遷後文件，修復本地測試報告連結，新增 rv2_project v0.1.0 ROS2 snapshot 規格與 T13。2026-09-13 查核：framework v0.5.0、interfaces/mocks/integration v0.1.1 已合併；transport PR #8 尚 open，主線仍 v0.1.1，不能記成 v0.1.2 已合併。新增總驗收缺口清單，區分已提交 release、未提交 I15/I18/T12 補強與 dirty legacy dependency，歷史 PASS 不升格為 clean snapshot 驗收。Snapshot 僅固定版本組合，非自動 release／總驗收認證；先規範再實作，原 Git 歷史與 staged submodules 保留。 |
 | v0.8.27 | **更新 Agent:`coco-codex`**。依使用者要求補 interfaces 正常 0.1.0→0.1.1 獨立版本 commit/tag 5bef9c0、更新 PR #1，取代暫不定版例外。Mocks/integration 格式提交 5af25b8／46e7116 與正式 lint 均 PASS；使用者另批准 I10 程序退出補強，獨立 commit 07d8a13，不混入 I15/I18。兩包完整四步串行皆 exit 0：mocks unit 3／integration 20、UBSan 3；integration 一般 21／I10 ASan 2 cases PASS，TSan SKIP。驗證後獨立 v0.1.1 commit/tag mocks 37d6e7f、integration 5adecce，提出 PR #4／#3。保留所有原來源 bytes、I15/I18 未提交差異與 dirty rv2_interfaces 依賴限制；metadata-only release 後未重跑 ROS，docs 無 remote 留本地。 |
@@ -58,6 +59,8 @@
 **Interfaces 進版裁決(v0.8.27)**：使用者現在要求補進版 commit；先前「維持 0.1.0、不附 release/tag」為歷史，不再適用本輪 PR。按現有 package.xml 0.1.0 正常升至 0.1.1，以獨立版本 commit/tag 記錄；不新增空 commit 或改寫原始版本歷史。
 
 **文件位置與 snapshot(v0.8.28)**：本文件及設計稿改由 `rv2_project/docs/r1_design_docs/` 維護，適用範圍新增 `rv2_project`。其 `package.xml` 首版為 0.1.0，代表專案版本組合，不必是 release。新增 snapshot 依 §2.1.1 記錄各包已合併 release 的版本、精確 SHA 與原 tag tree 對照；不得從 dirty checkout 推定已發布內容，亦不自動更新 consumers 內部 framework pin。首次建立 ROS manifest 的 0.1.0 為使用者指定的 snapshot 初始值，不製造 0.0.0→0.1.0 回退／空 release commit；未要求 release 時不打 release tag。後續 snapshot 版本變更仍須獨立 commit，既有 snapshot 不覆寫。R1 packages 原獨立 release 規範不變。
+
+**本輪裁決(v0.8.30)**：使用者要求先更新 project snapshot、進版並直接提出 PR／release tag；再將 transport `r1` 分支改為 R1-only、取消 legacy package 依賴，保留凍結 `master`，接續既有 I15/I18、T12/export 補強，最後同步 framework README。不得因移除 legacy 把 `rv2_interfaces::r1` C++ namespace 一併改名，或刪減 R1 113 cases。新的 framework 相容性變更也須獨立版本 PR，經使用者 merge 後才更新 consumer pins；開發 override 證據須明示不等於正式導入。Snapshot 升版先提交資料／gitlinks／文件，PR-ready 的候選只改 package.xml version，驗證後獨立提交該版本欄位並附同名 annotated tag，不混入其他來源，也不覆寫舊 snapshot。
 
 ### 1.1 清單結構
 
@@ -222,12 +225,12 @@ graph LR
 
 | 項目 | 狀態／完成條件 |
 |---|---|
-| transport PR #8 | 遠端仍 open；主線 `r1` 為 a0338d1／v0.1.1，v0.1.2 候選 8f56a55 尚未合併。須使用者 merge 後本地 pull，重新記錄改寫後 SHA；目前 snapshot 不提前採用。 |
+| transport PR #8／新 snapshot | 已確認合併，主線 `r1` 為 cc7cec22043f80b1a4179ae9acdf5a0e6b98105e／v0.1.2；與原 tag 8f56a55 tree 相同。T14.1 實際 pull 後納入 project v0.1.1，其他四包仍為最新已合併版本，不混入後續尚未合併 PR。 |
 | transport T12/export 補強 | 原開發 checkout 的 CMakeLists.txt 與四個 test 檔仍未提交：r1_interfaces export、L14/S11/K12/K15/K16/M22。尚不屬 v0.1.2 PR，後續需獨立提交、驗證、release。 |
 | integration I15/I18 | 兩份啟動 ready／identity／code=10 retry gate 修正仍未提交，須另行驗證、提交及定版；I10 shutdown 補強已隨 v0.1.1 合併，不重複列為欠項。 |
-| legacy rv2_interfaces | 乾淨 8a9d995 缺既有 transport 測試需要的 controller_name、controller_priority_type、CONTROL_SIGNAL_PRIORITY_REMOTE_CUSTOM。前輪 PASS 使用唯讀 dirty dependency；其尚有其他使用者變更，不自行全部提交或宣稱乾淨可重現。project 尚未固定此 legacy dependency，須另外收斂可用版本。 |
+| legacy rv2_interfaces | 使用者本輪要求由 transport 移除舊 rv2 library／keyboard／tests／launch/config 與依賴，以 R1-only 解決來源缺口；目前已合併 v0.1.2 尚未做。同步刪 integration 的多餘 local dependency，保留 master／舊 tags／legacy repo 原使用者改動。須乾淨 R1 dependencies 實測才可結案。 |
 | T12.2 | TSan runtime 平台阻塞；須在支援環境由兩個 owner 明確 `-t on` 通過。預設 SKIP/77 不算完成，不更動主機安全設定。 |
-| framework README | 原 tag-only／禁止 rebase 說明仍待另行同步為 §1.4 現行規範；不可因此修改已固定的 release tree。 |
+| framework README／R1-only 相容性 | 原 tag-only／禁止 rebase 說明最後同步為 §1.4；另需修 UBSan 精確 target 集合與 T0 對 legacy 的假設，維持新舊 owner 相容與 R1 最低案例 gate，不跳過失敗或修改已固定的 release tree。正式導入仍待使用者 merge。 |
 | 總驗收 | T13 snapshot metadata 自身驗收已完成，不代表整體 R1 完成。上述已提交版本、依賴缺口與待發布補強收斂後，才對精確 snapshot 串行跑各 owner 四步／lint 及另列的打包、TSan；現有 dirty PASS 不代替最終驗收。 |
 
 §12 的 HA、async API、adapter、durable fencing 等未來政策不自動擴張成此次 v0.1.0 的必做實作。
@@ -748,6 +751,17 @@ v0.8.16 當時尚未完成：framework merge 後的 consumer pin/新 nested 入�
 初輪 unit 131／integration 6 PASS、3 FAIL 是 project 舊 checkout 未取得 rebase 前 release tags，`pull` 不保證帶回不在新主線祖先中的 tags；補取明確原 tag 並核對 tree 後通過，不移動 tag、不更改固定 release。README 取得／升版流程已補明確取 tags，測試自身仍唯讀、不連網。文件歷史 merge／backup 與三份既有 tracked dirty diff SHA256 均另經獨立複核。完整 [T13 測試報告與逐案例 logs](../../test_env/jazzy/project-snapshot.sPrkip/T13-report.md)。
 
 **驗證**：`rv2_project` 的 ROS discovery、安裝 metadata 與兩類測試一致性；錯誤版本／SHA／path／缺失 component 必須失敗。整個 R1 workspace 的依賴 closure 與 runtime 驗收仍受 §2.1 缺口限制，另行安排。
+
+---
+
+## T14 總驗收前版本與來源收斂(v0.8.30)
+
+- [ ] **T14.1** Project 五個 workspace submodules 與 root framework 實際 pull／核對最新已合併版本；新增 v0.1.1 snapshot，保留 v0.1.0 bytes。獨立版本 commit／annotated tag、lint、unit/integration／安裝一致性通過後提出 PR 至 project master。
+- [ ] **T14.2** Transport 只在新 `r1` 工作分支移除 legacy 程式、測試、keyboard launch/config 與 rv2_interfaces／rclcpp_components 依賴，保留 R1 namespace／API／113 cases 與 master。既有 T12/export 補強另外 commit；乾淨依賴 normal 113／ASan 64／UBSan 72 及 Debian downstream export 證據齊備才定版／PR。若 framework 相容版本尚未 merge，先保留開發預驗證與待導入狀態。
+- [ ] **T14.3** Integration 以 merged clean base 原樣移入 I15/I18 ready／identity／code=10 補強，保留原場景本體與 timeout；移除僅供 legacy transport 的 local dependency。Focused I15/I18＋normal 21／I10 ASan 2、lint 及 clean-dependency 證據通過後獨立進版／PR。
+- [ ] **T14.4** 最後更新 framework README 的 rebase／pull／merged SHA／舊 tag tree 規範；必要的 R1-only 相容性實作另外 commit，不降低原 sanitizer gate。Docker 正反例／既有回歸與 lint 過後独立版本 commit／tag／PR；等待使用者 merge 才導入。
+
+TSan 預設 off 不變；T12.2 仍須支援平台實測。T14 不自行合併任何 PR；project 後續版本只能納入已合併、重新 pull 核對的 releases。
 
 ---
 

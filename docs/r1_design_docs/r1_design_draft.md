@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.28)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.29)
 
-> 狀態:正式版(v1.3.28);rv2_project v0.1.0 snapshot metadata 驗收完成。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.29);合併後 snapshot 更新、R1-only transport 與待提交補強。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.29 | **更新 Agent:`coco-codex`**。依使用者本輪裁決新增 project v0.1.1 snapshot 規劃：transport 已合併 v0.1.2 cc7cec2，其他四包版本不變，舊 v0.1.0 完整保留。Transport legacy 移除與取消 rv2_interfaces 依賴是接下來的變更，尚不屬 v0.1.2；規範保留 master、R1 namespace/API/案例，接續 I15/I18 與 T12/export 再獨立定版。Framework README 最後同步；UBSan/T0 的 legacy target 假設需相容修正、先 framework PR/merge 才正式導入，不能假通過。工作與證據追蹤見 TODO v0.8.30 T14。 |
 | v1.3.28 | **更新 Agent:`coco-codex`**。rv2_project v0.1.0 實作與 T13 metadata 驗收完成：五個 component 先本地 pull 再固定合併主線／release tree，文件以 merge 保留原歷史並備份完整 metadata。官方 Docker nested 四步、lint 及 clean clone 的 unit 131／integration 9、CMake/XML／安裝與 discovery 全過，sanitizers N/A、容器已清除；功能 commit 3ba0b4d，逐項原始成功／失敗 logs 見 TODO v0.8.29。補 release tag 取得步驟，不移動舊 tag；版本組合仍 development／acceptance_pending，T12.2、transport PR #8、未提交補強與 legacy 依賴缺口不變。新 project 的遠端仍空，本次本地提交不建空 PR base 或 release tag。 |
 | v1.3.27 | **更新 Agent:`coco-codex`**。文件正式搬至 rv2_project/docs/r1_design_docs；新增 §2.1.1 專案 ROS2 snapshot package 與 v0.1.0 對照。核對已合併 framework v0.5.0、interfaces/mocks/integration v0.1.1，transport PR #8 仍 open、主線 v0.1.1。同步 interfaces 已進版現況，區分 I15/I18／T12 未提交補強、TSan 平台阻塞與 dirty rv2_interfaces 依賴限制；不把舊 PASS 宣稱為 clean snapshot 總驗收。初版 snapshot 不等於 release／完整依賴 closure；使用者同意文件及原歷史納入 project 並保留備份，實作／驗證追蹤見 TODO v0.8.28 T13。 |
 | v1.3.26 | **更新 Agent:`coco-codex`**。Interfaces 補正常 v0.1.1 獨立版本 commit/tag 5bef9c0 更新 PR #1，取代原例外。Mocks/integration 格式提交及 lint PASS；使用者追加核准 I10 程序退出補強另做 07d8a13，不混入 I15/I18。兩包 nested 完整四步串行通過：mocks 23／UBSan 3、integration 21／ASan 2 cases；TSan SKIP不算 T12.2。獨立 v0.1.1 metadata-only commits/tags mocks 37d6e7f／integration 5adecce，提出 PR #4／#3；依賴來源、原始 logs／SHA 保留及 dirty rv2_interfaces 重現限制見 TODO v0.8.27。 |
@@ -298,6 +299,7 @@ rv2_project/
 | rv2_project | r1_test_framework | r1_interfaces | r1_test_mocks | r1_integration_tests | rv2_control_signal_transport | 狀態 |
 |---|---|---|---|---|---|---|
 | v0.1.0 | v0.5.0 | v0.1.1 | v0.1.1 | v0.1.1 | v0.1.1 | development／acceptance_pending |
+| v0.1.1 | v0.5.0 | v0.1.1 | v0.1.1 | v0.1.1 | v0.1.2 | development／acceptance_pending；T14.1 待驗證 |
 
 | Component | 固定合併主線 SHA | 原 release tag commit(歷史保留) |
 |---|---|---|
@@ -307,6 +309,18 @@ rv2_project/
 | r1_integration_tests | 43f8bd5e38f71643072ea4312495bdd1b7c9c324 | 5adecce4986b386ee4f75ff1f2b02fa273d1fd41 |
 | rv2_control_signal_transport | a0338d1a393e8ad90debdae7d5c6e1015ee3ce03 | 51913eec4e0d40ea7bac83e0ed0d30a60c7bba23 |
 
+v0.1.1 的 component 對照(其餘四包同 v0.1.0，皆為本輪最新已合併 release)：
+
+| Component | 固定合併主線 SHA | 原 release tag commit(歷史保留) |
+|---|---|---|
+| r1_test_framework | f5952a8d2d1f834870283494e22173d8511e5d69 | af386dee731ec13448a344e9f64ed0978bd6cfba |
+| r1_interfaces | c25fcc18f15d957cf15247dc39486aec4f3aad9d | 5bef9c013128ee31005a4967d6d0229e428426b1 |
+| r1_test_mocks | de847ef4c86a40e6e4c057e58ff856157f79c8fc | 37d6e7f3f9c27427b03d55807e02bfcb12b3372c |
+| r1_integration_tests | 43f8bd5e38f71643072ea4312495bdd1b7c9c324 | 5adecce4986b386ee4f75ff1f2b02fa273d1fd41 |
+| rv2_control_signal_transport | cc7cec22043f80b1a4179ae9acdf5a0e6b98105e | 8f56a551368a4c8838420f0efde1313e0efcabd8 |
+
+v0.1.1 只導入已合併 transport v0.1.2（framework pin 更新至 v0.5.0）；legacy 依賴、I15/I18、T12/export 尚待下列 R1-only 收斂，不把後續未合併 releases 提前寫入 snapshot。使用者本輪要求 project 正式 PR／tag，於候選驗證後獨立進版 package.xml；專案 release tag 不等於所有 runtime／TSan 均已驗收。
+
 每個 manifest 使用 `schema_version: 1`、`project_version`、`status`、`acceptance`、非空 `limitations` 與 `components`。每個 component 必須記錄 `path`、`repository`、`branch`、`version`(無 v 前綴)、`commit`(40 字元)、`tag_commit` 與 `tree`。五個名稱及相對路徑一一對應既有 gitlinks；project 根目錄 framework 與 workspace framework 固定同 commit。Release tag 為 `v<version>`，rebase 前後 commit 可不同，但 tree 必須相同且記錄原 tag，不移動既有 tag。`package.xml` 選擇 `snapshots/v<version>.json`；版本對照表隨新 snapshot 追加。未來 schema 改動須明確進版，不默默接受缺欄位或錯誤版本。
 
 先在乾淨 checkout 實際 `git pull --ff-only origin <主線>`，再 `git fetch origin tag vX.Y.Z` 取得欲固定的原 release tag，比對 HEAD／遠端與 release tree，再固定精確 SHA。rebase 後舊 tag 可能不在主線祖先中，不能假定 pull 已帶回所有 tags。主線取純 R1 `master`、transport `r1`，不能使用 transport legacy `master`。一般 clone 以 `git submodule update --init --recursive` 還原固定 SHA；取得 tags 的準備命令見 README，不使用 --remote／--force。測試自身不連網、不追 HEAD，也不改寫 component 內部已發布的 framework pin。
@@ -314,6 +328,14 @@ rv2_project/
 CMake 安裝 `snapshots/`、README 與文件至 `share/rv2_project/`，由 ament index／`ros2 pkg prefix --share rv2_project` 找到；不安裝 child Git working trees、test_env 或 Git metadata。`test/unit/` 檢查 manifest 合約與失敗案例，`test/integration/` 檢查 package.xml、gitlinks、checkout/tag tree、文件對照及實際安裝內容；pytest/CTest 分為兩個 labels，保存逐案例 log。Project 的 nested 四步入口測試本 metadata package；sanitizers 不適用，不等於重跑所有 child packages。要列出 nested ROS packages 時顯式指定 `colcon list --paths . ros2_ws/src/*`；framework 的 COLCON_IGNORE 仍有效。
 
 **v0.1.0 已知限制**：transport PR #8/v0.1.2 仍未合併，故其 v0.1.1 內部 framework 仍為 v0.2.1 `3dd3c27`，其餘三個 ROS consumers 為 v0.5.0 `f5952a8`。I15/I18 與 transport T12/export 補強尚未提交；legacy `rv2_interfaces` 不在目前 project gitlinks 中，乾淨 8a9d995 缺測試需要欄位，歷史成功用了 dirty dependency。TSan runtime 仍阻塞。此 snapshot 固定 R1 release 組合，**不是完整可重現的依賴 closure 或整體驗收證明**；待 TODO §2.1 缺口收斂後新增 snapshot 驗收，不回寫原版。
+
+### 2.1.2 R1-only transport 收斂(v1.3.29)
+
+本輪使用者要求從 transport 新 `r1` 工作分支移除 legacy library、keyboard component、舊 headers/src、21 個 legacy tests、keyboard launch/config 與 rv2_interfaces／rclcpp_components 依賴。凍結 `master` 與所有舊 commits/tags 保留；`Doxyfile` 不隨 package 進版修改。R1 實作仍使用 `rv2_interfaces::r1` C++ namespace，它不等於 ROS package 依賴，不能在本輪任意改名。
+
+保留 R1 113 個功能案例（unit 72／integration 41）及 labels，既有 L14/S11/K12/K15/K16/M22 fixture 補強與 r1_interfaces export 另做可審查 commit。Integration 的 I15/I18 原 timeout／場景斷言保持，移入已批准的 code=10 ready／matching identity gate 與 teardown logs；其 test_depends.repos 同步移除僅供 legacy transport 的 rv2_interfaces。兩包以乾淨 R1 dependencies 驗證，不再借用 dirty legacy repo。
+
+Framework v0.5.0 的 UBSan 精確集合仍含 legacy test_control_signal_transport，T0 也有舊 filter；相容更新須分辨新舊 owners，保留所有 R1 最低 target/case requirements 與缺失／空／skipped／diagnostic 的失敗行為。不得靠改名、假 target、複製測項或取消 UBSan 解決。Framework 版本 PR 經使用者 merge／本地 pull 後才能更新 consumer 正式 pin；之前僅可使用明確 owner override 作開發預驗證。README 的舊禁止 rebase／tag-only 規範最後同步，同一發布範圍仍以獨立版本 commit／tag 完成。
 
 ### 2.2 元件關係圖
 
