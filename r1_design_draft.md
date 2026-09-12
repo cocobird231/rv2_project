@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.18)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.19)
 
-> 狀態:正式版(v1.3.18);T12 nested 串行驗收，TSan 平台阻塞。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.19);TSan 平台查證與明確開關。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.19 | **更新 Agent:`coco-codex`**。依使用者要求查詢 TSan 啟動錯誤並規範明確開關：本機 mmap_rnd_bits=32 與既有 GCC/Clang 啟動失敗符合 LLVM 的 ASLR/shadow mapping 問題；不變更 host/容器安全設定。§11.4 新增兩個框架入口的 `-t on\|off`，預設 on、明確 off 才 SKIP/exit 77，不啟動/清除容器或產物、不影響其他 sanitizer、不將 SKIP 當驗收。文件先行；framework 開發與 consumer pin/release 分離，T12.2 保持未完成。 |
 | v1.3.18 | **更新 Agent:`coco-codex`**。四個 consumer 已固定 framework v0.3.0 原 tag `67755d6`。nested 串行 ASan/LSan、UBSan、Debian 乾淨安裝與完整 t2–t11 鏈通過，TODO T12.1/T12.3/T12.4/T12.5 完成。M22 補真實 calc/activity/seal 兩種交錯、恰一次 terminal 順序與 ASan 五次複測；原 K11 平行 DDS 干擾以串行原樣重驗解決，不改 runtime/門檻。TSan 兩 owner 的 clean probe 仍平台阻塞，T12.2 未完成，未附 consumer release/PR。package 版本、rv2 Doxyfile 與既有差異保留；完整測試/產物證據及案例數區分見 TODO T12。 |
 | v1.3.17 | **更新 Agent:`coco-codex`**。修正 Docker default bridge 自帶測試隔離的錯誤假設：正式 UBSan K11 與 t5 的同名 topic 重疊 265 ms，獨立容器探針證實 domain 0 跨 bridge 容器通訊。§11.3 明訂未驗證獨立 domain/network 的 ROS jobs 全域串行，不能只靠 container 名稱或 host env 宣稱隔離。本輪不改 K11 斷言/runtime 或已發布 framework，保留失敗證據後串行重驗；M22 已以 test-only forwarding probe 補兩種真實交錯，ASan 矩陣及五次複測通過，TSan runtime 仍阻塞。 |
 | v1.3.16 | **更新 Agent:`coco-codex`**。framework PR #7 已經使用者合併，主線 `6a04bfe` 與原 v0.3.0 tag `67755d6` tree 相同；consumer 依序固定原版本 commit，不移動 tag。正式驗收改用各 owner nested 入口，補 M22 calc→activity→commit 決定性交錯並重跑 sanitizer/打包/t2–t11 鏈；沿用 fail-closed、Docker 隔離與 PR-ready 獨立版本 commit 規則。前輪結果保留為歷史預驗證，不提前宣稱新矩陣完成，不改 rv2 Doxyfile 或自動放寬 TSan 安全設定。 |
@@ -1674,6 +1675,12 @@ H1–H6 驗證 Handle 的單一操作、型別、引用與並發安全合約，�
 每種 sanitizer 以獨立乾淨 build/install/log 建置與連結，啟用符號與 frame pointers；ASan 保持 leak detection，UBSan diagnostic 不得 recover 成成功，TSan report 非零。instrument 範圍須列明：R1 C++ 實作、測試與 I10 場景 nodes 必須 instrument；distro 預編譯 ROS/DDS、純介面生成物與 Python orchestration 不宣稱涵蓋。I10 需驗證子程序正常 shutdown/exit，並使 sanitizer diagnostic 造成失敗，不可只依 Python 場景 assertions。
 
 runtime 不支援、空選集、diagnostics 或異常退出均回非零，保留原始 log 並記為失敗或平台阻塞；不自動更改 host sysctl、安全設定、關閉 leak detection 或加入 suppressions。第三方 diagnostics 亦不得隱藏，需依證據另行處理。每個 run 在 owner `test_env/<distro>/` 下隔離並保留選集、工具/來源 metadata 與結果，不覆蓋既有一般或其他 sanitizer 產物。
+
+依使用者裁決新增顯式 TSan 開關：`todo_check.sh <item> -t on|off` 與 `test_run.sh ... -t on|off` 預設 on；只有已選 TSan（`t12-tsan`／`-a tsan`）且明確 off 時略過，stdout 明示 SKIP、owner/原因與未執行，回 exit 77。在 Docker 存取、產物建立/清除與 cleanup trap 前返回，既有 log 不覆蓋，不改跑無 instrumentation 的一般測試。非法值/缺值/多餘參數、無效 owner/item 與互斥參數不能被 off 掩蓋；其他 sanitizer、一般測試與打包仍原樣執行。排程可明確記錄 77 為 SKIP 後繼續其他 jobs，但不可吞掉其他非零，也不能據此勾選 T12.2。on 仍須完整 runtime preflight/build/results gate，runtime 失敗不自動降級成 SKIP。
+
+平台查證：官方 Jazzy 容器讀得 Linux 6.17.0-35、mmap_rnd_bits=32、ASLR=2；既有 GCC mapping failure 與 Clang 18 personality CHECK 符合 [LLVM #78351](https://github.com/llvm/llvm-project/pull/78351) 的固定 shadow mapping／高 entropy 限制及 re-exec 恢復機制；[Docker seccomp](https://docs.docker.com/engine/security/seccomp/) 對 personality 有參數限制。這是證據支持的診斷，未更改安全設定作 A/B 實驗。新 probe 仍 BLOCKED，不宣稱工具鏈更新已解決。開關不是 runtime 修復，正式導入仍須先 framework PR/merge 再 pin；詳細 log 與開關驗證見 TODO v0.8.20。
+
+開關進度(v1.3.19)：framework 的 7 組 CLI integration 與 21 sanitizer unit、既有 owner/selector/sanitizer integration、完整 lint 均於官方 Docker 通過；兩個真實 owner／兩入口共 4 次 SKIP 返回 77。功能 commit `0f11798` 與獨立 v0.4.0 版本 commit/tag `dbef3f40818081756d147ce7b064b4e6e7917916` 已提出 [PR #8](https://github.com/cocobird231/r1_test_framework/pull/8)，待使用者 merge。consumer pins 仍為 v0.3.0 原 tag `67755d6`；開關自測不代替 TSan runtime 矩陣，T12.2 仍未完成，既有 package 版本/來源差異與 rv2 Doxyfile 不動。
 
 導入仍依 §11.5.4：framework 開發 checkout 可透過明確 owner override 預驗證，但不修改 consumer nested checkout/gitlink，不視為正式驗收；framework PR 先經使用者 merge，再 pin 原 tag 的版本 commit，從 owner nested 入口重驗後才勾選 TODO。
 
