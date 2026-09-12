@@ -4,9 +4,9 @@ RV2 專案總目錄與 ROS2 `ament_cmake` snapshot metadata package。首版 **v
 記錄各 R1 package 的已合併 release 版本、精確 commit 及原 tag 的相同 tree。
 它沒有 runtime node，也不是所有 child packages 的自動 build／測試代理。
 
-目前 snapshot 為 development，總驗收 pending。Transport PR #8/v0.1.2 尚未合併，
-因此固定已合併的 v0.1.1；I15/I18、T12 補強與 legacy `rv2_interfaces` 乾淨依賴
-仍待收斂。完整限制見 [snapshot](snapshots/v0.1.0.json) 與
+目前 snapshot 為 development，總驗收 pending。Transport PR #8/v0.1.2 已合併，
+新版 snapshot 納入它；I15/I18、T12 補強與 legacy `rv2_interfaces` 依賴移除
+仍待後續 PR 收斂。完整限制見 [snapshots](snapshots/) 中 package.xml 所選版本與
 [TODO](docs/r1_design_docs/r1_todo.md) §2.1。不要把 metadata 測試通過當成整體 R1 驗收。
 
 ## 取得與布局
@@ -78,8 +78,9 @@ PR 前獨立執行 lint：
    或僅沿用合併前 SHA；不能移動既有 tag。
 2. 新建 `snapshots/vX.Y.Z.json`，記錄五個 releases 的版本／SHA／tree／來源及限制；
    同步 gitlinks 與設計稿對照表。已提交 snapshot 不覆寫，版本相同亦不能偷換 commit。
-3. 通過 lint／測試後，以獨立版本 commit 更新 `package.xml`。Snapshot 不必是 release，
-   不自動附 release tag；真正 release 時另遵循 TODO §1.4。
+3. 資料／gitlinks／文件先提交，再以只有 `package.xml` version 差異的 PR-ready 候選執行
+   lint／測試；通過後以獨立版本 commit 保存該欄位變更。Snapshot 不必是 release，
+   不自動附 release tag；使用者要求 release 時依 TODO §1.4 建立同名 annotated tag。
 
 首次 v0.1.0 是使用者指定的初始化版本，不製造版本回退或空版本 commit。
 未來 snapshot 可以繼續是 development／pending；通過總驗收後如何擴充認證狀態，須先更新

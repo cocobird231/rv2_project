@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "project_version": "0.1.1",
+  "status": "development",
+  "acceptance": "pending",
+  "limitations": [
+    "Transport PR #8 (v0.1.2) is merged and all four ROS consumers now pin framework v0.5.0. Legacy code removal is a subsequent, not yet merged change.",
+    "I15/I18 startup fixes and transport T12/export improvements remain uncommitted outside this snapshot.",
+    "Legacy rv2_interfaces is not pinned here. Its clean commit 8a9d995778b4f57d0f713715c7994c18c572e46d lacks fields needed by legacy tests; earlier successful runs used a read-only dirty dependency.",
+    "T12.2 TSan remains platform-blocked. Default SKIP is not a passing race test.",
+    "This is an R1 release combination, not a complete dependency closure or full-project acceptance certificate."
+  ],
+  "components": {
+    "r1_test_framework": {
+      "path": "ros2_ws/src/r1_test_framework",
+      "repository": "git@github.com:cocobird231/r1_test_framework.git",
+      "branch": "master",
+      "version": "0.5.0",
+      "commit": "f5952a8d2d1f834870283494e22173d8511e5d69",
+      "tag_commit": "af386dee731ec13448a344e9f64ed0978bd6cfba",
+      "tree": "0f074e3833c274318cef7d695009c3c924928612"
+    },
+    "r1_interfaces": {
+      "path": "ros2_ws/src/r1_interfaces",
+      "repository": "git@github.com:cocobird231/r1_interfaces.git",
+      "branch": "master",
+      "version": "0.1.1",
+      "commit": "c25fcc18f15d957cf15247dc39486aec4f3aad9d",
+      "tag_commit": "5bef9c013128ee31005a4967d6d0229e428426b1",
+      "tree": "a27245f1063f7905c2da60e7e621c4a81e0df488"
+    },
+    "r1_test_mocks": {
+      "path": "ros2_ws/src/r1_test_mocks",
+      "repository": "git@github.com:cocobird231/r1_test_mocks.git",
+      "branch": "master",
+      "version": "0.1.1",
+      "commit": "de847ef4c86a40e6e4c057e58ff856157f79c8fc",
+      "tag_commit": "37d6e7f3f9c27427b03d55807e02bfcb12b3372c",
+      "tree": "f0fab21c80085f40e1f83e8f00c107691de827ff"
+    },
+    "r1_integration_tests": {
+      "path": "ros2_ws/src/r1_integration_tests",
+      "repository": "git@github.com:cocobird231/r1_integration_tests.git",
+      "branch": "master",
+      "version": "0.1.1",
+      "commit": "43f8bd5e38f71643072ea4312495bdd1b7c9c324",
+      "tag_commit": "5adecce4986b386ee4f75ff1f2b02fa273d1fd41",
+      "tree": "7f4576c1dbbb5be71266d017c63590e4d434785d"
+    },
+    "rv2_control_signal_transport": {
+      "path": "ros2_ws/src/rv2_control_signal_transport",
+      "repository": "git@github.com:cocobird231/rv2_control_signal_transport.git",
+      "branch": "r1",
+      "version": "0.1.2",
+      "commit": "cc7cec22043f80b1a4179ae9acdf5a0e6b98105e",
+      "tag_commit": "8f56a551368a4c8838420f0efde1313e0efcabd8",
+      "tree": "e301246fd1f5a86327a333fb648418da7f3ecd0b"
+    }
+  }
+}
