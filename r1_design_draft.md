@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.22)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.23)
 
-> 狀態:正式版(v1.3.22);I15 啟動診斷與修正。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.23);framework v0.5.0 submodule 導入。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.23 | **更新 Agent:`coco-codex`**。framework PR #8 已由使用者合併；主線 f5952a8 與既有 v0.5.0 tag af386de tree 一致，consumer pin 使用原版本 tag commit，不重打 tag。依使用者要求更新本 workspace 四個頂層 R1 consumers，僅修改 gitlink／nested checkout，保留既有來源差異與 package 版本；另行初始化中的 rv2_project 不動。本輪為依賴 pin 導入及入口查核，不替代完整 ROS／sanitizer 驗收；TSan 預設 SKIP，T12.2 不勾選。 |
 | v1.3.22 | **更新 Agent:`coco-codex`**。使用者授權 I15 診斷／修正。合法 code=10 必須等實際 ready pair，不能當成功略過；受控 RED/GREEN 證實並修正初始註冊等待缺口，維持同世代存活、seal 後零資料／Handle DISCONNECTED、恰一次 terminal、late STATE 不復活等原測試本體，不改 runtime／timeout。無參數完整流程一般 21、I10 ASan 2 cases 與 lint PASS，TSan 明示 SKIP。framework 附獨立 v0.5.0 commit/tag af386de，PR #8 可供審核；仍需使用者 merge 後才更新 consumer pins，I18 修正與既有差異保留。 |
 | v1.3.21 | **更新 Agent:`coco-codex`**。使用者授權 I18 診斷/修正；補充合法初始 code=10 背景成功路徑，啟動 service discovery 與同步初始註冊不應取代最終 REGISTERED/ACTIVE 與 identity 證據。受控 RED/GREEN 與修正後完整流程的 I18 通過，保留原失敗；service response failure、matching UNREGISTER、恰一次 G+1 mandatory retry/late-event 去重要求不變。完整流程另有 I15 初始註冊等待失敗，framework 定版繼續暫緩。r1_interfaces API 權限已恢復並提出 PR #1，維持 0.1.0 且本次不新增 release commit/tag；保留 framework 先 merge 再更新 consumer pins 的順序。 |
 | v1.3.20 | **更新 Agent:`coco-codex`**。依使用者新裁決改 TSan 預設 off，無參數 test_run 在既有 Docker 環境完成全部一般 unit/integration 與適用 sanitizer；build/deps/run/clean 各自負責一個生命週期步驟，lint 保持獨立。沿用精確案例/非空/diagnostic gate，以新持久 run-root 掛載隔離 profile 產物並記錄各階段狀態。單項參數與 TODO 除錯入口保留，SKIP 不滿足 T12.2；不改來源安全設定/已發布 tag，不提前更新 consumer pin。r1_interfaces SSH remote 已確認可用，但 API 404 仍阻塞 PR；使用者已裁決保持 package.xml 0.1.0，本次不新增 release commit/tag。 |
@@ -1687,7 +1688,7 @@ runtime 不支援、空選集、diagnostics 或異常退出均回非零，保留
 
 使用者完整測試入口為 `test_build.sh`（建立 Docker/唯讀來源與產物 mounts）→`test_deps.sh`（安裝依賴）→無參數 `test_run.sh`（同一容器內串行一般完整 CTest、適用 ASan/UBSan、可選 TSan）→`test_clean.sh`（卸載、預設保留產物）。不讓使用者逐一呼叫 TODO item，也不從 test_run 重新建容器或安裝依賴。新增持久 run-root mount，每次新 run/profile 的 build/install/log 與摘要 log 都保留；mount 必須實查、來源保持唯讀，既有 checker 的 workspace 參數與精確矩陣重用。
 
-transport sanitizer 矩陣為 ASan/UBSan/可選 TSan；mocks 僅 UBSan；integration 僅 I10 ASan/可選 TSan；interfaces 無測試與 sanitizer，不新增空案例。完整流程逐階段記 PASS/FAIL/SKIP/N/A/NOT_RUN 與 exit/log；任何已啟用階段失敗仍非零。指定 `-p/-s/-f/-c/-j/-k/-a` 時保留特殊單項模式，只有 `-d/-t` 時仍為完整流程。lint 仍以 `test_lint.sh` 獨立 Docker 執行；既有 ament 非重複檢查保留在一般 CTest，不把 clang-format/Ruff/ShellCheck 說成涵蓋全部 CMake/XML 檢查。Debian 打包/乾淨安裝暫仍獨立 test_packages，是否預設包含待使用者回覆。framework PR 先經使用者 merge，再更新所有 consumers；r1_interfaces SSH/API 權限已恢復，已提出 [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1)，現有 pin 仍為已合併 v0.3.0。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag，不再等待首次空版本 commit 例外（TODO §1.4）。I15/I18 啟動修正後，最新完整流程的一般 21 cases 與 I10 ASan 2 cases 均通過；framework v0.5.0 獨立版本 commit/tag `af386dee731ec13448a344e9f64ed0978bd6cfba` 已推送，PR #8 可供審核。先前失敗保留為歷史，不提前更新 consumers；詳見 TODO T12 v0.8.23 證據。TSan SKIP 不等於 T12.2 通過。
+transport sanitizer 矩陣為 ASan/UBSan/可選 TSan；mocks 僅 UBSan；integration 僅 I10 ASan/可選 TSan；interfaces 無測試與 sanitizer，不新增空案例。完整流程逐階段記 PASS/FAIL/SKIP/N/A/NOT_RUN 與 exit/log；任何已啟用階段失敗仍非零。指定 `-p/-s/-f/-c/-j/-k/-a` 時保留特殊單項模式，只有 `-d/-t` 時仍為完整流程。lint 仍以 `test_lint.sh` 獨立 Docker 執行；既有 ament 非重複檢查保留在一般 CTest，不把 clang-format/Ruff/ShellCheck 說成涵蓋全部 CMake/XML 檢查。Debian 打包/乾淨安裝暫仍獨立 test_packages，是否預設包含待使用者回覆。framework PR 先經使用者 merge，再更新所有 consumers；r1_interfaces SSH/API 權限已恢復，已提出 [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1)，現有 pin 已更新為 v0.5.0 原 tag。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag，不再等待首次空版本 commit 例外（TODO §1.4）。I15/I18 啟動修正後，最新完整流程的一般 21 cases 與 I10 ASan 2 cases 均通過；framework v0.5.0 獨立版本 commit/tag `af386dee731ec13448a344e9f64ed0978bd6cfba` 已合併，四個頂層 consumers 已以 gitlink-only commits 導入；詳見 TODO T12 v0.8.24。先前失敗與 override 全套通過皆保留為歷史，本輪僅重驗 nested 入口與掛載，不等於 ROS 全套正式重驗。TSan SKIP 不等於 T12.2 通過。
 
 平台查證：官方 Jazzy 容器讀得 Linux 6.17.0-35、mmap_rnd_bits=32、ASLR=2；既有 GCC mapping failure 與 Clang 18 personality CHECK 符合 [LLVM #78351](https://github.com/llvm/llvm-project/pull/78351) 的固定 shadow mapping／高 entropy 限制及 re-exec 恢復機制；[Docker seccomp](https://docs.docker.com/engine/security/seccomp/) 對 personality 有參數限制。這是證據支持的診斷，未更改安全設定作 A/B 實驗。新 probe 仍 BLOCKED，不宣稱工具鏈更新已解決。開關不是 runtime 修復，正式導入仍須先 framework PR/merge 再 pin；詳細 log 與開關驗證見 TODO v0.8.20。
 
@@ -1794,6 +1795,8 @@ T12 打包驗收使用新的官方 base container，僅帶入產出 deb 與驗�
 v1.3.15 開發實證：三個 local deb 的內外版本/檔名、安裝與 discovery 正確，但第一次乾淨下游 `find_package(rv2_control_signal_transport)` 因缺少 `r1_interfaces` 匯出而失敗。修正 transport 的 `ament_export_dependencies`，不在 smoke 額外手動 find 介面 package；一般全量回歸再次通過，重新建置三包並於另一全新官方容器驗證下游 compile/link 與 master 正常啟停通過。這是一行 package export 修正，不改 runtime、package.xml 或 rv2 Doxyfile；consumer 更動保留待 framework 合併後接續正式導入。
 
 #### 11.5.4 一般化約定
+
+v1.3.23 導入紀錄：framework PR #8 已合併；主線 release `f5952a8d2d1f834870283494e22173d8511e5d69` 與原 v0.5.0 tag `af386dee731ec13448a344e9f64ed0978bd6cfba` 的 tree 同為 `0f074e3833c274318cef7d695009c3c924928612`。四個頂層 consumers（transport、interfaces、mocks、integration）固定後者，保留原 tag SHA。回退方式為另建 gitlink commit 指回先前已合併 v0.3.0 `67755d663922c55a15d50933ef083def4d92c964` 並執行 submodule update，不需刪除來源或移動 tag；本輪不執行回退。package 版本只在各自 PR-ready 時獨立提交；本輪不混入既有未提交來源差異。先前「待 framework merge」為歷史狀態，導入查核與剩餘驗收見 TODO T12 v0.8.24。
 
 v1.3.16 導入紀錄：framework PR #7 已合併。主線 release `6a04bfe913f9a07862020e270d263b8db7d6f08f` 與既有 v0.3.0 tag commit `67755d663922c55a15d50933ef083def4d92c964` tree 一致，consumer 固定後者；先前 v1.3.15「待合併」說明為歷史狀態。接續各 package nested 正式查核，結果與阻塞依 TODO T12 逐項紀錄，不能沿用 sibling override 預驗證替代。
 

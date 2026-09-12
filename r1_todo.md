@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.23)
+# R1 實作 TODO List(v0.8.24)
 
-> 依據:`r1_design_draft.md` v1.3.22(正式版;I15 啟動診斷與修正)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.23(正式版;framework v0.5.0 submodule 導入)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.24 | **更新 Agent:`coco-codex`**。使用者已合併 framework PR #8 並要求更新各 package submodule；主線 release f5952a8 與原 v0.5.0 tag af386de tree 一致，固定原 tag、不移動既有標記。先修文件，再更新四個頂層 consumers 的 gitlink／nested checkout，以獨立 dependency commits 與 Docker 入口查核驗證；不混入 I15/I18、格式化或 export 等既有來源差異，不改 package 版本、rv2 Doxyfile 或另行初始化中的 rv2_project staged workspace。不把本輪 pin／入口驗證說成完整 ROS／sanitizer 重驗，T12.2 仍未完成。 |
 | v0.8.23 | **更新 Agent:`coco-codex`**。使用者授權診斷並修正 I15；受控初始 client-not-ready 證實合法 code=10 背景成功被舊 code=0-only 等待漏接，修正前 FAIL／修正後 PASS。僅修啟動 identity／ready／retry callback gate 與 teardown log，保留原 activity/seal/terminal/亂序控制本體、runtime、timeout 及既有 I18/其他 diff。無參數完整流程一般 21/21、I10 ASan 2/2 PASS、整體 exit 0，UBSan N/A、TSan SKIP/77；owner/framework lint PASS。framework 附獨立 v0.5.0 commit/tag af386de，PR #8 恢復可審核；仍待使用者 merge 才更新 consumer pins，T12.2 不勾選。 |
 | v0.8.22 | **更新 Agent:`coco-codex`**。使用者授權診斷並修正 I18；先保留原失敗與未重現診斷，收集實際註冊回覆/重試事件，區分啟動註冊與 service-response-failure 驗收。受控初始 client-not-ready 證實 code=10 後可合法背景成功；修正前 FAIL、修正後 PASS，保持 ACTIVE、matching identity、G/G+1、恰一次 terminal/mandatory retry 及 late-event 去重，不放寬 timeout 或修改 runtime。完整 test_run 的 I18 PASS，但另有 I15 初始註冊等待 FAIL，整體 20/21；lint 與另跑 I10 ASan 2 cases PASS。PR #8 改為 I15 validation pending，下一版定版繼續暫緩。r1_interfaces API 權限已恢復並提出 PR #1，維持 0.1.0、不新增 release commit/tag；新版 framework merge 前不更新 consumer gitlink。 |
 | v0.8.21 | **更新 Agent:`coco-codex`**。依使用者新裁決，TSan 預設 off，正式使用流程為 test_build→test_deps→無參數 test_run→test_clean，lint 維持獨立入口。test_run 在既有依賴就緒容器內串行完成一般 unit/integration 與 owner 適用 sanitizer，按 run/profile 隔離並保留產物、逐項狀態/log；特殊 selectors 保留單項模式，不呼叫 todo_check 重建環境或重裝依賴。關閉的 TSan 明示 SKIP，不能掩蓋其他失敗或勾選 T12.2；保留既有 ament 非重複檢查。r1_interfaces SSH remote 已確認可用，但 API 404 仍阻塞 PR；使用者已裁決保持 package.xml 0.1.0，本次不新增 release commit/tag。framework PR 經使用者 merge 後才更新所有 consumer pins/PR，既有 v0.4.0 tag 不移動。 |
@@ -582,6 +583,10 @@ graph LR
 
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
+
+**Framework v0.5.0 submodule 導入(v0.8.24)**：framework PR #8 已由使用者 merge；主線 release `f5952a8d2d1f834870283494e22173d8511e5d69` 與原 tag `af386dee731ec13448a344e9f64ed0978bd6cfba` tree 一致，四個頂層 consumers 固定原 tag，未移動既有標記。gitlink-only commits：interfaces `85b893b`、mocks `edc7dda`、integration `257413f`、transport `77b77dc`，皆在 `coco-codex/framework-v0.5.0` 分支，僅一個 mode 160000 路徑變更。先前 I15/I18、格式化、export／其他測試差異仍保留未提交，排除 gitlink 的 diff SHA256 前後相同；package.xml、rv2 Doxyfile 與獨立初始化中的 rv2_project staged workspace 不變。
+
+四個 nested checkout 的 owner/version/shell syntax、既有 toggle 8＋full-run orchestration 6 回歸各自 PASS（共 4×14 次，不是 56 個不同功能案例）；官方 Jazzy Docker 內 CLI 查核，TSan off 明示 SKIP/77。另逐 package 執行 nested test_build，真實驗證來源/framework RO 與 owner/run-root 掛載，再以 nested test_clean 卸載本輪容器，logs 保留。本輪未執行 test_deps／ROS build/test、sanitizer 矩陣、package lint 或打包，不冒稱 nested 全套正式驗收或勾選 T12.2。依本次 submodule 更新範圍，四個 commits 僅留本地，未 push／新開 PR／附 package release commit/tag；後續 PR-ready 才依 §1.4 獨立定版，interfaces 仍維持 0.1.0 例外裁決。完整紀錄：[submodule-update-report.md](../test_env/jazzy/framework-v0.5.0.yKzumw/submodule-update-report.md)。
 
 **I15 診斷與修正(v0.8.23)**：依使用者授權先修文件，再僅修改 `r1_integration_tests/test/integration/scenario_i15_terminal_activity_race.py` 的 `_register_and_activate` 與 teardown 診斷。精確接受初始 OK(0)／RETRY_SCHEDULED(10)，source 須 REGISTERED＋endpoint 且有完整 identity triple，10 另須 matching-generation RETRY_SUCCEEDED(kind=7)；sink readiness 與兩側 ACTIVE gates 均匹配同 identity。整段 `test_activity_and_seal_outcomes` 本體完全不變，保留 120 Hz、1.2 秒 disconnect、activity/seal、terminal 恰一次、seal 後零資料與亂序 master 控制斷言；獨立 review 0 must-fix，nested lint C/C++ 4／Python 20 PASS。
 
