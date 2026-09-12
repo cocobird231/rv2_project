@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.22)
+# R1 實作 TODO List(v0.8.23)
 
-> 依據:`r1_design_draft.md` v1.3.21(正式版;I18 啟動診斷與 interfaces 權限恢復)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.22(正式版;I15 啟動診斷與修正)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.23 | **更新 Agent:`coco-codex`**。使用者授權診斷並修正 I15；受控初始 client-not-ready 證實合法 code=10 背景成功被舊 code=0-only 等待漏接，修正前 FAIL／修正後 PASS。僅修啟動 identity／ready／retry callback gate 與 teardown log，保留原 activity/seal/terminal/亂序控制本體、runtime、timeout 及既有 I18/其他 diff。無參數完整流程一般 21/21、I10 ASan 2/2 PASS、整體 exit 0，UBSan N/A、TSan SKIP/77；owner/framework lint PASS。framework 附獨立 v0.5.0 commit/tag af386de，PR #8 恢復可審核；仍待使用者 merge 才更新 consumer pins，T12.2 不勾選。 |
 | v0.8.22 | **更新 Agent:`coco-codex`**。使用者授權診斷並修正 I18；先保留原失敗與未重現診斷，收集實際註冊回覆/重試事件，區分啟動註冊與 service-response-failure 驗收。受控初始 client-not-ready 證實 code=10 後可合法背景成功；修正前 FAIL、修正後 PASS，保持 ACTIVE、matching identity、G/G+1、恰一次 terminal/mandatory retry 及 late-event 去重，不放寬 timeout 或修改 runtime。完整 test_run 的 I18 PASS，但另有 I15 初始註冊等待 FAIL，整體 20/21；lint 與另跑 I10 ASan 2 cases PASS。PR #8 改為 I15 validation pending，下一版定版繼續暫緩。r1_interfaces API 權限已恢復並提出 PR #1，維持 0.1.0、不新增 release commit/tag；新版 framework merge 前不更新 consumer gitlink。 |
 | v0.8.21 | **更新 Agent:`coco-codex`**。依使用者新裁決，TSan 預設 off，正式使用流程為 test_build→test_deps→無參數 test_run→test_clean，lint 維持獨立入口。test_run 在既有依賴就緒容器內串行完成一般 unit/integration 與 owner 適用 sanitizer，按 run/profile 隔離並保留產物、逐項狀態/log；特殊 selectors 保留單項模式，不呼叫 todo_check 重建環境或重裝依賴。關閉的 TSan 明示 SKIP，不能掩蓋其他失敗或勾選 T12.2；保留既有 ament 非重複檢查。r1_interfaces SSH remote 已確認可用，但 API 404 仍阻塞 PR；使用者已裁決保持 package.xml 0.1.0，本次不新增 release commit/tag。framework PR 經使用者 merge 後才更新所有 consumer pins/PR，既有 v0.4.0 tag 不移動。 |
 | v0.8.20 | **更新 Agent:`coco-codex`**。依使用者要求查詢 TSan unexpected memory mapping；官方 LLVM 說明高 ASLR entropy 與固定 shadow mapping 衝突，本機官方容器確認 mmap_rnd_bits=32，GCC clean probe 仍阻塞，既有 Clang 18 證據亦有 personality CHECK。維持主機/容器安全設定，先規範 framework 的顯式 `-t on\|off`（預設 on）：off 只略過選定 TSan job，stdout 明示 SKIP、exit 77，不建立/清除容器或產物、不降級成未 instrument 的測試。非法參數仍失敗、其他測試不受影響、T12.2 不勾選。框架先開發驗證，consumer gitlink/版本與 rv2 Doxyfile 不動；實測結果見 T12 補充。 |
@@ -581,6 +582,16 @@ graph LR
 
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
+
+**I15 診斷與修正(v0.8.23)**：依使用者授權先修文件，再僅修改 `r1_integration_tests/test/integration/scenario_i15_terminal_activity_race.py` 的 `_register_and_activate` 與 teardown 診斷。精確接受初始 OK(0)／RETRY_SCHEDULED(10)，source 須 REGISTERED＋endpoint 且有完整 identity triple，10 另須 matching-generation RETRY_SUCCEEDED(kind=7)；sink readiness 與兩側 ACTIVE gates 均匹配同 identity。整段 `test_activity_and_seal_outcomes` 本體完全不變，保留 120 Hz、1.2 秒 disconnect、activity/seal、terminal 恰一次、seal 後零資料與亂序 master 控制斷言；獨立 review 0 must-fix，nested lint C/C++ 4／Python 20 PASS。
+
+一般舊測試 baseline 1/1 PASS，並未自然重現；app-only 首次 manage-client-not-ready 受控注入，舊測試實際收到 code=10→kind=7／G=2 成功，卻只等 code=0 而不送資料，最終 FAIL。相同 C++ binaries／注入條件下，修正後 c15_live 以 G=2 建立、其餘兩 channel 以同步 code=0 建立，完整 I15 PASS。原歷史失敗未記事件，不能以受控結果宣稱其確切根因已證實；baseline、RED、GREEN 與 teardown 事件均留獨立原始 log。
+
+本輪無參數完整入口 `full-20260912T155344.yOpCrA` 已 PASS／exit 0：同一 invocation/container 完成一般 19 targets／21 cases（包含 I15/I18）及 I10 ASan 2 cases；ASan clean/defect controls、instrumentation、精確 results／子程序 shutdown gates 均通過，UBSan N/A、TSan SKIP/77。framework lint C/C++ 3／Python 10／Shell 14 PASS。build/deps 成功、test_clean 已卸載本輪容器，所有 logs/build/install 保留。逐項 XML 計數另存 `normal-cases.tsv`，不把 colcon 40 records 說成 40 個獨立案例，也不將 SKIP 算入 T12.2。
+
+接續原暫緩 PR：framework 功能仍為 `976007b`，驗證後以僅改 VERSION／README 安裝 tag 的獨立版本 commit/tag **v0.5.0 `af386dee731ec13448a344e9f64ed0978bd6cfba`** 定版，Docker metadata 查核 PASS，branch/tag 已 atomic push，[PR #8](https://github.com/cocobird231/r1_test_framework/pull/8) 已移除 DO NOT MERGE、供使用者審核。既有 v0.4.0 `dbef3f4` 不移動；使用者 merge 後才更新所有 consumer gitlink，不能 squash/rebase 已標記版本。其他 owner 沿用 v0.8.21 同功能來源的成功證據，本輪未重跑三包或獨立 Debian 打包；interfaces PR #1 仍保持 0.1.0、不新增 release commit/tag。
+
+其他既有 diff（包含 I18 修正）排除 I15 後 SHA256 保持 `ad4423b55de164a1edd90980f0089506bc63eb94c5aa01d93d2c2f53edbea69d`；I15 測試本體前後 SHA256 亦相同，I15/I18 修正保留未提交差異，待 consumer 後續一併處理。不改 runtime、consumer 版本/gitlink 或 rv2 Doxyfile。逐項證據：[I15-fix-report.md](../../r1_integration_tests/test_env/jazzy/I15-fix.A7ODxO/I15-fix-report.md)。
 
 **I18 診斷與修正(v0.8.22)**：依使用者授權先修訂文件，再只修改 `r1_integration_tests/test/integration/scenario_i18_service_response_failure.py` 的啟動前置條件與診斷輸出。初始同步回覆精確接受 SUCCESS(0)／RETRY_SCHEDULED(10)，但兩者皆須唯一 wire REGISTER 與 matching identity、endpoint ready 的 REGISTERED status；10 另須 matching-generation RETRY_SUCCEEDED(kind=7)。ACTIVE、response-failure epoch、matching UNREGISTER、恰一次 terminal／G+1 mandatory retry、late-event 去重斷言均保留，未修改 runtime 或 timeout。teardown 輸出既有 timed events 與最後 status，使往後失敗留下實際事件。
 
