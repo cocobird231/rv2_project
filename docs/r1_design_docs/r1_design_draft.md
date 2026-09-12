@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.30)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.31)
 
-> 狀態:正式版(v1.3.30);project v0.1.1 候選驗證完成。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.31);project v0.1.1／framework v0.5.1 已提出 PR，R1-only 正式導入待 merge。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.31 | **更新 Agent:`coco-codex`**。Project v0.1.1 獨立版本 commit/tag fddcccd、乾淨 release 四步驗證與 PR #1 完成；9 份 .gitmodules／14 個 gitlinks 均為最新已合併版本。Transport legacy 移除與 T12/export、integration I15/I18 與依賴清理已分開提交到乾淨工作分支，保留原 dirty bytes、R1 production/API、Doxyfile 與 master。Framework v0.5.1 相容性／README／版本分開 commits，84 Python 回歸與四套 shell、lint 全過，已推 PR #9/tag a058498。明訂 UBSan discovery 與五個 R1 floor，保留 mixed legacy 必測；consumer 正式導入待使用者 merge／重新 pull，不將開發 override 或 TSan SKIP 視為總驗收。原始 logs 與進度見 TODO v0.8.32 T14。 |
 | v1.3.30 | **更新 Agent:`coco-codex`**。Project v0.1.1 候選已驗證；五個 components 實際 pull／核對最新已合併 release 與原 tag tree，transport 為 cc7cec2/v0.1.2，四個 ROS consumers 均 pin framework f5952a8/v0.5.0。保留 v0.1.0 原 snapshot bytes；官方 nested build/deps/run 與 lint 通過，unit131/integration9、CMake/XML 全 PASS，sanitizers N/A。獨立版本 commit／tag／PR 準備中；不把後續 R1-only、I15/I18、T12/export 或 TSan 缺口記為已解決，完整 log 見 TODO v0.8.31。 |
 | v1.3.29 | **更新 Agent:`coco-codex`**。依使用者本輪裁決新增 project v0.1.1 snapshot 規劃：transport 已合併 v0.1.2 cc7cec2，其他四包版本不變，舊 v0.1.0 完整保留。Transport legacy 移除與取消 rv2_interfaces 依賴是接下來的變更，尚不屬 v0.1.2；規範保留 master、R1 namespace/API/案例，接續 I15/I18 與 T12/export 再獨立定版。Framework README 最後同步；UBSan/T0 的 legacy target 假設需相容修正、先 framework PR/merge 才正式導入，不能假通過。工作與證據追蹤見 TODO v0.8.30 T14。 |
 | v1.3.28 | **更新 Agent:`coco-codex`**。rv2_project v0.1.0 實作與 T13 metadata 驗收完成：五個 component 先本地 pull 再固定合併主線／release tree，文件以 merge 保留原歷史並備份完整 metadata。官方 Docker nested 四步、lint 及 clean clone 的 unit 131／integration 9、CMake/XML／安裝與 discovery 全過，sanitizers N/A、容器已清除；功能 commit 3ba0b4d，逐項原始成功／失敗 logs 見 TODO v0.8.29。補 release tag 取得步驟，不移動舊 tag；版本組合仍 development／acceptance_pending，T12.2、transport PR #8、未提交補強與 legacy 依賴缺口不變。新 project 的遠端仍空，本次本地提交不建空 PR base 或 release tag。 |
@@ -337,6 +338,8 @@ CMake 安裝 `snapshots/`、README 與文件至 `share/rv2_project/`，由 ament
 保留 R1 113 個功能案例（unit 72／integration 41）及 labels，既有 L14/S11/K12/K15/K16/M22 fixture 補強與 r1_interfaces export 另做可審查 commit。Integration 的 I15/I18 原 timeout／場景斷言保持，移入已批准的 code=10 ready／matching identity gate 與 teardown logs；其 test_depends.repos 同步移除僅供 legacy transport 的 rv2_interfaces。兩包以乾淨 R1 dependencies 驗證，不再借用 dirty legacy repo。
 
 Framework v0.5.0 的 UBSan 精確集合仍含 legacy test_control_signal_transport，T0 也有舊 filter；相容更新須分辨新舊 owners，保留所有 R1 最低 target/case requirements 與缺失／空／skipped／diagnostic 的失敗行為。不得靠改名、假 target、複製測項或取消 UBSan 解決。Framework 版本 PR 經使用者 merge／本地 pull 後才能更新 consumer 正式 pin；之前僅可使用明確 owner override 作開發預驗證。README 的舊禁止 rebase／tag-only 規範最後同步，同一發布範圍仍以獨立版本 commit／tag 完成。
+
+v1.3.31 實作紀錄：上述變更已分開提交，project v0.1.1 與 framework v0.5.1 已有獨立版本 commit/tag／PR。Framework #9 以未篩選的 `ctest --show-only=json-v1` 取得所有精確 unit targets，實跑集合必須完全相同；五個 R1 targets／72 個必需案例不可省略。若 legacy target 仍註冊或有 build artifact，必須為 unit 並實跑；mixed 版目前 84 cases。新增 unit 也不能漏跑，discovery 失敗、malformed／重複名稱、空／skipped／diagnostic 皆 fail-closed。T0 的 `^test_` 選集含全部 R1 或 mixed 功能 targets，排除 ament lint。新 PR 合併前所有既有 framework gitlinks 保留已合併 v0.5.0；詳細來源／正式驗收限制以 TODO T14 為準，原 snapshots 不回寫。
 
 ### 2.2 元件關係圖
 
