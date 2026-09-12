@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.24)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.25)
 
-> 狀態:正式版(v1.3.24);rebase 後 pull／pin 規範更正。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.25);consumer PR 前已提交版本驗證。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.25 | **更新 Agent:`coco-codex`**。使用者授權 consumer PR；framework 本地 master 再 pull 確認 f5952a8，依已提交 checkout 驗證。Interfaces 完整入口 PASS／lint SKIP，更新 PR #1，維持 0.1.0 例外；transport lint／normal 134／ASan 64／UBSan 84 PASS 後，獨立 v0.1.2 commit/tag 8f56a55 並提出 PR #8。乾淨 rv2_interfaces 的 legacy 欄位缺漏造成首次編譯失敗，成功重驗使用現有唯讀 dirty dependency，兩者及重現限制均揭露。mocks/integration lint FAIL 11／26，保留未提交修正待裁決，不 release／PR；來源、Doxyfile 不動，docs 無 remote 留本地，詳細證據見 TODO v0.8.26。 |
 | v1.3.24 | **更新 Agent:`coco-codex`**。依使用者新裁決改用 rebase 合併後版本 SHA：先本地 master git pull，再比對本地／遠端主線、VERSION 與 release tree，才更新各 package submodule，不繼續固定合併前 tag。此次 pull 後主線為 f5952a8，與舊 af386de tree 一致；四個頂層 consumers 改 pin f5952a8，既有 tag／來源／版本保留。舊 pin／禁止 rebase 段落僅為歷史，不改寫過往紀錄；新規範優先於已發布 README，後者另行同步。 |
 | v1.3.23 | **更新 Agent:`coco-codex`**。framework PR #8 已由使用者合併；主線 f5952a8 與既有 v0.5.0 tag af386de tree 一致，consumer pin 使用原版本 tag commit，不重打 tag。依使用者要求更新本 workspace 四個頂層 R1 consumers，僅修改 gitlink／nested checkout，保留既有來源差異與 package 版本；另行初始化中的 rv2_project 不動。本輪為依賴 pin 導入及入口查核，不替代完整 ROS／sanitizer 驗收；TSan 預設 SKIP，T12.2 不勾選。 |
 | v1.3.22 | **更新 Agent:`coco-codex`**。使用者授權 I15 診斷／修正。合法 code=10 必須等實際 ready pair，不能當成功略過；受控 RED/GREEN 證實並修正初始註冊等待缺口，維持同世代存活、seal 後零資料／Handle DISCONNECTED、恰一次 terminal、late STATE 不復活等原測試本體，不改 runtime／timeout。無參數完整流程一般 21、I10 ASan 2 cases 與 lint PASS，TSan 明示 SKIP。framework 附獨立 v0.5.0 commit/tag af386de，PR #8 可供審核；仍需使用者 merge 後才更新 consumer pins，I18 修正與既有差異保留。 |
@@ -1796,6 +1797,8 @@ T12 打包驗收使用新的官方 base container，僅帶入產出 deb 與驗�
 v1.3.15 開發實證：三個 local deb 的內外版本/檔名、安裝與 discovery 正確，但第一次乾淨下游 `find_package(rv2_control_signal_transport)` 因缺少 `r1_interfaces` 匯出而失敗。修正 transport 的 `ament_export_dependencies`，不在 smoke 額外手動 find 介面 package；一般全量回歸再次通過，重新建置三包並於另一全新官方容器驗證下游 compile/link 與 master 正常啟停通過。這是一行 package export 修正，不改 runtime、package.xml 或 rv2 Doxyfile；consumer 更動保留待 framework 合併後接續正式導入。
 
 #### 11.5.4 一般化約定
+
+v1.3.25 PR 結果：interfaces [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1) 更新至 f5952a8 pin，維持 package 0.1.0；transport [PR #8](https://github.com/cocobird231/rv2_control_signal_transport/pull/8) 同 pin、獨立版本 commit/tag v0.1.2 `8f56a55`。已提交來源的 lint／適用完整入口結果與 rv2_interfaces dirty dependency 重現限制均明示；mocks/integration 因 committed lint 未過而暫緩，不自行提交工作樹修正。詳見 TODO T12 v0.8.26；以下版本段落為先前導入／規範紀錄。
 
 v1.3.24 最新裁決取代以下歷史的原 tag pin／禁止 rebase 規則：使用者採 rebase，先在乾淨的 framework master 執行 `git pull --ff-only origin master`，核對本地 HEAD、origin/master 與即時遠端 SHA、已合併 PR、VERSION／release 內容，再固定主線版本 SHA。此次已確認 `f5952a8d2d1f834870283494e22173d8511e5d69`；舊 tag `af386dee731ec13448a344e9f64ed0978bd6cfba` 的 tree 與其相同，但不再是本輪 consumer pin。既有 tag 不重打；已發布 framework README 的相反文字不優先於使用者新裁決，後續另行同步。四個頂層 consumers 的更正與證據見 TODO T12 v0.8.25；下列版本段落保留為歷史。
 

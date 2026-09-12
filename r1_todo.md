@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.25)
+# R1 實作 TODO List(v0.8.26)
 
-> 依據:`r1_design_draft.md` v1.3.24(正式版;rebase 後 pull／pin 規範更正)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.25(正式版;consumer PR 前已提交版本驗證)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.26 | **更新 Agent:`coco-codex`**。使用者要求推送 consumer PR；framework 本地 master 再次 pull 確認仍為 f5952a8。以已提交 checkout 驗證：interfaces build/full entry PASS、lint SKIP，更新 PR #1，維持 0.1.0 不定版例外；transport lint、一般 134／ASan 64／UBSan 84 PASS，獨立 v0.1.2 commit/tag 8f56a55 後提出 PR #8。乾淨 rv2_interfaces 缺 legacy 欄位的編譯失敗保留；成功結果依賴現有唯讀 dirty workspace dependency，PR 明示非全 clean-dependency 重現。mocks/integration committed lint 分別 FAIL 11／26，不 push／release／PR，待允許另行提交格式化修正；既有 source 差異與 Doxyfile 不動，docs 無 remote 仍留本地。 |
 | v0.8.25 | **更新 Agent:`coco-codex`**。依使用者最新裁決取代「固定合併前原 tag SHA」：使用者採 rebase 合併，必須先在本地 framework master 執行 git pull，再核對實際合併後版本 SHA 才更新 consumers。已 git pull --ff-only origin master，確認本地／origin/master／即時遠端皆為 v0.5.0 release f5952a8；四個頂層 consumers 改 pin 該主線 SHA，不再 pin af386de。兩者 tree 相同、原 tag 不移動，保留前輪 commits／歷史及既有來源差異；本次只補 gitlink 修正提交、不升 package 版本／push／PR。 |
 | v0.8.24 | **更新 Agent:`coco-codex`**。使用者已合併 framework PR #8 並要求更新各 package submodule；主線 release f5952a8 與原 v0.5.0 tag af386de tree 一致，固定原 tag、不移動既有標記。先修文件，再更新四個頂層 consumers 的 gitlink／nested checkout，以獨立 dependency commits 與 Docker 入口查核驗證；不混入 I15/I18、格式化或 export 等既有來源差異，不改 package 版本、rv2 Doxyfile 或另行初始化中的 rv2_project staged workspace。不把本輪 pin／入口驗證說成完整 ROS／sanitizer 重驗，T12.2 仍未完成。 |
 | v0.8.23 | **更新 Agent:`coco-codex`**。使用者授權診斷並修正 I15；受控初始 client-not-ready 證實合法 code=10 背景成功被舊 code=0-only 等待漏接，修正前 FAIL／修正後 PASS。僅修啟動 identity／ready／retry callback gate 與 teardown log，保留原 activity/seal/terminal/亂序控制本體、runtime、timeout 及既有 I18/其他 diff。無參數完整流程一般 21/21、I10 ASan 2/2 PASS、整體 exit 0，UBSan N/A、TSan SKIP/77；owner/framework lint PASS。framework 附獨立 v0.5.0 commit/tag af386de，PR #8 恢復可審核；仍待使用者 merge 才更新 consumer pins，T12.2 不勾選。 |
@@ -586,6 +587,12 @@ graph LR
 
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
+
+**Consumer PR 前驗證(v0.8.26)**：使用者授權推 PR。各 package 在自身 `test_env/jazzy/framework-pr.*/checkout` 建立已提交 HEAD 的乾淨副本，submodule 由 GitHub 還原 f5952a8；使用該副本自身的 `./r1_test_framework/test_lint.sh`，不納入主工作樹未提交的格式化、I15/I18 或 T12 差異。interfaces build→deps→無參數 run→clean 全 exit 0，0 executable tests、sanitizer N/A，lint 無支援來源 SKIP；已更新 [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1) 至 4f6176b，base master，保持 0.1.0、不附 release/tag。
+
+Transport committed-source lint PASS(C/C++ 32／Python 3／Shell 1)，一般 unit 84／integration 50、ASan 64、UBSan 84 cases PASS，TSan off SKIP/77；正常 colcon 197 records 非唯一案例數，cppcheck 原生 32 SKIP。四步完整流程全 exit 0 且確認容器卸載。首次乾淨 rv2_interfaces HEAD 8a9d995 因缺 legacy controller 欄位而 normal build exit 2；其失敗 logs 保留，重驗使用原 workspace 唯讀 dirty dependency，transport／framework 仍為乾淨精確 HEAD。故不能宣稱全依賴 committed HEAD 可重現，PR 已明示限制。通過後獨立 `chore(release): v0.1.2` commit/tag `8f56a551368a4c8838420f0efde1313e0efcabd8` 僅改 package.xml；相對實測來源無其他差異，Docker metadata PASS，branch/tag atomic push，已提出 [PR #8](https://github.com/cocobird231/rv2_control_signal_transport/pull/8)(base r1)。rv2 Doxyfile 與既有來源 diff 不動。
+
+Mocks／integration 已提交版本 lint 分別 FAIL 11／26，未 push／附版本／PR；已詢問是否允許另外提交既有格式化修正，尚待回覆，不以 draft 規避 gate 或自行納入 I15/I18/T12。docs 無 remote 保留本地。完整結果、各原始 log 與依賴限制：[consumer-pr-report.md](../test_env/jazzy/framework-pr.U074Jd/consumer-pr-report.md)。T12.2 保持未完成，未自行 merge。
 
 **Rebase 後 pull／pin 更正(v0.8.25)**：依使用者最新裁決，在乾淨 standalone framework 本地 master 實際執行 `git pull --ff-only origin master`，exit 0，確認 HEAD／origin/master／即時遠端主線均為已合併 v0.5.0 `f5952a8d2d1f834870283494e22173d8511e5d69`。與原 tag `af386de` tree 一致，但 consumer 不再沿用合併前 SHA；tag 不移動。四個 nested repos 各自 fetch、核對並 checkout 此 SHA，新增 gitlink-only 更正 commits：interfaces `4f6176b`、mocks `0cbf2c8`、integration `61332a0`、transport `f4ff1e0`，皆在 `coco-codex/framework-rebase-pin`。前輪 commits／分支保留，不 amend；既有來源 diff SHA256、package 版本、rv2 Doxyfile 與獨立 rv2_project 不變，未 push／新 PR／release。
 
