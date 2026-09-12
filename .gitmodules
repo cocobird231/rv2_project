@@ -13,3 +13,6 @@
 [submodule "ros2_ws/src/r1_interfaces"]
 	path = ros2_ws/src/r1_interfaces
 	url = git@github.com:cocobird231/r1_interfaces.git
+[submodule "r1_test_framework"]
+	path = r1_test_framework
+	url = git@github.com:cocobird231/r1_test_framework.git
