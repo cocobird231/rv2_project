@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.18)
+# R1 實作 TODO List(v0.8.19)
 
-> 依據:`r1_design_draft.md` v1.3.17(正式版;T12 DDS 隔離查證與串行驗收)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.18(正式版;T12 nested 串行驗收，TSan 平台阻塞)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.19 | **更新 Agent:`coco-codex`**。四個 consumer 已以 gitlink-only commits 固定 framework v0.3.0 原 tag `67755d6`。正式 nested 串行 ASan 64/I10 2、UBSan 84/mocks 3、三包 Debian 乾淨安裝與 t2–t11 完整鏈全過，勾選 T12.1/T12.3/T12.4/T12.5；transport 完整 134 cases、T11 21 cases，cppcheck 原生 32 SKIP 如實保留。M22 真實 calc/activity/seal 交錯與 terminal 順序已補，ASan 額外五次亦通過。原 K11 平行 DDS 干擾失敗與探針證據保留，原斷言/runtime 不改。T12.2 仍因兩 owner 的 TSan clean probe unexpected memory mapping 阻塞；不附 package release/PR、不提前改版本，來源與既有格式化 diff 保留，容器已卸載，詳見 T12 正式結果。 |
 | v0.8.18 | **更新 Agent:`coco-codex`**。正式 nested 測試發現 UBSan K11 的 23.94 Hz 失敗；XML 證實與 t5 同 topic 重疊 265 ms，兩個官方容器通訊探針證實 default bridge/domain 0 可互通。修正 §1.2 執行規範：不同 container 名稱不代表 DDS 隔離，未明確驗證隔離的 ROS 測試須全域串行；停止把本輪平行排程當作隔離實證，保留失敗 log，待既有流程完成後串行重驗 UBSan 與完整鏈。不放寬 K11 門檻、不修改 runtime、不改已發布 framework。M22 兩種交錯已補且 ASan 及額外五次皆過；最終逐項結果仍待收斂。 |
 | v0.8.17 | **更新 Agent:`coco-codex`**。使用者已合併 framework PR #7，主線 release `6a04bfe` 與原 v0.3.0 tag `67755d6` tree 完全相同；保留原 tag，四個 consumer 將固定其版本 commit。接續從各自 nested 入口正式執行 sanitizer、打包與 t2–t11 連續鏈，補 M22 決定性交錯測試；既有 diff 保留、package 版本待 PR-ready 才獨立提交、rv2 Doxyfile 不動。TSan 仍需重新證實 runtime 能力，不放寬安全設定、不將平台阻塞當 PASS；尚未取得本輪結果的小項不勾選。 |
 | v0.8.16 | **更新 Agent:`coco-codex`**。T12 framework 已實作隔離 run/mount 防護、sanitizer compile/link/ELF 與精確案例 gate、Debian dependency closure/內部版本與乾淨安裝；21 sanitizer unit、16 packaging unit、入口/CMake/既有回歸與全檔 lint PASS。開發預驗證：transport ASan 64、UBSan 84、mocks UBSan 3、I10 ASan 2 cases PASS；transport 完整 134 功能案例 PASS(cppcheck 原生 32 SKIP)。乾淨安裝先抓出缺少 r1_interfaces export，補 CMake 一行後三包 deb/discovery/downstream compile/link/node 啟停 PASS。L14/S11/K12/K15/K16 與 I10 shutdown 測試補強保留 consumer diff；M22 決定性交錯證據仍待補。GCC/Clang TSan 均遇平台啟動阻塞，不放寬安全設定、不勾選正式 T12。framework 功能 commits 後獨立 v0.3.0 commit/tag `67755d6`，已提出 [PR #7](https://github.com/cocobird231/r1_test_framework/pull/7)；待使用者 merge 才可更新 consumer pin，版本/Doxyfile/gitlink 未動。 |
@@ -553,6 +554,22 @@ graph LR
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
 
+**目前狀態(v0.8.19，2026-09-12)**：framework v0.3.0 已導入四個 consumers，gitlink-only commits 為 transport `3026c16`、mocks `1bf34dc`、integration `703d29c`、interfaces `2c7815b`，皆固定 `67755d663922c55a15d50933ef083def4d92c964`。以下 v0.8.15–v0.8.18 為開發／查證歷史，目前只剩 T12.2 平台驗收阻塞。
+
+| 正式 nested 查核 | 結果 | 證據（transport 的 test_env/jazzy/T12-formal.6Gxz4q/） |
+|---|---|---|
+| T12.1 ASan/LSan | transport 3 targets／64 cases、integration I10 1 target／2 cases PASS，無 report，三個 C++ 子程序正常退出 | `serial-t12-asan.log`、`integration-asan.log` |
+| T12.2 TSan | **BLOCKED**：transport/integration clean runtime probe 均 unexpected memory mapping、exit 1，未執行 race 矩陣 | `transport-tsan.log`、`integration-tsan.log` |
+| M22 補強 | test-only forwarding probe 驅動真實 Manager/Source；activity 先勝出取消註銷、seal 先勝出拒絕 hot path、callback→shutdown→removal 各一次。一般/ASan 過，ASan 額外五次皆過；不是 TSan 替代 | `m22-asan-repeat.log`、`serial-t7.log` |
+| T12.3 UBSan | transport 6 unit targets／84 cases、mocks 1 target／3 cases PASS，無 report | `serial-t12-ubsan.log`、`mocks-ubsan.log` |
+| T12.4 Debian | 三包內外版本/檔名、dpkg、discovery、公開 headers 下游 compile/link 與 master 啟停 PASS；全量回歸 134 cases（unit 84、integration 50）PASS，cppcheck 原生 32 SKIP | `serial-t12-pkg.log`；產物 `../runs/t12-pkg-20260912T110017-823051/packages/run.LfZk0s/` |
+| T12.5 完整鏈 | t2→t3→t4→t5→t6→t7→t8→t9→t10→t11 連續且串行，十項 exit 0；mocks 23 cases、T11 19 targets／21 cases PASS | `serial.log`、`serial-exit-codes.tsv`、`serial-t2.log` 至 `serial-t11.log` |
+| 各 owner lint／interfaces | transport/mocks/integration lint PASS；interfaces 無適用來源 SKIP，T1 build PASS | `transport-lint.log`、`mocks-lint.log`、`integration-lint.log`、`interfaces-lint.log`、`interfaces-t1.log` |
+
+原平行 UBSan K11 的 23.935 Hz 失敗與 t5 同 topic 重疊 265 ms；獨立官方容器 probe 證實 domain 0 可跨 default bridge 收到訊息。全域串行重驗保持 K11 18–22 Hz 斷言及 runtime 不變後通過；失敗、互通證據與新 run 分開保留。總報告為 `T12-formal-report.md`。本輪 ROS 測試容器全部卸載，logs/build/deb 保留。
+
+打包 manifest 的 `validation_mode` 由現行框架固定為 `development-validation`；此處「正式」指已合併 tag 的 nested TODO gate，不代表 timestamp/hash 測試 deb 可當正式 release。manifest 保留 transport 與既有 dirty `rv2_interfaces` 的 source-tree SHA256，不修改後者。consumer 的測試/export 差異與前輪 mocks/integration 格式化差異保持未提交；package.xml、rv2 Doxyfile 與 runtime headers/src 不動。T12.2 尚缺支援 TSan 的環境，整體 T12 未完成，未附 consumer release commit/tag 或提出 PR。
+
 **正式導入開工(v0.8.17)**：framework PR #7 已合併；主線 `6a04bfe913f9a07862020e270d263b8db7d6f08f` 與原 tag commit `67755d663922c55a15d50933ef083def4d92c964` 的 tree 同為 `e50f516813aa5701cb5137ae360db259be85ff67`。依既有 rebase 處理方式，四個 consumer pin 原 tag commit，不移動 tag。以下 v0.8.15–v0.8.16 為歷史預驗證紀錄，不代表目前仍待 framework 合併。本輪從各 owner nested 入口重跑並保留獨立產物；先補 M22 calc→activity→commit 的確定性交錯，再執行 transport 矩陣/完整鏈。不得把前輪預驗證當本輪結果；TSan 平台阻塞如實保留。前輪 mocks/integration 格式化差異不因 pin 升級自行丟棄或混入 gitlink-only commit。
 
 **現況校準(v0.8.15)**：transport PR #7 已合併，來源版本為 0.1.1；各 consumer 仍 pin framework v0.2.1 tag `3dd3c27`，不移動既有 tag。舊 T12 入口只有 CXX/EXE flags，沒有跨 package I10、runtime fail-closed、隔離產物或乾淨安裝驗證，故不可視為已實作。mocks/integration 前輪格式化 diff 保留，不混入框架變更。
@@ -574,17 +591,17 @@ graph LR
 
 consumer 保留待提交差異：transport 補 `ament_export_dependencies(... r1_interfaces)`，並補 L14 真 activity/seal 並發、S11 停流收斂、K12 非空 intake、K15 真 waiter fence、K16 receive/seal 競爭；integration 僅新增 I10 三個實際子程序的正常退出與 diagnostic gate，前輪格式化 diff 仍保留。未更改 runtime 邏輯、package.xml、Doxyfile 或任何 gitlink。既有 M22 是真 Manager 的週期並發，尚非 calc→activity→commit barrier 證據，T12.2 驗收前須補足，不宣稱已完成決定性交錯驗證。
 
-尚未完成：framework merge 後的 consumer pin/新 nested 入口正式矩陣、支援的 TSan runner 與 M22 補驗、T12.5 指定 t2–t11 連續鏈。沒有以本輪部分/歷史結果勾選 T12.1–T12.5；總報告見 transport `runs/framework-T12-check/T12-development-report.md`。
+v0.8.16 當時尚未完成：framework merge 後的 consumer pin/新 nested 入口正式矩陣、支援的 TSan runner 與 M22 補驗、T12.5 指定 t2–t11 連續鏈。當時沒有以部分/歷史結果勾選 T12.1–T12.5；歷史報告見 transport `runs/framework-T12-check/T12-development-report.md`。目前結果以本節 v0.8.19 為準。
 
-- [ ] **T12.1** ASan + LSan job:H6 / K10 / K15 / M10 / I10(UAF、shutdown 與 leak 回歸)。
+- [x] **T12.1** ASan + LSan job:H6 / K10 / K15 / M10 / I10(UAF、shutdown 與 leak 回歸)。
   查核：transport 執行 `./r1_test_framework/todo_check.sh t12-asan`；`r1_integration_tests` 執行相同 item 跑 I10，且實際 instrument transport 與 C++ 場景 nodes。兩份皆全綠、正常 shutdown、無 sanitizer/leak 報告。
 - [ ] **T12.2** TSan job:LivenessState 並發活動與 terminal seal(L14–L18)、Source / Sink hot path(S11/K10/K12/K16)、tick commit(M22)、Handle replacement(H6)、M4 註冊風暴及 I10。
   查核：transport 與 `r1_integration_tests` 各執行 `./r1_test_framework/todo_check.sh t12-tsan`，覆蓋以上案例，無 race 報告。runtime/平台不支援須回非零並記為阻塞，不可跳過後宣稱 PASS；不得更改 host sysctl 或自動加入 suppressions。
-- [ ] **T12.3** UBSan job:全部單元測試。
+- [x] **T12.3** UBSan job:全部單元測試。
   查核：transport 與 `r1_test_mocks` 各執行 `./r1_test_framework/todo_check.sh t12-ubsan`，精確匹配 `unit` label 且實際測試非空，diagnostic 必須使 job 非零。interfaces/integration 無 unit cases，明示不適用，不用空集合充當成功。
-- [ ] **T12.4** `.deb` 打包:`test_packages.sh` 產出命名符合 §11.5.3 規則(version 段附 timestamp + short hash)之套件,並於乾淨 container 內 `dpkg -i` 安裝驗證。
+- [x] **T12.4** `.deb` 打包:`test_packages.sh` 產出命名符合 §11.5.3 規則(version 段附 timestamp + short hash)之套件,並於乾淨 container 內 `dpkg -i` 安裝驗證。
   查核：transport 的 `./r1_test_framework/todo_check.sh t12-pkg` 產出檔名匹配 `ros-<distro>-<pkg>_<version>.<YYYYMMDDHHMMSS>.<hash>_<arch>.deb`，且 `dpkg-deb -f` 的 Package/Version/Architecture 完全相符。建置並攜帶必要 workspace-local 依賴；以同官方 base 的新容器安裝外部依賴及產出 deb，不掛載來源/build/install overlay，驗 `dpkg -i`、ROS package discovery、公開 R1 header/link 與 node 啟動。禁止只改檔名、忽略未解析依賴、複製整個含 test_env 的 repo、或只驗 dpkg metadata。timestamp/hash 是測試產物版本，不修改 package.xml、不代替 PR 前版本 commit。
-- [ ] **T12.5** 全量迴歸:t2–t11 連續執行一輪全綠(CI 腳本鏈)。
+- [x] **T12.5** 全量迴歸:t2–t11 連續執行一輪全綠(CI 腳本鏈)。
   查核:從 workspace 根目錄依目標 package 分派以下指令，全部結束碼為 0：
 
   ```bash
@@ -615,9 +632,9 @@ consumer 保留待提交差異：transport 補 `ament_export_dependencies(... r1
 | T8 | `test/unit/test_handles.cpp`、`test/integration/test_handles_lifecycle.cpp` | `test_handles`、`test_handles_lifecycle` | H1–H8 | 8 |
 | T9 | `test/integration/test_csm_master.cpp` | `test_csm_master` | CM1–CM13 | 13 |
 | T10 | `r1_test_mocks/test/integration/test_mock_{manager,source_sink,master}.cpp`、`test/unit/test_status_fault.cpp` | 4 smoke targets | — | 23 |
-| T11 | `r1_integration_tests/test/integration/`(launch_testing) | 19 launch targets | I1–I18(+I00 harness smoke) | 18(+1 framework smoke) |
+| T11 | `r1_integration_tests/test/integration/`(launch_testing) | 19 launch targets | I1–I18(+I00 harness smoke) | 21（I08/I10 各兩案例） |
 
-單元 + 整合案例合計 154(不含 §11.3 之逐 function 補充案例)。
+設計最低案例集合合計 154（不含 I00 與額外案例）；本輪上述 R1 targets 實際為 157 cases，加上 transport legacy 21 cases，共 178 個功能案例。T12.5 會重複執行部分 targets，不以鏈的加總冒充唯一案例數；colcon 另含 wrapper/lint records。
 
 ## 附錄 B:`todo_check.sh` item 對照
 

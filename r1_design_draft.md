@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.17)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.18)
 
-> 狀態:正式版(v1.3.17);T12 DDS 隔離查證與串行驗收。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.18);T12 nested 串行驗收，TSan 平台阻塞。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.18 | **更新 Agent:`coco-codex`**。四個 consumer 已固定 framework v0.3.0 原 tag `67755d6`。nested 串行 ASan/LSan、UBSan、Debian 乾淨安裝與完整 t2–t11 鏈通過，TODO T12.1/T12.3/T12.4/T12.5 完成。M22 補真實 calc/activity/seal 兩種交錯、恰一次 terminal 順序與 ASan 五次複測；原 K11 平行 DDS 干擾以串行原樣重驗解決，不改 runtime/門檻。TSan 兩 owner 的 clean probe 仍平台阻塞，T12.2 未完成，未附 consumer release/PR。package 版本、rv2 Doxyfile 與既有差異保留；完整測試/產物證據及案例數區分見 TODO T12。 |
 | v1.3.17 | **更新 Agent:`coco-codex`**。修正 Docker default bridge 自帶測試隔離的錯誤假設：正式 UBSan K11 與 t5 的同名 topic 重疊 265 ms，獨立容器探針證實 domain 0 跨 bridge 容器通訊。§11.3 明訂未驗證獨立 domain/network 的 ROS jobs 全域串行，不能只靠 container 名稱或 host env 宣稱隔離。本輪不改 K11 斷言/runtime 或已發布 framework，保留失敗證據後串行重驗；M22 已以 test-only forwarding probe 補兩種真實交錯，ASan 矩陣及五次複測通過，TSan runtime 仍阻塞。 |
 | v1.3.16 | **更新 Agent:`coco-codex`**。framework PR #7 已經使用者合併，主線 `6a04bfe` 與原 v0.3.0 tag `67755d6` tree 相同；consumer 依序固定原版本 commit，不移動 tag。正式驗收改用各 owner nested 入口，補 M22 calc→activity→commit 決定性交錯並重跑 sanitizer/打包/t2–t11 鏈；沿用 fail-closed、Docker 隔離與 PR-ready 獨立版本 commit 規則。前輪結果保留為歷史預驗證，不提前宣稱新矩陣完成，不改 rv2 Doxyfile 或自動放寬 TSan 安全設定。 |
 | v1.3.15 | **更新 Agent:`coco-codex`**。T12 framework 支援完成並提出 v0.3.0 [PR #7](https://github.com/cocobird231/r1_test_framework/pull/7)，獨立版本 commit/tag `67755d6`；consumer pin 保持 v0.2.1，須等 merge 再正式驗收。開發 Docker 的 ASan/LSan、UBSan、framework 回歸/lint與三包 Debian 乾淨安裝通過，TSan 在 GCC/Clang 皆有平台阻塞，詳見 TODO T12 證據。測試補強 L14/S11/K12/K15/K16/I10；乾淨下游失敗實證後修正 transport r1_interfaces export，保留 consumer diff，不改 runtime/版本/Doxyfile/gitlink。M22 決定性交錯證據、正式矩陣與完整 t2–t11 鏈仍待完成，不以預驗證或部分結果宣稱 T12 全綠。 |
@@ -1675,6 +1676,8 @@ H1–H6 驗證 Handle 的單一操作、型別、引用與並發安全合約，�
 runtime 不支援、空選集、diagnostics 或異常退出均回非零，保留原始 log 並記為失敗或平台阻塞；不自動更改 host sysctl、安全設定、關閉 leak detection 或加入 suppressions。第三方 diagnostics 亦不得隱藏，需依證據另行處理。每個 run 在 owner `test_env/<distro>/` 下隔離並保留選集、工具/來源 metadata 與結果，不覆蓋既有一般或其他 sanitizer 產物。
 
 導入仍依 §11.5.4：framework 開發 checkout 可透過明確 owner override 預驗證，但不修改 consumer nested checkout/gitlink，不視為正式驗收；framework PR 先經使用者 merge，再 pin 原 tag 的版本 commit，從 owner nested 入口重驗後才勾選 TODO。
+
+目前進度(v1.3.18)：四個 consumers 已固定 v0.3.0 原 tag `67755d663922c55a15d50933ef083def4d92c964`。nested 串行 ASan/LSan（transport 64、I10 2 cases）、UBSan（transport 84、mocks 3 cases）、Debian 全新容器安裝/下游編譯連結/node 啟停與 t2–t11 完整鏈均通過；全量 transport 134 cases、T11 19 targets／21 cases，cppcheck 32 原生 SKIP 保留。M22 使用僅在 test/ 的 forwarding probe，真實 Manager calc 後注入活動令 seal 取消；另驗 seal 先成功時拒絕 hot path，callback→shutdown→removal 各一次。一般/ASan 與五次額外 ASan 複測通過，無 production headers/src 變更。TSan 兩個 owner 的 clean probe 仍報 unexpected memory mapping，未跑 race 矩陣，T12.2 保持阻塞；其餘四項已驗收，不宣稱整體 T12 完成或提前 release/PR。詳細來源狀態、原平行 DDS 干擾負例與串行證據見 TODO T12；下段 v1.3.15 為歷史預驗證。
 
 實作進度(v1.3.15)：framework v0.3.0 的 [PR #7](https://github.com/cocobird231/r1_test_framework/pull/7) 待合併，原 tag commit `67755d663922c55a15d50933ef083def4d92c964` 不得因 merge 改寫而移動。開發預驗證 ASan/LSan(transport 64、I10 2 cases)、UBSan(transport 84、mocks 3 cases)、framework 回歸/lint 均通過；TSan 的最小正常程式在 GCC/Clang runtime 仍無法可靠啟動，不調整 host/container 安全設定來掩蓋失敗。L14 與 K16 增加實際雙執行緒 seal 競爭，S11/K12/K15 補非空流量/收斂/waiter fence，I10 新增逐 node shutdown/diagnostic gate。M22 既有週期並發不可冒稱 calc→activity→commit 的決定性 barrier 證據，正式 TSan 驗收前仍須補足。詳情與原始 log 位置見 TODO T12；consumer 新 nested 入口矩陣及 t2–t11 完整鏈尚未驗收。
 
