@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.28)
+# R1 實作 TODO List(v0.8.29)
 
-> 依據:`r1_design_draft.md` v1.3.27(正式版;文件搬遷、合併後版本盤點與 rv2_project snapshot)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.28(正式版;rv2_project v0.1.0 snapshot metadata 驗收完成)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.29 | **更新 Agent:`coco-codex`**。T13 完成：使用者同意以 merge 2ee952c 納入原 docs 歷史，保留完整 bundle／Git metadata（含 stash reflog）及原 staged workspace。五包乾淨 checkout 實際 pull 後固定已合併 release SHA，原 tags/tree 核對不移動；根目錄 framework v0.5.0，既有五個 workspace gitlinks 保留。rv2_project v0.1.0 功能 commit 3ba0b4d，官方 Docker nested 四步、lint、乾淨 clone unit 131／integration 9 與 CMake/XML 全 PASS；sanitizers N/A，容器已卸載。首輪缺 rebase 前 tags／一份 Ruff 格式失敗與修正 log 皆保留；後續文件完成紀錄不冒充重跑 ROS。T12.2、待 merge／未提交補強及 legacy dirty dependency 缺口不勾消；新 project 空 remote 尚無 PR base，本次提交留本地、不自建空主線／release tag。 |
 | v0.8.28 | **更新 Agent:`coco-codex`**。依使用者要求先同步搬遷後文件，修復本地測試報告連結，新增 rv2_project v0.1.0 ROS2 snapshot 規格與 T13。2026-09-13 查核：framework v0.5.0、interfaces/mocks/integration v0.1.1 已合併；transport PR #8 尚 open，主線仍 v0.1.1，不能記成 v0.1.2 已合併。新增總驗收缺口清單，區分已提交 release、未提交 I15/I18/T12 補強與 dirty legacy dependency，歷史 PASS 不升格為 clean snapshot 驗收。Snapshot 僅固定版本組合，非自動 release／總驗收認證；先規範再實作，原 Git 歷史與 staged submodules 保留。 |
 | v0.8.27 | **更新 Agent:`coco-codex`**。依使用者要求補 interfaces 正常 0.1.0→0.1.1 獨立版本 commit/tag 5bef9c0、更新 PR #1，取代暫不定版例外。Mocks/integration 格式提交 5af25b8／46e7116 與正式 lint 均 PASS；使用者另批准 I10 程序退出補強，獨立 commit 07d8a13，不混入 I15/I18。兩包完整四步串行皆 exit 0：mocks unit 3／integration 20、UBSan 3；integration 一般 21／I10 ASan 2 cases PASS，TSan SKIP。驗證後獨立 v0.1.1 commit/tag mocks 37d6e7f、integration 5adecce，提出 PR #4／#3。保留所有原來源 bytes、I15/I18 未提交差異與 dirty rv2_interfaces 依賴限制；metadata-only release 後未重跑 ROS，docs 無 remote 留本地。 |
 | v0.8.26 | **更新 Agent:`coco-codex`**。使用者要求推送 consumer PR；framework 本地 master 再次 pull 確認仍為 f5952a8。以已提交 checkout 驗證：interfaces build/full entry PASS、lint SKIP，更新 PR #1，維持 0.1.0 不定版例外；transport lint、一般 134／ASan 64／UBSan 84 PASS，獨立 v0.1.2 commit/tag 8f56a55 後提出 PR #8。乾淨 rv2_interfaces 缺 legacy 欄位的編譯失敗保留；成功結果依賴現有唯讀 dirty workspace dependency，PR 明示非全 clean-dependency 重現。mocks/integration committed lint 分別 FAIL 11／26，不 push／release／PR，待允許另行提交格式化修正；既有 source 差異與 Doxyfile 不動，docs 無 remote 仍留本地。 |
@@ -227,7 +228,7 @@ graph LR
 | legacy rv2_interfaces | 乾淨 8a9d995 缺既有 transport 測試需要的 controller_name、controller_priority_type、CONTROL_SIGNAL_PRIORITY_REMOTE_CUSTOM。前輪 PASS 使用唯讀 dirty dependency；其尚有其他使用者變更，不自行全部提交或宣稱乾淨可重現。project 尚未固定此 legacy dependency，須另外收斂可用版本。 |
 | T12.2 | TSan runtime 平台阻塞；須在支援環境由兩個 owner 明確 `-t on` 通過。預設 SKIP/77 不算完成，不更動主機安全設定。 |
 | framework README | 原 tag-only／禁止 rebase 說明仍待另行同步為 §1.4 現行規範；不可因此修改已固定的 release tree。 |
-| T13／總驗收 | 先完成下面 snapshot metadata 自身驗收。上述已提交版本、依賴缺口與待發布補強收斂後，才對精確 snapshot 串行跑各 owner 四步／lint 及另列的打包、TSan；現有 dirty PASS 不代替最終驗收。 |
+| 總驗收 | T13 snapshot metadata 自身驗收已完成，不代表整體 R1 完成。上述已提交版本、依賴缺口與待發布補強收斂後，才對精確 snapshot 串行跑各 owner 四步／lint 及另列的打包、TSan；現有 dirty PASS 不代替最終驗收。 |
 
 §12 的 HA、async API、adapter、durable fencing 等未來政策不自動擴張成此次 v0.1.0 的必做實作。
 
@@ -736,11 +737,15 @@ v0.8.16 當時尚未完成：framework merge 後的 consumer pin/新 nested 入�
 
 **目標**：以 ROS2 `ament_cmake` package 安裝與查詢專案版本組合，不新增 runtime node，不宣稱已完成所有 R1 packages 的總驗收。
 
-- [ ] **T13.1** 依新文件位置完成版本／歷史／Agent 署名與所有已合併 R1 版本對照；保留搬遷前文件 Git 歷史與既有 staged submodules，不建立缺少可取得 remote 的 docs gitlink。
-- [ ] **T13.2** 新增 `package.xml` 0.1.0、CMake/ament 註冊、README、`snapshots/v0.1.0.json`；安裝文件與 snapshot 至 `share/rv2_project`。每個 component 記錄 release 版本、合併主線 SHA、原 tag SHA/tree；固定來源不跟隨 HEAD。
-- [ ] **T13.3** 在乾淨 checkout 實際 pull 並核對遠端，再更新 project gitlinks。根目錄另有自身 `r1_test_framework/`；保留使用者的 `ros2_ws/src/` 五個 gitlinks，兩處 framework 同 SHA。既有 dirty 開發 checkout／consumer 內部 pins／rv2 Doxyfile 不動。
-- [ ] **T13.4** `test/unit/` 驗證 manifest 合約正反例，`test/integration/` 驗證真實 package.xml、gitlinks、checkout、release tree、文件對照與安裝結果；兩個 CTest labels 均非空。ROS discovery 不把 nested packages 混入 owner 測試。
-- [ ] **T13.5** 自己的 nested `test_build`→`test_deps`→無參數 `test_run`→`test_clean` 與獨立 lint 全過，保留逐項 log／exit code；本 package 無 native runtime，sanitizers 為 N/A，不冒充整體 R1 驗收。
+- [x] **T13.1** 依新文件位置完成版本／歷史／Agent 署名與所有已合併 R1 版本對照；保留搬遷前文件 Git 歷史與既有 staged submodules，不建立缺少可取得 remote 的 docs gitlink。
+- [x] **T13.2** 新增 `package.xml` 0.1.0、CMake/ament 註冊、README、`snapshots/v0.1.0.json`；安裝文件與 snapshot 至 `share/rv2_project`。每個 component 記錄 release 版本、合併主線 SHA、原 tag SHA/tree；固定來源不跟隨 HEAD。
+- [x] **T13.3** 在乾淨 checkout 實際 pull 並核對遠端，再更新 project gitlinks。根目錄另有自身 `r1_test_framework/`；保留使用者的 `ros2_ws/src/` 五個 gitlinks，兩處 framework 同 SHA。既有 dirty 開發 checkout／consumer 內部 pins／rv2 Doxyfile 不動。
+- [x] **T13.4** `test/unit/` 驗證 manifest 合約正反例，`test/integration/` 驗證真實 package.xml、gitlinks、checkout、release tree、文件對照與安裝結果；兩個 CTest labels 均非空。ROS discovery 不把 nested packages 混入 owner 測試。
+- [x] **T13.5** 自己的 nested `test_build`→`test_deps`→無參數 `test_run`→`test_clean` 與獨立 lint 全過，保留逐項 log／exit code；本 package 無 native runtime，sanitizers 為 N/A，不冒充整體 R1 驗收。
+
+完成證據(v0.8.29)：功能 commit `3ba0b4d71f074aaabefab5551b9dc1f5afb6252e`，乾淨已提交 owner 的 run `full-20260912T193350.LGU34Y` 一般 PASS/exit 0；unit 131、integration 9 unique pytest cases，另 CMake/XML 各 1 檢查與 4 CTest wrappers，colcon 彙總 146，不能誤算成 146 個功能案例。Lint 三份 Python PASS，無 C/C++／Shell 來源。乾淨 recursive clone 透過本地 Git object transport（非主機來源 overlay、不使用未提交檔）亦通過同組測試與原歷史祖先查核；Git ownership／ROS setup 診斷失敗僅屬一次性驗證 harness，原 logs 保留。四步與獨立 lint、clone 最終均 exit 0，容器已清除。
+
+初輪 unit 131／integration 6 PASS、3 FAIL 是 project 舊 checkout 未取得 rebase 前 release tags，`pull` 不保證帶回不在新主線祖先中的 tags；補取明確原 tag 並核對 tree 後通過，不移動 tag、不更改固定 release。README 取得／升版流程已補明確取 tags，測試自身仍唯讀、不連網。文件歷史 merge／backup 與三份既有 tracked dirty diff SHA256 均另經獨立複核。完整 [T13 測試報告與逐案例 logs](../../test_env/jazzy/project-snapshot.sPrkip/T13-report.md)。
 
 **驗證**：`rv2_project` 的 ROS discovery、安裝 metadata 與兩類測試一致性；錯誤版本／SHA／path／缺失 component 必須失敗。整個 R1 workspace 的依賴 closure 與 runtime 驗收仍受 §2.1 缺口限制，另行安排。
 

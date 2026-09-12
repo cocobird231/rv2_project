@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.27)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.28)
 
-> 狀態:正式版(v1.3.27);文件搬遷、合併後版本盤點與 rv2_project snapshot。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.28);rv2_project v0.1.0 snapshot metadata 驗收完成。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.28 | **更新 Agent:`coco-codex`**。rv2_project v0.1.0 實作與 T13 metadata 驗收完成：五個 component 先本地 pull 再固定合併主線／release tree，文件以 merge 保留原歷史並備份完整 metadata。官方 Docker nested 四步、lint 及 clean clone 的 unit 131／integration 9、CMake/XML／安裝與 discovery 全過，sanitizers N/A、容器已清除；功能 commit 3ba0b4d，逐項原始成功／失敗 logs 見 TODO v0.8.29。補 release tag 取得步驟，不移動舊 tag；版本組合仍 development／acceptance_pending，T12.2、transport PR #8、未提交補強與 legacy 依賴缺口不變。新 project 的遠端仍空，本次本地提交不建空 PR base 或 release tag。 |
 | v1.3.27 | **更新 Agent:`coco-codex`**。文件正式搬至 rv2_project/docs/r1_design_docs；新增 §2.1.1 專案 ROS2 snapshot package 與 v0.1.0 對照。核對已合併 framework v0.5.0、interfaces/mocks/integration v0.1.1，transport PR #8 仍 open、主線 v0.1.1。同步 interfaces 已進版現況，區分 I15/I18／T12 未提交補強、TSan 平台阻塞與 dirty rv2_interfaces 依賴限制；不把舊 PASS 宣稱為 clean snapshot 總驗收。初版 snapshot 不等於 release／完整依賴 closure；使用者同意文件及原歷史納入 project 並保留備份，實作／驗證追蹤見 TODO v0.8.28 T13。 |
 | v1.3.26 | **更新 Agent:`coco-codex`**。Interfaces 補正常 v0.1.1 獨立版本 commit/tag 5bef9c0 更新 PR #1，取代原例外。Mocks/integration 格式提交及 lint PASS；使用者追加核准 I10 程序退出補強另做 07d8a13，不混入 I15/I18。兩包 nested 完整四步串行通過：mocks 23／UBSan 3、integration 21／ASan 2 cases；TSan SKIP不算 T12.2。獨立 v0.1.1 metadata-only commits/tags mocks 37d6e7f／integration 5adecce，提出 PR #4／#3；依賴來源、原始 logs／SHA 保留及 dirty rv2_interfaces 重現限制見 TODO v0.8.27。 |
 | v1.3.25 | **更新 Agent:`coco-codex`**。使用者授權 consumer PR；framework 本地 master 再 pull 確認 f5952a8，依已提交 checkout 驗證。Interfaces 完整入口 PASS／lint SKIP，更新 PR #1，維持 0.1.0 例外；transport lint／normal 134／ASan 64／UBSan 84 PASS 後，獨立 v0.1.2 commit/tag 8f56a55 並提出 PR #8。乾淨 rv2_interfaces 的 legacy 欄位缺漏造成首次編譯失敗，成功重驗使用現有唯讀 dirty dependency，兩者及重現限制均揭露。mocks/integration lint FAIL 11／26，保留未提交修正待裁決，不 release／PR；來源、Doxyfile 不動，docs 無 remote 留本地，詳細證據見 TODO v0.8.26。 |
@@ -292,7 +293,7 @@ rv2_project/
 └── test/unit/、test/integration/
 ```
 
-版本對照(2026-09-13 已合併主線盤點；v0.1.0 待 T13 自身驗證，不代表整體總驗收)：
+版本對照(2026-09-13 已合併主線盤點；v0.1.0 已通過 T13 metadata 驗證，不代表整體總驗收)：
 
 | rv2_project | r1_test_framework | r1_interfaces | r1_test_mocks | r1_integration_tests | rv2_control_signal_transport | 狀態 |
 |---|---|---|---|---|---|---|
@@ -308,7 +309,7 @@ rv2_project/
 
 每個 manifest 使用 `schema_version: 1`、`project_version`、`status`、`acceptance`、非空 `limitations` 與 `components`。每個 component 必須記錄 `path`、`repository`、`branch`、`version`(無 v 前綴)、`commit`(40 字元)、`tag_commit` 與 `tree`。五個名稱及相對路徑一一對應既有 gitlinks；project 根目錄 framework 與 workspace framework 固定同 commit。Release tag 為 `v<version>`，rebase 前後 commit 可不同，但 tree 必須相同且記錄原 tag，不移動既有 tag。`package.xml` 選擇 `snapshots/v<version>.json`；版本對照表隨新 snapshot 追加。未來 schema 改動須明確進版，不默默接受缺欄位或錯誤版本。
 
-先在乾淨 checkout 實際 `git pull --ff-only origin <主線>`，比對 HEAD／遠端與 release 內容，再固定精確 SHA。主線取純 R1 `master`、transport `r1`，不能使用 transport legacy `master`。測試／一般 clone 僅 `git submodule update --init --recursive`，不追最新 HEAD，也不改寫 component 內部已發布的 framework pin。
+先在乾淨 checkout 實際 `git pull --ff-only origin <主線>`，再 `git fetch origin tag vX.Y.Z` 取得欲固定的原 release tag，比對 HEAD／遠端與 release tree，再固定精確 SHA。rebase 後舊 tag 可能不在主線祖先中，不能假定 pull 已帶回所有 tags。主線取純 R1 `master`、transport `r1`，不能使用 transport legacy `master`。一般 clone 以 `git submodule update --init --recursive` 還原固定 SHA；取得 tags 的準備命令見 README，不使用 --remote／--force。測試自身不連網、不追 HEAD，也不改寫 component 內部已發布的 framework pin。
 
 CMake 安裝 `snapshots/`、README 與文件至 `share/rv2_project/`，由 ament index／`ros2 pkg prefix --share rv2_project` 找到；不安裝 child Git working trees、test_env 或 Git metadata。`test/unit/` 檢查 manifest 合約與失敗案例，`test/integration/` 檢查 package.xml、gitlinks、checkout/tag tree、文件對照及實際安裝內容；pytest/CTest 分為兩個 labels，保存逐案例 log。Project 的 nested 四步入口測試本 metadata package；sanitizers 不適用，不等於重跑所有 child packages。要列出 nested ROS packages 時顯式指定 `colcon list --paths . ros2_ws/src/*`；framework 的 COLCON_IGNORE 仍有效。
 
