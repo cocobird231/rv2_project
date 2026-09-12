@@ -1,13 +1,14 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.26)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.27)
 
-> 狀態:正式版(v1.3.26);interfaces 補進版、其餘 consumer lint 與測試。未決事項集中在第 12 章,將於實作階段逐項裁決。
-> 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
+> 狀態:正式版(v1.3.27);文件搬遷、合併後版本盤點與 rv2_project snapshot。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
 ## 0. 版本歷史
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.27 | **更新 Agent:`coco-codex`**。文件正式搬至 rv2_project/docs/r1_design_docs；新增 §2.1.1 專案 ROS2 snapshot package 與 v0.1.0 對照。核對已合併 framework v0.5.0、interfaces/mocks/integration v0.1.1，transport PR #8 仍 open、主線 v0.1.1。同步 interfaces 已進版現況，區分 I15/I18／T12 未提交補強、TSan 平台阻塞與 dirty rv2_interfaces 依賴限制；不把舊 PASS 宣稱為 clean snapshot 總驗收。初版 snapshot 不等於 release／完整依賴 closure；使用者同意文件及原歷史納入 project 並保留備份，實作／驗證追蹤見 TODO v0.8.28 T13。 |
 | v1.3.26 | **更新 Agent:`coco-codex`**。Interfaces 補正常 v0.1.1 獨立版本 commit/tag 5bef9c0 更新 PR #1，取代原例外。Mocks/integration 格式提交及 lint PASS；使用者追加核准 I10 程序退出補強另做 07d8a13，不混入 I15/I18。兩包 nested 完整四步串行通過：mocks 23／UBSan 3、integration 21／ASan 2 cases；TSan SKIP不算 T12.2。獨立 v0.1.1 metadata-only commits/tags mocks 37d6e7f／integration 5adecce，提出 PR #4／#3；依賴來源、原始 logs／SHA 保留及 dirty rv2_interfaces 重現限制見 TODO v0.8.27。 |
 | v1.3.25 | **更新 Agent:`coco-codex`**。使用者授權 consumer PR；framework 本地 master 再 pull 確認 f5952a8，依已提交 checkout 驗證。Interfaces 完整入口 PASS／lint SKIP，更新 PR #1，維持 0.1.0 例外；transport lint／normal 134／ASan 64／UBSan 84 PASS 後，獨立 v0.1.2 commit/tag 8f56a55 並提出 PR #8。乾淨 rv2_interfaces 的 legacy 欄位缺漏造成首次編譯失敗，成功重驗使用現有唯讀 dirty dependency，兩者及重現限制均揭露。mocks/integration lint FAIL 11／26，保留未提交修正待裁決，不 release／PR；來源、Doxyfile 不動，docs 無 remote 留本地，詳細證據見 TODO v0.8.26。 |
 | v1.3.24 | **更新 Agent:`coco-codex`**。依使用者新裁決改用 rebase 合併後版本 SHA：先本地 master git pull，再比對本地／遠端主線、VERSION 與 release tree，才更新各 package submodule，不繼續固定合併前 tag。此次 pull 後主線為 f5952a8，與舊 af386de tree 一致；四個頂層 consumers 改 pin f5952a8，既有 tag／來源／版本保留。舊 pin／禁止 rebase 段落僅為歷史，不改寫過往紀錄；新規範優先於已發布 README，後者另行同步。 |
@@ -271,6 +272,47 @@ v0.5.0 新增執行檔 `csm_master_node`:這是一個獨立的 node,負責 host 
 ```
 src/r1/csm_master.cpp / include/rv2_control_signal_transport/r1/csm_master.h
 ```
+
+### 2.1.1 rv2_project：專案版本 snapshot(v1.3.27)
+
+`rv2_project` 是 RV2 專案總目錄與獨立 ROS2 `ament_cmake` metadata package，首版 `package.xml` 為 **0.1.0**。它保存「這個專案版本對應哪組 R1 releases」，不新增 transport、mock 或管理 node，也不把 framework 當 ROS package 依賴。專案 snapshot 版本、各 component release 版本、本文件修訂版本三者各自管理，不必同步。Snapshot 版本不必是 release；建立 v0.1.0 不代表總驗收已通過，不額外產生空 release commit/tag。
+
+```text
+rv2_project/
+├── package.xml / CMakeLists.txt / README.md
+├── snapshots/v0.1.0.json       # 版本組合與限制；後續版本另建檔，不覆寫
+├── docs/r1_design_docs/        # 本設計稿與 TODO；原歷史納入 project
+├── r1_test_framework/          # project 自己的固定版測試入口
+├── ros2_ws/src/                # 保留既有五個 gitlinks
+│   ├── r1_test_framework/      # workspace 開發 checkout，與根目錄同 SHA
+│   ├── r1_interfaces/
+│   ├── r1_test_mocks/
+│   ├── r1_integration_tests/
+│   └── rv2_control_signal_transport/
+└── test/unit/、test/integration/
+```
+
+版本對照(2026-09-13 已合併主線盤點；v0.1.0 待 T13 自身驗證，不代表整體總驗收)：
+
+| rv2_project | r1_test_framework | r1_interfaces | r1_test_mocks | r1_integration_tests | rv2_control_signal_transport | 狀態 |
+|---|---|---|---|---|---|---|
+| v0.1.0 | v0.5.0 | v0.1.1 | v0.1.1 | v0.1.1 | v0.1.1 | development／acceptance_pending |
+
+| Component | 固定合併主線 SHA | 原 release tag commit(歷史保留) |
+|---|---|---|
+| r1_test_framework | f5952a8d2d1f834870283494e22173d8511e5d69 | af386dee731ec13448a344e9f64ed0978bd6cfba |
+| r1_interfaces | c25fcc18f15d957cf15247dc39486aec4f3aad9d | 5bef9c013128ee31005a4967d6d0229e428426b1 |
+| r1_test_mocks | de847ef4c86a40e6e4c057e58ff856157f79c8fc | 37d6e7f3f9c27427b03d55807e02bfcb12b3372c |
+| r1_integration_tests | 43f8bd5e38f71643072ea4312495bdd1b7c9c324 | 5adecce4986b386ee4f75ff1f2b02fa273d1fd41 |
+| rv2_control_signal_transport | a0338d1a393e8ad90debdae7d5c6e1015ee3ce03 | 51913eec4e0d40ea7bac83e0ed0d30a60c7bba23 |
+
+每個 manifest 使用 `schema_version: 1`、`project_version`、`status`、`acceptance`、非空 `limitations` 與 `components`。每個 component 必須記錄 `path`、`repository`、`branch`、`version`(無 v 前綴)、`commit`(40 字元)、`tag_commit` 與 `tree`。五個名稱及相對路徑一一對應既有 gitlinks；project 根目錄 framework 與 workspace framework 固定同 commit。Release tag 為 `v<version>`，rebase 前後 commit 可不同，但 tree 必須相同且記錄原 tag，不移動既有 tag。`package.xml` 選擇 `snapshots/v<version>.json`；版本對照表隨新 snapshot 追加。未來 schema 改動須明確進版，不默默接受缺欄位或錯誤版本。
+
+先在乾淨 checkout 實際 `git pull --ff-only origin <主線>`，比對 HEAD／遠端與 release 內容，再固定精確 SHA。主線取純 R1 `master`、transport `r1`，不能使用 transport legacy `master`。測試／一般 clone 僅 `git submodule update --init --recursive`，不追最新 HEAD，也不改寫 component 內部已發布的 framework pin。
+
+CMake 安裝 `snapshots/`、README 與文件至 `share/rv2_project/`，由 ament index／`ros2 pkg prefix --share rv2_project` 找到；不安裝 child Git working trees、test_env 或 Git metadata。`test/unit/` 檢查 manifest 合約與失敗案例，`test/integration/` 檢查 package.xml、gitlinks、checkout/tag tree、文件對照及實際安裝內容；pytest/CTest 分為兩個 labels，保存逐案例 log。Project 的 nested 四步入口測試本 metadata package；sanitizers 不適用，不等於重跑所有 child packages。要列出 nested ROS packages 時顯式指定 `colcon list --paths . ros2_ws/src/*`；framework 的 COLCON_IGNORE 仍有效。
+
+**v0.1.0 已知限制**：transport PR #8/v0.1.2 仍未合併，故其 v0.1.1 內部 framework 仍為 v0.2.1 `3dd3c27`，其餘三個 ROS consumers 為 v0.5.0 `f5952a8`。I15/I18 與 transport T12/export 補強尚未提交；legacy `rv2_interfaces` 不在目前 project gitlinks 中，乾淨 8a9d995 缺測試需要欄位，歷史成功用了 dirty dependency。TSan runtime 仍阻塞。此 snapshot 固定 R1 release 組合，**不是完整可重現的依賴 closure 或整體驗收證明**；待 TODO §2.1 缺口收斂後新增 snapshot 驗收，不回寫原版。
 
 ### 2.2 元件關係圖
 
@@ -1691,7 +1733,7 @@ runtime 不支援、空選集、diagnostics 或異常退出均回非零，保留
 
 使用者完整測試入口為 `test_build.sh`（建立 Docker/唯讀來源與產物 mounts）→`test_deps.sh`（安裝依賴）→無參數 `test_run.sh`（同一容器內串行一般完整 CTest、適用 ASan/UBSan、可選 TSan）→`test_clean.sh`（卸載、預設保留產物）。不讓使用者逐一呼叫 TODO item，也不從 test_run 重新建容器或安裝依賴。新增持久 run-root mount，每次新 run/profile 的 build/install/log 與摘要 log 都保留；mount 必須實查、來源保持唯讀，既有 checker 的 workspace 參數與精確矩陣重用。
 
-transport sanitizer 矩陣為 ASan/UBSan/可選 TSan；mocks 僅 UBSan；integration 僅 I10 ASan/可選 TSan；interfaces 無測試與 sanitizer，不新增空案例。完整流程逐階段記 PASS/FAIL/SKIP/N/A/NOT_RUN 與 exit/log；任何已啟用階段失敗仍非零。指定 `-p/-s/-f/-c/-j/-k/-a` 時保留特殊單項模式，只有 `-d/-t` 時仍為完整流程。lint 仍以 `test_lint.sh` 獨立 Docker 執行；既有 ament 非重複檢查保留在一般 CTest，不把 clang-format/Ruff/ShellCheck 說成涵蓋全部 CMake/XML 檢查。Debian 打包/乾淨安裝暫仍獨立 test_packages，是否預設包含待使用者回覆。framework PR 先經使用者 merge，再更新所有 consumers；r1_interfaces SSH/API 權限已恢復，已提出 [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1)，現有 pin 已更正為本地 pull 後確認的 v0.5.0 主線 SHA。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag，不再等待首次空版本 commit 例外（TODO §1.4）。I15/I18 啟動修正後，最新完整流程的一般 21 cases 與 I10 ASan 2 cases 均通過；framework v0.5.0 已由使用者 rebase 合併，本地 master pull 後確認主線版本 commit 為 `f5952a8d2d1f834870283494e22173d8511e5d69`；四個頂層 consumers 改以 gitlink-only commits 固定該 SHA，不沿用舊 tag `af386de`，詳見 TODO T12 v0.8.25。先前失敗與 override 全套通過皆保留為歷史，本輪僅做同 tree SHA 更正及 nested 入口重驗，不等於 ROS 全套正式重驗。TSan SKIP 不等於 T12.2 通過。
+transport sanitizer 矩陣為 ASan/UBSan/可選 TSan；mocks 僅 UBSan；integration 僅 I10 ASan/可選 TSan；interfaces 無測試與 sanitizer，不新增空案例。完整流程逐階段記 PASS/FAIL/SKIP/N/A/NOT_RUN 與 exit/log；任何已啟用階段失敗仍非零。指定 `-p/-s/-f/-c/-j/-k/-a` 時保留特殊單項模式，只有 `-d/-t` 時仍為完整流程。lint 仍以 `test_lint.sh` 獨立 Docker 執行；既有 ament 非重複檢查保留在一般 CTest，不把 clang-format/Ruff/ShellCheck 說成涵蓋全部 CMake/XML 檢查。Debian 打包/乾淨安裝暫仍獨立 test_packages，是否預設包含待使用者回覆。framework PR 先經使用者 merge，再更新所有 consumers；r1_interfaces SSH/API 權限已恢復，已提出 [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1)，現有 pin 已更正為本地 pull 後確認的 v0.5.0 主線 SHA。Interfaces 已按 v1.3.26 正常升為 0.1.1，原版本 commit/tag 5bef9c0 經 rebase 後主線為 c25fcc1，PR #1 已合併；舊暫不定版裁決僅保留於歷史（TODO §1.4）。歷史 dirty I15/I18 啟動修正後的完整流程一般 21 cases 與 I10 ASan 2 cases 均通過；framework v0.5.0 已由使用者 rebase 合併，本地 master pull 後確認主線版本 commit 為 `f5952a8d2d1f834870283494e22173d8511e5d69`；四個頂層 consumers 改以 gitlink-only commits 固定該 SHA，不沿用舊 tag `af386de`，詳見 TODO T12 v0.8.25。先前失敗與 override 全套通過皆保留為歷史，本輪僅做同 tree SHA 更正及 nested 入口重驗，不等於 ROS 全套正式重驗。TSan SKIP 不等於 T12.2 通過。
 
 平台查證：官方 Jazzy 容器讀得 Linux 6.17.0-35、mmap_rnd_bits=32、ASLR=2；既有 GCC mapping failure 與 Clang 18 personality CHECK 符合 [LLVM #78351](https://github.com/llvm/llvm-project/pull/78351) 的固定 shadow mapping／高 entropy 限制及 re-exec 恢復機制；[Docker seccomp](https://docs.docker.com/engine/security/seccomp/) 對 personality 有參數限制。這是證據支持的診斷，未更改安全設定作 A/B 實驗。新 probe 仍 BLOCKED，不宣稱工具鏈更新已解決。開關不是 runtime 修復，正式導入仍須先 framework PR/merge 再 pin；詳細 log 與開關驗證見 TODO v0.8.20。
 
@@ -1938,7 +1980,7 @@ Config/AST 與 C/C++ diff 保留比對通過，日誌與分類執行證據見 TO
    是否提供通用 adapter,以及 adapter 的支援期限。
 5. **使用者層 forced disconnect API**:`disconnect()` 的語意已改為「強制進入註銷流程」
    (v1.1.0,§2.3)。是否經由 Manager / Handle 對使用者開放,目前仍未決。
-6. **retry 參數細節**(D7):方向與非阻塞、去重、backoff、jitter、bounded in-flight
+6. **retry 參數細節**(D7)：目前實作的 `RetryPolicy::Recommended()` 預設為 200/5000ms、jitter 0.2、initial attempts 3、in-flight 4，quarantine 3、autoRetryInitial=true；以下是後續政策討論，不代表目前沒有實作預設。方向與非阻塞、去重、backoff、jitter、bounded in-flight
    的結構均已定,數值與 policy 待議。待議項目包括 initial / max delay、optional initial
    retry 的上限、`auto_retry` 旗標的歸屬(屬 ManagerOptions 全域或 per-info),以及
    初次註冊失敗是否預設 retry。已成功過的 intent 遇到 remote retryable failure 時,
