@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.20)
+# R1 實作 TODO List(v0.8.21)
 
-> 依據:`r1_design_draft.md` v1.3.19(正式版;TSan 平台查證與明確開關)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.20(正式版;四步測試流程與 TSan 預設關閉)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.21 | **更新 Agent:`coco-codex`**。依使用者新裁決，TSan 預設 off，正式使用流程為 test_build→test_deps→無參數 test_run→test_clean，lint 維持獨立入口。test_run 在既有依賴就緒容器內串行完成一般 unit/integration 與 owner 適用 sanitizer，按 run/profile 隔離並保留產物、逐項狀態/log；特殊 selectors 保留單項模式，不呼叫 todo_check 重建環境或重裝依賴。關閉的 TSan 明示 SKIP，不能掩蓋其他失敗或勾選 T12.2；保留既有 ament 非重複檢查。r1_interfaces SSH remote 已確認可用，但 API 404 仍阻塞 PR；使用者已裁決保持 package.xml 0.1.0，本次不新增 release commit/tag。framework PR 經使用者 merge 後才更新所有 consumer pins/PR，既有 v0.4.0 tag 不移動。 |
 | v0.8.20 | **更新 Agent:`coco-codex`**。依使用者要求查詢 TSan unexpected memory mapping；官方 LLVM 說明高 ASLR entropy 與固定 shadow mapping 衝突，本機官方容器確認 mmap_rnd_bits=32，GCC clean probe 仍阻塞，既有 Clang 18 證據亦有 personality CHECK。維持主機/容器安全設定，先規範 framework 的顯式 `-t on\|off`（預設 on）：off 只略過選定 TSan job，stdout 明示 SKIP、exit 77，不建立/清除容器或產物、不降級成未 instrument 的測試。非法參數仍失敗、其他測試不受影響、T12.2 不勾選。框架先開發驗證，consumer gitlink/版本與 rv2 Doxyfile 不動；實測結果見 T12 補充。 |
 | v0.8.19 | **更新 Agent:`coco-codex`**。四個 consumer 已以 gitlink-only commits 固定 framework v0.3.0 原 tag `67755d6`。正式 nested 串行 ASan 64/I10 2、UBSan 84/mocks 3、三包 Debian 乾淨安裝與 t2–t11 完整鏈全過，勾選 T12.1/T12.3/T12.4/T12.5；transport 完整 134 cases、T11 21 cases，cppcheck 原生 32 SKIP 如實保留。M22 真實 calc/activity/seal 交錯與 terminal 順序已補，ASan 額外五次亦通過。原 K11 平行 DDS 干擾失敗與探針證據保留，原斷言/runtime 不改。T12.2 仍因兩 owner 的 TSan clean probe unexpected memory mapping 阻塞；不附 package release/PR、不提前改版本，來源與既有格式化 diff 保留，容器已卸載，詳見 T12 正式結果。 |
 | v0.8.18 | **更新 Agent:`coco-codex`**。正式 nested 測試發現 UBSan K11 的 23.94 Hz 失敗；XML 證實與 t5 同 topic 重疊 265 ms，兩個官方容器通訊探針證實 default bridge/domain 0 可互通。修正 §1.2 執行規範：不同 container 名稱不代表 DDS 隔離，未明確驗證隔離的 ROS 測試須全域串行；停止把本輪平行排程當作隔離實證，保留失敗 log，待既有流程完成後串行重驗 UBSan 與完整鏈。不放寬 K11 門檻、不修改 runtime、不改已發布 framework。M22 兩種交錯已補且 ASan 及額外五次皆過；最終逐項結果仍待收斂。 |
@@ -69,6 +70,21 @@
 
 每個 R1 相關 package 均須將 framework 以 git submodule 引入至 `<package>/r1_test_framework/`，直接執行其中腳本。適用範圍包含 `rv2_control_signal_transport`、`r1_interfaces`、`r1_test_mocks`、`r1_integration_tests` 與未來的 R1 packages；framework 自身不必遞迴引入自己。不得依賴 workspace sibling checkout 或根目錄 shell symlink。
 
+一般使用者只需以下四步，不必逐一知道 TODO item 或 sanitizer 選集：
+
+```bash
+./r1_test_framework/test_build.sh
+./r1_test_framework/test_deps.sh
+./r1_test_framework/test_run.sh
+./r1_test_framework/test_clean.sh
+```
+
+無參數 test_run（或只指定 distro/TSan 開關）在步驟 1/2 的同一容器執行完整流程：一般完整 CTest（含全部 unit/integration 與既有註冊檢查）→適用 ASan→適用 UBSan→可選 TSan；owner 無定義的 sanitizer 明示 N/A。transport 適用三者、mocks 僅 UBSan、integration 僅 I10 ASan/TSan；interfaces 完成 build、無案例/無 sanitizer，不新增空測試。TSan 預設 off；完整流程中的 SKIP 不妨礙已啟用項目成功，但任何已啟用階段失敗仍使整體非零，不能宣稱 T12.2 通過。
+
+完整流程新增持久 run-root 掛載，每次使用新 run/profile 的 build/install/log，不覆蓋前次證據或一般單項產物。來源維持唯讀、沿用既有 runtime/build/results gate、全程串行，不重建/清除容器或重裝依賴；清理由步驟 4 負責。run 摘要記錄各階段 PASS/FAIL/SKIP/N/A/NOT_RUN、exit code 與實際 log，失敗亦保留。
+
+`-p/-s/-f/-c/-j/-k/-a` 為特殊單項執行參數；如 `test_run.sh -s all` 僅跑一般全測試、`-s unit` 僅 unit、`-a tsan -t on` 明確跑 TSan，保留非空選集與隔離驗證。`todo_check.sh` 保留給 agent/除錯的 TODO 映射，不再是使用者完整測試的必要入口。獨立 lint 仍只呼叫 `test_lint.sh`，不從 test_run 啟動其獨立 Docker；既有 ament CMake/XML/flake8/pep257/cppcheck 不因此刪除。Debian 打包/乾淨安裝暫維持 `test_packages.sh` 獨立（是否納入完整流程已詢問使用者，待裁決）。
+
 從該 item 的目標 package 執行(附錄 B)：T0、T2–T9 從 transport、T1 從 `r1_interfaces`、T10 從 `r1_test_mocks`、T11 從 `r1_integration_tests`。
 
 ```bash
@@ -112,8 +128,8 @@ TSan 的人工停用規範另見 §1.3.3，不得將其 SKIP 當成 lint 或 T12
 
 ### 1.3.3 TSan 明確開關
 
-- `todo_check.sh <item> -t on|off` 與 `test_run.sh ... -t on|off` 預設 `on`；這是已選定 TSan job 的開關，`on` 不會將一般測試自動變成 TSan，低階入口仍需 `-a tsan`。
-- 只有使用者明確給 `off` 才略過 TSan。略過時 stdout 明示 `SKIP`、owner/原因與 TSan 未執行，exit `77`（不是 PASS）；在 Docker 存取、產物建立/清除與 cleanup trap 之前返回。一般、ASan、UBSan 與打包不因 `-t off` 被略過。
+- 使用者最新裁決取代 v0.8.20：`todo_check.sh <item> -t on|off` 與 `test_run.sh ... -t on|off` **預設 off**；明確 on 才啟用 TSan。完整流程的 on 加入該 owner TSan 階段；特殊單項仍需 `-a tsan`／`t12-tsan`。
+- 單獨 TSan job 為 off 時，stdout 明示 `SKIP`、owner/原因與 TSan 未執行，exit `77`（不是 PASS），在 Docker 存取、產物建立/清除與 cleanup trap 前返回。完整流程則記錄 TSan 為 SKIP/77，繼續其他已啟用項目；一般、ASan、UBSan 與打包不因 off 被略過。
 - 不接受 on/off 以外的值、缺值或多餘參數；無效 owner/item、sanitizer 與互斥參數仍失敗。不得在 runtime 失敗後自動改為 off，也不得以未 instrument 的重跑冒稱 TSan 成功。
 - 排程若選擇繼續其他 jobs，須單獨記錄 exit 77 為 SKIP，其他非零仍中止；不能用 `|| true` 吞掉所有錯誤。SKIP 不滿足 T12.2，該項保留未完成，需支援環境以 on 真正驗收。
 - 不自動更改 host sysctl/ASLR、Docker seccomp/capabilities 或加入 suppressions。新旗標依 §1.4 先完成 framework PR/merge 才能導入 consumer；開發期使用明確 owner override，不修改已發布 tag 或 nested gitlink。
@@ -132,7 +148,7 @@ TSan 的人工停用規範另見 §1.3.3，不得將其 SKIP 當成 lint 或 T12
 | 版本 commit 與 tag | 功能、測試、文件變更先提交，版本欄位不得提前混入這些 commit；完成驗證、準備提出 PR 時才附獨立版本 commit，只含版本欄位變更，訊息包含 `vX.Y.Z`(如 `chore(release): v0.1.0`)，並建立同名 Git tag 指向該 commit。目前手動執行，未來才由 GitHub Actions 產生；本輪不實作 workflow。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者本次准許的首次定版例外，不作為後續慣例。合併須保留該獨立 commit 與 tag SHA，使用 merge commit，不 squash/rebase 已標記的版本 commit；不得自行移動或覆寫 tag |
 | 完成流程 | 階段完成(該大項查核與實測通過)後:附版本 commit/tag → push branch 與 tag → 對主 branch 提出 PR → 回報使用者。PR 合併由使用者裁決；無 remote 的 repo 暫存本地，待具備 PR 條件才附 release commit |
 | Framework 升版順序 | 先提交 framework 版本 PR，等待使用者 merge；確認 merge 後才將各 package 的 submodule gitlink 固定到該版本 tag 所指 commit，再推送各 package 的 PR。不得提前更新，也不得改 pin 任意開發 HEAD 或 merge commit |
-| Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`。`r1_interfaces` remote 待建立;建立前 branch 僅存本地 |
+| Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`；`r1_interfaces`:`git@github.com:cocobird231/r1_interfaces.git`（SSH 已確認可用，當前 GitHub API 404 仍阻塞 PR）。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag；本次 PR 不附版本提交，不捏造版本回退/升版。 |
 
 ### 1.5 前置裁決(開工前決定)
 
@@ -565,6 +581,12 @@ graph LR
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
 
+**四步完整入口開發驗證(v0.8.21)**：framework 功能 commit `976007b` 將無參數 test_run 串接一般完整測試與 owner 適用 sanitizer，TSan 預設 off；沿用既有 runtime/build/results gate，按 run/profile 隔離，失敗不繼續後續已啟用階段。使用官方 Jazzy Docker，以明確 owner override 依序跑四個 packages，未更新 nested v0.3.0 gitlink。transport 一般 134（unit 84／integration 50）、ASan 64、UBSan 84 PASS；mocks 一般 23、UBSan 3 PASS；interfaces build PASS、0 cases。transport 既有 cppcheck 32 SKIP 仍揭露。
+
+integration 一般測試為 20 PASS／1 FAIL：I18 在 `scenario_i18_service_response_failure.py:123` 等待 `register_result controller=c18 code=0` 15 秒未符合；完整流程 exit 1，ASan 正確標為 NOT_RUN，TSan SKIP/77。原始事件只在記憶體，log 無實際失敗回覆碼，不能定因；同一已編譯來源另做一次事件輸出診斷，I18 收到 code=0 並 PASS，**不覆蓋原失敗、不當成完整驗收通過**。不修改 consumer 測試或 runtime，後續修正待使用者授權。各測試容器已卸載、證據保留。
+
+framework 本輪 51 個具名 Python cases（21 sanitizer、16 packaging、8 toggle、6 full-run）與 owner/selector/sanitizer/lint-entry shell suites PASS；framework lint C/C++ 3、Python 10、Shell 14 PASS。報告與逐項原始 log：[R1-full-entry-report.md](../test_env/jazzy/full-entry.rbdHfE/R1-full-entry-report.md)。本輪未重跑獨立 Debian 打包/乾淨安裝。已推送功能 commit，更新既有 framework [PR #8](https://github.com/cocobird231/r1_test_framework/pull/8) 的標題與說明為 **DO NOT MERGE／I18 validation pending**；目前 token 拒絕 convertPullRequestToDraft，GitHub draft 狀態仍為 false，需使用者手動轉草稿。完整驗證未全過前不新增下一版 release commit/tag；既有 v0.4.0 tag 不移動。所有 consumer pin 與版本保持不變，interfaces 另依使用者裁決不新增 release commit/tag，其 API 404 仍阻塞 PR。
+
 **TSan 平台查證與開關(v0.8.20)**：本機 Linux 6.17.0-35／官方 Jazzy image，`vm.mmap_rnd_bits=32`、ASLR=2、stack 8192 KiB、virtual memory unlimited。原 GCC 的 unexpected memory mapping 與 Clang 18 的 personality CHECK，符合 [LLVM #78351](https://github.com/llvm/llvm-project/pull/78351) 描述的高 entropy mapping 衝突及嘗試停用 ASLR 的恢復路徑；[Docker seccomp 文件](https://docs.docker.com/engine/security/seccomp/) 說明 personality 參數限制。這是與證據相符的原因判斷，不宣稱已用變更安全設定的 A/B 實驗證實。本輪新 clean probe 仍 BLOCKED（stderr 空白），不以此推稱新的 mapping 訊息；原錯誤 log 保留。查證 log：transport `test_env/jazzy/T12-formal.6Gxz4q/tsan-research-preflight.log`，Clang 舊 log：`test_env/jazzy/runs/framework-T12-check/clang-tsan-diagnostic.log`。目前安全邊界下無可靠修法，依 §1.3.3 增加顯式開關；開關驗證與 TSan runtime 驗收分開。
 
 開關實作結果：framework 功能 commit `0f11798` 後，另附只改 VERSION/README 安裝 tag 的 `chore(release): v0.4.0` commit/tag `dbef3f40818081756d147ce7b064b4e6e7917916`，已推送 [PR #8](https://github.com/cocobird231/r1_test_framework/pull/8)（base master，待使用者 merge）。Docker 7 組新 CLI integration 回歸、21 sanitizer unit、既有 owner/selector/sanitizer integration 全 PASS；後者包含真實 ASan/UBSan 正反控制，但不是 TSan runtime 驗收。另對 transport/integration 兩個真實 owner 以唯讀掛載、開發 framework 明確 override 驗證兩入口，共 4 次 SKIP/exit 77，沒有執行 TSan。完整 lint C/C++ 3、Python 9、Shell 14 檔全過，獨立複核無 must-fix。原始 log 在 transport `test_env/jazzy/T12-formal.6Gxz4q/`：`tsan-toggle-full-regression.log`、`tsan-toggle-final-check.log`、`tsan-toggle-lint.log`；新 Python 檔只以 Docker Ruff 格式化。consumer 四個 pins 仍是 `67755d6`，各 package 版本、rv2 Doxyfile 與既有來源差異保留；不提前導入或勾選 T12.2。
@@ -611,8 +633,8 @@ v0.8.16 當時尚未完成：framework merge 後的 consumer pin/新 nested 入�
 - [x] **T12.1** ASan + LSan job:H6 / K10 / K15 / M10 / I10(UAF、shutdown 與 leak 回歸)。
   查核：transport 執行 `./r1_test_framework/todo_check.sh t12-asan`；`r1_integration_tests` 執行相同 item 跑 I10，且實際 instrument transport 與 C++ 場景 nodes。兩份皆全綠、正常 shutdown、無 sanitizer/leak 報告。
 - [ ] **T12.2** TSan job:LivenessState 並發活動與 terminal seal(L14–L18)、Source / Sink hot path(S11/K10/K12/K16)、tick commit(M22)、Handle replacement(H6)、M4 註冊風暴及 I10。
-  查核：transport 與 `r1_integration_tests` 各執行 `./r1_test_framework/todo_check.sh t12-tsan`，覆蓋以上案例，無 race 報告。runtime/平台不支援須回非零並記為阻塞，不可跳過後宣稱 PASS；不得更改 host sysctl 或自動加入 suppressions。
-  人工停用：新版框架可使用 `./r1_test_framework/todo_check.sh t12-tsan -t off`，僅產生 SKIP/exit 77，**不滿足本項查核**；開啟為 `-t on`（預設）。兩個 owner 都適用，正式導入仍須先完成 framework merge/pin。
+  查核：transport 與 `r1_integration_tests` 各執行 `./r1_test_framework/todo_check.sh t12-tsan -t on`，覆蓋以上案例，無 race 報告。runtime/平台不支援須回非零並記為阻塞，不可跳過後宣稱 PASS；不得更改 host sysctl 或自動加入 suppressions。
+  人工停用：新版框架預設 off，`./r1_test_framework/todo_check.sh t12-tsan [-t off]` 僅產生 SKIP/exit 77，**不滿足本項查核**；須明確 `-t on` 開啟。兩個 owner 都適用，正式導入仍須先完成 framework merge/pin。
 - [x] **T12.3** UBSan job:全部單元測試。
   查核：transport 與 `r1_test_mocks` 各執行 `./r1_test_framework/todo_check.sh t12-ubsan`，精確匹配 `unit` label 且實際測試非空，diagnostic 必須使 job 非零。interfaces/integration 無 unit cases，明示不適用，不用空集合充當成功。
 - [x] **T12.4** `.deb` 打包:`test_packages.sh` 產出命名符合 §11.5.3 規則(version 段附 timestamp + short hash)之套件,並於乾淨 container 內 `dpkg -i` 安裝驗證。

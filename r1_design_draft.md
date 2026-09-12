@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.19)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.20)
 
-> 狀態:正式版(v1.3.19);TSan 平台查證與明確開關。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.20);四步測試流程與 TSan 預設關閉。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.20 | **更新 Agent:`coco-codex`**。依使用者新裁決改 TSan 預設 off，無參數 test_run 在既有 Docker 環境完成全部一般 unit/integration 與適用 sanitizer；build/deps/run/clean 各自負責一個生命週期步驟，lint 保持獨立。沿用精確案例/非空/diagnostic gate，以新持久 run-root 掛載隔離 profile 產物並記錄各階段狀態。單項參數與 TODO 除錯入口保留，SKIP 不滿足 T12.2；不改來源安全設定/已發布 tag，不提前更新 consumer pin。r1_interfaces SSH remote 已確認可用，但 API 404 仍阻塞 PR；使用者已裁決保持 package.xml 0.1.0，本次不新增 release commit/tag。 |
 | v1.3.19 | **更新 Agent:`coco-codex`**。依使用者要求查詢 TSan 啟動錯誤並規範明確開關：本機 mmap_rnd_bits=32 與既有 GCC/Clang 啟動失敗符合 LLVM 的 ASLR/shadow mapping 問題；不變更 host/容器安全設定。§11.4 新增兩個框架入口的 `-t on\|off`，預設 on、明確 off 才 SKIP/exit 77，不啟動/清除容器或產物、不影響其他 sanitizer、不將 SKIP 當驗收。文件先行；framework 開發與 consumer pin/release 分離，T12.2 保持未完成。 |
 | v1.3.18 | **更新 Agent:`coco-codex`**。四個 consumer 已固定 framework v0.3.0 原 tag `67755d6`。nested 串行 ASan/LSan、UBSan、Debian 乾淨安裝與完整 t2–t11 鏈通過，TODO T12.1/T12.3/T12.4/T12.5 完成。M22 補真實 calc/activity/seal 兩種交錯、恰一次 terminal 順序與 ASan 五次複測；原 K11 平行 DDS 干擾以串行原樣重驗解決，不改 runtime/門檻。TSan 兩 owner 的 clean probe 仍平台阻塞，T12.2 未完成，未附 consumer release/PR。package 版本、rv2 Doxyfile 與既有差異保留；完整測試/產物證據及案例數區分見 TODO T12。 |
 | v1.3.17 | **更新 Agent:`coco-codex`**。修正 Docker default bridge 自帶測試隔離的錯誤假設：正式 UBSan K11 與 t5 的同名 topic 重疊 265 ms，獨立容器探針證實 domain 0 跨 bridge 容器通訊。§11.3 明訂未驗證獨立 domain/network 的 ROS jobs 全域串行，不能只靠 container 名稱或 host env 宣稱隔離。本輪不改 K11 斷言/runtime 或已發布 framework，保留失敗證據後串行重驗；M22 已以 test-only forwarding probe 補兩種真實交錯，ASan 矩陣及五次複測通過，TSan runtime 仍阻塞。 |
@@ -1676,7 +1677,11 @@ H1–H6 驗證 Handle 的單一操作、型別、引用與並發安全合約，�
 
 runtime 不支援、空選集、diagnostics 或異常退出均回非零，保留原始 log 並記為失敗或平台阻塞；不自動更改 host sysctl、安全設定、關閉 leak detection 或加入 suppressions。第三方 diagnostics 亦不得隱藏，需依證據另行處理。每個 run 在 owner `test_env/<distro>/` 下隔離並保留選集、工具/來源 metadata 與結果，不覆蓋既有一般或其他 sanitizer 產物。
 
-依使用者裁決新增顯式 TSan 開關：`todo_check.sh <item> -t on|off` 與 `test_run.sh ... -t on|off` 預設 on；只有已選 TSan（`t12-tsan`／`-a tsan`）且明確 off 時略過，stdout 明示 SKIP、owner/原因與未執行，回 exit 77。在 Docker 存取、產物建立/清除與 cleanup trap 前返回，既有 log 不覆蓋，不改跑無 instrumentation 的一般測試。非法值/缺值/多餘參數、無效 owner/item 與互斥參數不能被 off 掩蓋；其他 sanitizer、一般測試與打包仍原樣執行。排程可明確記錄 77 為 SKIP 後繼續其他 jobs，但不可吞掉其他非零，也不能據此勾選 T12.2。on 仍須完整 runtime preflight/build/results gate，runtime 失敗不自動降級成 SKIP。
+依使用者最新裁決，顯式 TSan 開關 `todo_check.sh <item> -t on|off` 與 `test_run.sh ... -t on|off` **預設 off**。單獨 TSan（`t12-tsan`／`-a tsan`）為 off 時略過，stdout 明示 SKIP、owner/原因與未執行，回 exit 77；在 Docker 存取、產物建立/清除與 cleanup trap 前返回，既有 log 不覆蓋，不改跑無 instrumentation 的一般測試。無參數完整流程則將 TSan 記為 SKIP/77，依其他已啟用階段判定 exit；明確 on 才加入適用 TSan 階段。非法值/缺值/多餘參數、無效 owner/item 與互斥參數不能被 off 掩蓋；其他 sanitizer、一般測試與打包仍原樣執行。SKIP 不能據此勾選 T12.2；on 仍須完整 runtime preflight/build/results gate，runtime 失敗不自動降級成 SKIP。
+
+使用者完整測試入口為 `test_build.sh`（建立 Docker/唯讀來源與產物 mounts）→`test_deps.sh`（安裝依賴）→無參數 `test_run.sh`（同一容器內串行一般完整 CTest、適用 ASan/UBSan、可選 TSan）→`test_clean.sh`（卸載、預設保留產物）。不讓使用者逐一呼叫 TODO item，也不從 test_run 重新建容器或安裝依賴。新增持久 run-root mount，每次新 run/profile 的 build/install/log 與摘要 log 都保留；mount 必須實查、來源保持唯讀，既有 checker 的 workspace 參數與精確矩陣重用。
+
+transport sanitizer 矩陣為 ASan/UBSan/可選 TSan；mocks 僅 UBSan；integration 僅 I10 ASan/可選 TSan；interfaces 無測試與 sanitizer，不新增空案例。完整流程逐階段記 PASS/FAIL/SKIP/N/A/NOT_RUN 與 exit/log；任何已啟用階段失敗仍非零。指定 `-p/-s/-f/-c/-j/-k/-a` 時保留特殊單項模式，只有 `-d/-t` 時仍為完整流程。lint 仍以 `test_lint.sh` 獨立 Docker 執行；既有 ament 非重複檢查保留在一般 CTest，不把 clang-format/Ruff/ShellCheck 說成涵蓋全部 CMake/XML 檢查。Debian 打包/乾淨安裝暫仍獨立 test_packages，是否預設包含待使用者回覆。framework PR 先經使用者 merge，再更新所有 consumers；r1_interfaces SSH remote 已確認可用，當前 API 404 仍阻塞 PR。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag，不再等待首次空版本 commit 例外（TODO §1.4）。
 
 平台查證：官方 Jazzy 容器讀得 Linux 6.17.0-35、mmap_rnd_bits=32、ASLR=2；既有 GCC mapping failure 與 Clang 18 personality CHECK 符合 [LLVM #78351](https://github.com/llvm/llvm-project/pull/78351) 的固定 shadow mapping／高 entropy 限制及 re-exec 恢復機制；[Docker seccomp](https://docs.docker.com/engine/security/seccomp/) 對 personality 有參數限制。這是證據支持的診斷，未更改安全設定作 A/B 實驗。新 probe 仍 BLOCKED，不宣稱工具鏈更新已解決。開關不是 runtime 修復，正式導入仍須先 framework PR/merge 再 pin；詳細 log 與開關驗證見 TODO v0.8.20。
 
@@ -1723,7 +1728,16 @@ rv2_control_signal_transport
 │   └── <ROS2_distro>/
 │       ├── install/
 │       ├── build/
-│       └── log/
+│       ├── log/
+│       └── runs/
+│           └── full-<UTC>.<suffix>/  <-- 每次完整流程建立新目錄
+│               ├── metadata.txt
+│               ├── summary.tsv
+│               └── <profile>/      <-- normal、asan、ubsan 或 tsan；僅已執行階段
+│                   ├── build/
+│                   ├── install/
+│                   ├── log/
+│                   └── execution.log
 └── .gitignore
 ```
 
@@ -1735,10 +1749,11 @@ rv2_control_signal_transport
 |---|---|
 | Base image | 依 ROS2 distro 選用對應的官方 image(含對應 OS 版本)。此 image **可重用**,不隨測試重建。 |
 | Per-package test container | 每次執行 `test_build.sh` 時**清除後重建**；容器命名為 `r1_test_<package>_<distro>`,使清除目標可識別。 |
-| 工作目錄 | 於容器內建立 `~/ros2_ws/`,其下含 `src/`、`install/`、`build/`、`log/`。 |
-| 程式碼掛載 | package 原始碼以 volume 掛載至容器內的 `~/ros2_ws/src/test_pkg/`。 |
+| 工作目錄 | 於容器內建立 `~/ros2_ws/`,其下含 `src/`、`install/`、`build/`、`log/`，供既有單項模式使用。完整流程各階段在 `/root/r1_test_runs/<run>/<profile>/` 編譯與測試，共用 `~/ros2_ws/src/` 唯讀來源。 |
+| 程式碼掛載 | package 原始碼以唯讀 bind mount 掛載至容器內的 `~/ros2_ws/src/<package>/`。 |
 | **Workspace-local 依賴掛載**(v1.2.1) | package 根目錄的 `test_depends.repos` 宣告檔列出 workspace 內尚未釋出的相依 packages(如 `rv2_interfaces`、`r1_test_mocks`),`test_build.sh` 會將這些相依的原始碼一併**唯讀掛載**至 `~/ros2_ws/src/<dep>/`。此機制之所以必要,是因為 rosdep 無法解析未釋出的 sibling package；若缺少此機制,單一掛載模型將無法 build。 |
 | 產物掛載 | package 路徑下 `test_env/<ROS2_distro>/` 中的 `install/`、`build/`、`log/` **一對一掛載**至容器內 `~/ros2_ws/` 的對應資料夾,因此測試 log 在容器外部即可直接讀取。 |
+| 完整流程 run-root 掛載 | 同一 owner 產物目錄下的 `runs/` 以**可讀寫 bind mount** 掛載至 `/root/r1_test_runs`。無參數 `test_run.sh` 先實查此掛載的唯一性、來源與可寫屬性，再建立新的 `full-<UTC>.<suffix>/<profile>/`；缺少或不符時失敗並要求使用者重跑 `test_build.sh`，不自動重建容器。各 run 的 metadata、摘要與逐階段產物/log 持續保留；一般 cleanup 不刪除。 |
 
 ROS2 distro 與 base image 的對應關係如下(隨支援版本擴充):
 
@@ -1752,11 +1767,12 @@ ROS2 distro 與 base image 的對應關係如下(隨支援版本擴充):
 
 | 腳本 | 職責 |
 |---|---|
-| `test_build.sh` | 先解析目標 ROS2 distro(由參數或環境變數指定),識別對應的 base image(含 OS)並下載。接著清除既有同名 test container 後重建,在容器內建立 `~/ros2_ws/{src,install,build,log}`,將 package 原始碼掛載至 `~/ros2_ws/src/test_pkg/`,並於 package 路徑建立 `test_env/<distro>/{install,build,log}` 完成一對一掛載。 |
+| `test_build.sh` | 先解析目標 ROS2 distro(由參數或環境變數指定),識別對應的 base image(含 OS)並下載。接著清除既有同名 test container 後重建,在容器內建立 `~/ros2_ws/{src,install,build,log}`，將 package 與 workspace-local 依賴來源唯讀掛載，於 owner `test_env/<distro>/{install,build,log}` 完成一對一掛載，另將同層 `runs/` 可讀寫掛載至 `/root/r1_test_runs`。保留既有 host 產物，不安裝依賴或執行測試。 |
 | `test_deps.sh` | 在容器內以 `rosdep install --from-paths ~/ros2_ws/src --ignore-src` 安裝全部**外部**依賴；workspace-local 依賴已由掛載滿足,`--ignore-src` 則使 rosdep 跳過 src 內已存在的 packages。此步驟必須完整解決 dependency 問題,一旦失敗即中止,不進入 build。 |
-| `test_run.sh` | 先初始化容器內的 `install/`、`build/`、`log/`(清空前次產物),再依 package 的 CMake 設定編譯 `test/unit/` 與 `test/integration/` 並執行 `colcon test`。預設執行兩類，可用 `-s unit` / `-s integration` 選擇 CTest label；保留案例名稱篩選，空匹配必須失敗。結束碼反映測試結果,作為 CI 的判定依據。 |
+| `test_run.sh` | 無參數(或只有 `-d/-t`)時，在既有依賴就緒容器內依序執行一般完整 CTest → owner 適用 ASan → 適用 UBSan → 可選 TSan；TSan 預設 off，無定義矩陣明示 N/A。每次建立新的 run，各已執行 profile 使用獨立乾淨 build/install/log，保留 metadata、summary.tsv 與 execution.log，不清除前次或一般單項產物，不重建/卸載容器或重裝依賴。所有階段串行，沿用非空選集與 sanitizer runtime/build/results gate，已啟用階段失敗使整體非零，未執行階段如實記錄 NOT_RUN/SKIP/N/A。指定 `-p/-s/-f/-c/-j/-k/-a` 則保留單項模式：一般單項預設清空既有 workspace 的 build/install/log，`-k` 保留；`-s all` 僅跑一般完整 CTest，`-s unit` / `-s integration` 與名稱篩選仍拒絕空匹配；sanitizer 仍要求隔離的新產物，不能合用 `-k`。 |
+| `test_clean.sh` | 卸載指定 test container，預設保留所有一般與完整流程產物/log。只有明確 `--purge-env` 才透過 Docker 清除 owner 選定產物目錄的 build/install/log/packages/runs；`--rmi` 另行移除 base image。 |
 | `test_lint.sh` | 獨立短生命週期 Docker lint，不依賴既有測試容器、不 build、不自動修正。檢查目標 Git repo 工作樹的 C/C++ 格式、Python 格式/基本靜態問題及 Shell 語法/ShellCheck；框架與來源唯讀掛載，排除 generated/submodule/symlink，不掃 sibling dependencies。採用含 lint 的 framework 版本後，PR 前必須通過。 |
-| `test_packages.sh` | 在容器內將 package 打包為 `.deb`。檔名符合 ROS2 官方命名規則(distro、package name、version),並附加 **timestamp 與 commit hash** 以供開發測試辨識。 |
+| `test_packages.sh` | 保持獨立入口，在容器內將 package 打包為 `.deb` 並執行乾淨安裝驗證；是否納入無參數完整流程待使用者回覆。檔名符合 ROS2 官方命名規則(distro、package name、version),並附加 **timestamp 與 commit hash** 以供開發測試辨識。 |
 
 `.deb` 命名規則如下:在官方樣式的 version 段附加辨識資訊:
 
