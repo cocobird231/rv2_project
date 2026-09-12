@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.26)
+# R1 實作 TODO List(v0.8.27)
 
-> 依據:`r1_design_draft.md` v1.3.25(正式版;consumer PR 前已提交版本驗證)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.26(正式版;interfaces 補進版、其餘 consumer lint 與測試)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.27 | **更新 Agent:`coco-codex`**。依使用者要求補 interfaces 正常 0.1.0→0.1.1 獨立版本 commit/tag 5bef9c0、更新 PR #1，取代暫不定版例外。Mocks/integration 格式提交 5af25b8／46e7116 與正式 lint 均 PASS；使用者另批准 I10 程序退出補強，獨立 commit 07d8a13，不混入 I15/I18。兩包完整四步串行皆 exit 0：mocks unit 3／integration 20、UBSan 3；integration 一般 21／I10 ASan 2 cases PASS，TSan SKIP。驗證後獨立 v0.1.1 commit/tag mocks 37d6e7f、integration 5adecce，提出 PR #4／#3。保留所有原來源 bytes、I15/I18 未提交差異與 dirty rv2_interfaces 依賴限制；metadata-only release 後未重跑 ROS，docs 無 remote 留本地。 |
 | v0.8.26 | **更新 Agent:`coco-codex`**。使用者要求推送 consumer PR；framework 本地 master 再次 pull 確認仍為 f5952a8。以已提交 checkout 驗證：interfaces build/full entry PASS、lint SKIP，更新 PR #1，維持 0.1.0 不定版例外；transport lint、一般 134／ASan 64／UBSan 84 PASS，獨立 v0.1.2 commit/tag 8f56a55 後提出 PR #8。乾淨 rv2_interfaces 缺 legacy 欄位的編譯失敗保留；成功結果依賴現有唯讀 dirty workspace dependency，PR 明示非全 clean-dependency 重現。mocks/integration committed lint 分別 FAIL 11／26，不 push／release／PR，待允許另行提交格式化修正；既有 source 差異與 Doxyfile 不動，docs 無 remote 仍留本地。 |
 | v0.8.25 | **更新 Agent:`coco-codex`**。依使用者最新裁決取代「固定合併前原 tag SHA」：使用者採 rebase 合併，必須先在本地 framework master 執行 git pull，再核對實際合併後版本 SHA 才更新 consumers。已 git pull --ff-only origin master，確認本地／origin/master／即時遠端皆為 v0.5.0 release f5952a8；四個頂層 consumers 改 pin 該主線 SHA，不再 pin af386de。兩者 tree 相同、原 tag 不移動，保留前輪 commits／歷史及既有來源差異；本次只補 gitlink 修正提交、不升 package 版本／push／PR。 |
 | v0.8.24 | **更新 Agent:`coco-codex`**。使用者已合併 framework PR #8 並要求更新各 package submodule；主線 release f5952a8 與原 v0.5.0 tag af386de tree 一致，固定原 tag、不移動既有標記。先修文件，再更新四個頂層 consumers 的 gitlink／nested checkout，以獨立 dependency commits 與 Docker 入口查核驗證；不混入 I15/I18、格式化或 export 等既有來源差異，不改 package 版本、rv2 Doxyfile 或另行初始化中的 rv2_project staged workspace。不把本輪 pin／入口驗證說成完整 ROS／sanitizer 重驗，T12.2 仍未完成。 |
@@ -50,6 +51,8 @@
 ## 1. 使用方式與共通規範
 
 **最新裁決優先(v0.8.25)**：使用者採 rebase 合併；framework 升版須遵守 §1.4 的「pull 後核對合併主線 SHA」流程。較舊歷史段落與已發布 framework README 中「只能 pin 原 tag／禁止 rebase」不再作為目前升版規則；保留歷史與原 tag，不為更新 README 改動本輪待固定的 framework tree。README 後續另行同步。
+
+**Interfaces 進版裁決(v0.8.27)**：使用者現在要求補進版 commit；先前「維持 0.1.0、不附 release/tag」為歷史，不再適用本輪 PR。按現有 package.xml 0.1.0 正常升至 0.1.1，以獨立版本 commit/tag 記錄；不新增空 commit 或改寫原始版本歷史。
 
 ### 1.1 清單結構
 
@@ -155,7 +158,7 @@ TSan 的人工停用規範另見 §1.3.3，不得將其 SKIP 當成 lint 或 T12
 | 版本 commit 與 tag | 功能、測試、文件變更先提交，版本欄位不得提前混入這些 commit；完成驗證、準備提出 PR 時才附獨立版本 commit，只含版本欄位變更，訊息包含 `vX.Y.Z`(如 `chore(release): v0.1.0`)，並建立同名 Git tag 指向該 commit。目前手動執行，未來才由 GitHub Actions 產生；本輪不實作 workflow。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者准許的首次定版例外，不作為後續慣例。合併方式由使用者決定，採 rebase 時預期 commit SHA 改變；版本提交仍應可在合併後歷史辨識。不得自行移動或覆寫既有 tag，也不能以保留 tag 為由繼續 pin 合併前 SHA；依下列流程核對新的主線版本 SHA |
 | 完成流程 | 階段完成(該大項查核與實測通過)後:附版本 commit/tag → push branch 與 tag → 對主 branch 提出 PR → 回報使用者。PR 合併由使用者裁決；無 remote 的 repo 暫存本地，待具備 PR 條件才附 release commit |
 | Framework 升版順序 | 先提交 framework 版本 PR，等待使用者 merge。檢查本地 framework 工作樹乾淨，再切 master 執行 `git pull --ff-only origin master`；不能只 fetch 或沿用記憶中的 SHA。核對本地 HEAD、origin/master、即時遠端主線 SHA 一致，並確認 PR 已合併、VERSION、主線版本 commit 與預期 release 內容。rebase 後 consumer 必須固定此已核對的合併主線版本 SHA，而非合併前 tag；記錄舊／新 SHA 與 tree 比較。若 pull 不能 fast-forward、工作樹不乾淨或主線有超出欲導入版本的額外變更，先查核／回報，不 reset、force pull 或直接追最新開發內容。各 nested repo fetch 後 checkout 該精確 SHA，以 gitlink-only commit 保存；測試／一般 clone 不得自動追 HEAD，仍用 submodule update 還原固定 SHA。package PR／獨立定版另依完成流程 |
-| Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`；`r1_interfaces`:`git@github.com:cocobird231/r1_interfaces.git`（v0.8.22 已確認 SSH/API 權限恢復）。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag；本次 PR 不附版本提交，不捏造版本回退/升版。 |
+| Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`；`r1_interfaces`:`git@github.com:cocobird231/r1_interfaces.git`（v0.8.22 已確認 SSH/API 權限恢復）。Interfaces 自 v0.8.27 使用者新裁決起恢復正常獨立進版，本輪 0.1.0→0.1.1，附只改版本欄位的 commit/tag 並更新原 PR；先前暫緩定版例外僅為歷史，不製造版本回退或空 commit。 |
 
 ### 1.5 前置裁決(開工前決定)
 
@@ -587,6 +590,16 @@ graph LR
 
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
+
+**Lint 修正與 interfaces 進版(v0.8.27)**：使用者授權接續前輪未完成的兩包 lint 與測試，並要求 interfaces 補進版。先修文件再實作；以 mocks/integration 已提交 HEAD 的乾淨候選在官方 Docker 執行 clang-format 18、Ruff 0.15.7 `check --fix --no-unsafe-fixes`／`format`，沿用 nested 設定與 gate 的 cwd／路徑，不變更規則。只把 formatter 產物的 scoped patch 提交，保留原工作樹 bytes，I10 額外授權另列下段。正式 nested lint PASS：mocks 16 C/C++ files、integration 4 C/C++／20 Python files；格式 commits 分別 5af25b8／46e7116。Python AST 僅 I04 unused re import 移除，C++ 另有原生 formatter 排序同一組 using declarations；獨立複核 0 must-fix。
+
+本輪追加裁決：使用者明確允許 I10 程序退出測試補強另做獨立 commit。Framework sanitizer gate 已要求 `TestI10ProcessShutdown.test_clean_shutdown`，因此在 lint commit 後只另提交既有 `scenario_i10_stress_extended.py` 的三個 sanitized nodes 暴露與 post-shutdown 檢查（exit 0、無 sanitizer diagnostics），再一起驗證；不將其混入格式 commit，也不連帶納入 I15/I18 或其他 T12 差異。
+
+I10 獨立 commit `07d8a13` 後，兩包均以乾淨候選自己的 nested 四步流程、官方 Jazzy Docker、ROS jobs 全域串行驗證，build／deps／無參數 run／clean 全 exit 0 且確認容器卸載：mocks unit 3／integration 20（共 23）與 UBSan 3 cases PASS，ASan/TSan N/A；integration 19 targets／21 unique cases、I10 ASan/LSan 2 cases PASS，controls／instrumentation／results gates 通過，UBSan N/A、TSan SKIP/77。40 colcon records 非 40 個功能案例，TSan 不滿足 T12.2。Integration 的 R1 dependencies 為乾淨 interfaces 5bef9c0／mocks 5af25b8／transport 8f56a55，但 legacy rv2_interfaces 沿用原唯讀 dirty workspace，重現限制已於 PR 揭露，不改該 repo。
+
+驗證後補獨立版本 commit/tag：interfaces `5bef9c013128ee31005a4967d6d0229e428426b1`、mocks `37d6e7f3f9c27427b03d55807e02bfcb12b3372c`、integration `5adecce4986b386ee4f75ff1f2b02fa273d1fd41`，皆只改 package.xml 0.1.0→0.1.1；Docker metadata PASS，不在 metadata-only release 後重跑 ROS。Interfaces 沿用前輪完整入口／lint SKIP 證據；已更新 [interfaces PR #1](https://github.com/cocobird231/r1_interfaces/pull/1)，提出 [mocks PR #4](https://github.com/cocobird231/r1_test_mocks/pull/4)／[integration PR #3](https://github.com/cocobird231/r1_integration_tests/pull/3)，base 皆 master、branch/tag atomic push，不自行 merge。Framework pin 仍 f5952a8，transport v0.1.2／Doxyfile 與原有差異不動。
+
+Mocks 原格式化工作樹已全部提交；integration 僅 I15/I18 非格式啟動／診斷修正仍未提交，本輪測試候選不包含它們，不能據此宣稱驗收其 code=10 修正。16 份 mocks／24 份 integration source SHA256 前後全部一致。逐項 logs、XML、版本與依賴證據：[lint-and-test-report.md](../../r1_integration_tests/test_env/jazzy/lint-fix.x9QvJk/lint-and-test-report.md)。docs 無 remote 保留本地；先前未過／尚待授權段落為歷史。
 
 **Consumer PR 前驗證(v0.8.26)**：使用者授權推 PR。各 package 在自身 `test_env/jazzy/framework-pr.*/checkout` 建立已提交 HEAD 的乾淨副本，submodule 由 GitHub 還原 f5952a8；使用該副本自身的 `./r1_test_framework/test_lint.sh`，不納入主工作樹未提交的格式化、I15/I18 或 T12 差異。interfaces build→deps→無參數 run→clean 全 exit 0，0 executable tests、sanitizer N/A，lint 無支援來源 SKIP；已更新 [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1) 至 4f6176b，base master，保持 0.1.0、不附 release/tag。
 

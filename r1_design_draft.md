@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.25)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.26)
 
-> 狀態:正式版(v1.3.25);consumer PR 前已提交版本驗證。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.26);interfaces 補進版、其餘 consumer lint 與測試。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 位置:先實作於本 repo(`rv2_control_signal_transport`)的 `r1` namespace 下,後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.26 | **更新 Agent:`coco-codex`**。Interfaces 補正常 v0.1.1 獨立版本 commit/tag 5bef9c0 更新 PR #1，取代原例外。Mocks/integration 格式提交及 lint PASS；使用者追加核准 I10 程序退出補強另做 07d8a13，不混入 I15/I18。兩包 nested 完整四步串行通過：mocks 23／UBSan 3、integration 21／ASan 2 cases；TSan SKIP不算 T12.2。獨立 v0.1.1 metadata-only commits/tags mocks 37d6e7f／integration 5adecce，提出 PR #4／#3；依賴來源、原始 logs／SHA 保留及 dirty rv2_interfaces 重現限制見 TODO v0.8.27。 |
 | v1.3.25 | **更新 Agent:`coco-codex`**。使用者授權 consumer PR；framework 本地 master 再 pull 確認 f5952a8，依已提交 checkout 驗證。Interfaces 完整入口 PASS／lint SKIP，更新 PR #1，維持 0.1.0 例外；transport lint／normal 134／ASan 64／UBSan 84 PASS 後，獨立 v0.1.2 commit/tag 8f56a55 並提出 PR #8。乾淨 rv2_interfaces 的 legacy 欄位缺漏造成首次編譯失敗，成功重驗使用現有唯讀 dirty dependency，兩者及重現限制均揭露。mocks/integration lint FAIL 11／26，保留未提交修正待裁決，不 release／PR；來源、Doxyfile 不動，docs 無 remote 留本地，詳細證據見 TODO v0.8.26。 |
 | v1.3.24 | **更新 Agent:`coco-codex`**。依使用者新裁決改用 rebase 合併後版本 SHA：先本地 master git pull，再比對本地／遠端主線、VERSION 與 release tree，才更新各 package submodule，不繼續固定合併前 tag。此次 pull 後主線為 f5952a8，與舊 af386de tree 一致；四個頂層 consumers 改 pin f5952a8，既有 tag／來源／版本保留。舊 pin／禁止 rebase 段落僅為歷史，不改寫過往紀錄；新規範優先於已發布 README，後者另行同步。 |
 | v1.3.23 | **更新 Agent:`coco-codex`**。framework PR #8 已由使用者合併；主線 f5952a8 與既有 v0.5.0 tag af386de tree 一致，consumer pin 使用原版本 tag commit，不重打 tag。依使用者要求更新本 workspace 四個頂層 R1 consumers，僅修改 gitlink／nested checkout，保留既有來源差異與 package 版本；另行初始化中的 rv2_project 不動。本輪為依賴 pin 導入及入口查核，不替代完整 ROS／sanitizer 驗收；TSan 預設 SKIP，T12.2 不勾選。 |
@@ -1797,6 +1798,10 @@ T12 打包驗收使用新的官方 base container，僅帶入產出 deb 與驗�
 v1.3.15 開發實證：三個 local deb 的內外版本/檔名、安裝與 discovery 正確，但第一次乾淨下游 `find_package(rv2_control_signal_transport)` 因缺少 `r1_interfaces` 匯出而失敗。修正 transport 的 `ament_export_dependencies`，不在 smoke 額外手動 find 介面 package；一般全量回歸再次通過，重新建置三包並於另一全新官方容器驗證下游 compile/link 與 master 正常啟停通過。這是一行 package export 修正，不改 runtime、package.xml 或 rv2 Doxyfile；consumer 更動保留待 framework 合併後接續正式導入。
 
 #### 11.5.4 一般化約定
+
+v1.3.26 最新裁決：使用者要求 interfaces 補進版 commit，先前本文／TODO／PR 的「維持 0.1.0、不新增 release/tag」只保留為歷史。正常 0.1.0→0.1.1、獨立 package.xml-only commit/tag，更新原 PR #1，不以空 commit 補記或回退再升版。Mocks/integration 本輪取得 lint 修正與測試授權，只提交格式／Ruff 安全修正。使用者追加允許 I10 程序退出檢查另做獨立 commit，以滿足新版 sanitizer gate；保留 I15/I18 與其他 T12 非格式差異，驗證後才定版／PR。逐項結果見 TODO T12 v0.8.27。
+
+本輪結果：interfaces [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1) 已附 v0.1.1 `5bef9c0`；mocks [PR #4](https://github.com/cocobird231/r1_test_mocks/pull/4) v0.1.1 `37d6e7f`、integration [PR #3](https://github.com/cocobird231/r1_integration_tests/pull/3) v0.1.1 `5adecce`，版本提交均只有 XML 欄位。兩包已提交候選的 lint／完整一般測試／適用 sanitizer 通過，I10 另為 `07d8a13`；I15/I18 非格式修正保留未提交。所有 PR 明示實測來源、metadata-only release 後未重跑 ROS，以及 integration 的既有 dirty rv2_interfaces 依賴限制；不宣稱全依賴 clean checkout 可重現，TSan 不算通過。
 
 v1.3.25 PR 結果：interfaces [PR #1](https://github.com/cocobird231/r1_interfaces/pull/1) 更新至 f5952a8 pin，維持 package 0.1.0；transport [PR #8](https://github.com/cocobird231/rv2_control_signal_transport/pull/8) 同 pin、獨立版本 commit/tag v0.1.2 `8f56a55`。已提交來源的 lint／適用完整入口結果與 rv2_interfaces dirty dependency 重現限制均明示；mocks/integration 因 committed lint 未過而暫緩，不自行提交工作樹修正。詳見 TODO T12 v0.8.26；以下版本段落為先前導入／規範紀錄。
 
