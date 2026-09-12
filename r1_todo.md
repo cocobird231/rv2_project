@@ -1,12 +1,13 @@
-# R1 實作 TODO List(v0.8.24)
+# R1 實作 TODO List(v0.8.25)
 
-> 依據:`r1_design_draft.md` v1.3.23(正式版;framework v0.5.0 submodule 導入)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.24(正式版;rebase 後 pull／pin 規範更正)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
 ## 0. 版本歷史
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.25 | **更新 Agent:`coco-codex`**。依使用者最新裁決取代「固定合併前原 tag SHA」：使用者採 rebase 合併，必須先在本地 framework master 執行 git pull，再核對實際合併後版本 SHA 才更新 consumers。已 git pull --ff-only origin master，確認本地／origin/master／即時遠端皆為 v0.5.0 release f5952a8；四個頂層 consumers 改 pin 該主線 SHA，不再 pin af386de。兩者 tree 相同、原 tag 不移動，保留前輪 commits／歷史及既有來源差異；本次只補 gitlink 修正提交、不升 package 版本／push／PR。 |
 | v0.8.24 | **更新 Agent:`coco-codex`**。使用者已合併 framework PR #8 並要求更新各 package submodule；主線 release f5952a8 與原 v0.5.0 tag af386de tree 一致，固定原 tag、不移動既有標記。先修文件，再更新四個頂層 consumers 的 gitlink／nested checkout，以獨立 dependency commits 與 Docker 入口查核驗證；不混入 I15/I18、格式化或 export 等既有來源差異，不改 package 版本、rv2 Doxyfile 或另行初始化中的 rv2_project staged workspace。不把本輪 pin／入口驗證說成完整 ROS／sanitizer 重驗，T12.2 仍未完成。 |
 | v0.8.23 | **更新 Agent:`coco-codex`**。使用者授權診斷並修正 I15；受控初始 client-not-ready 證實合法 code=10 背景成功被舊 code=0-only 等待漏接，修正前 FAIL／修正後 PASS。僅修啟動 identity／ready／retry callback gate 與 teardown log，保留原 activity/seal/terminal/亂序控制本體、runtime、timeout 及既有 I18/其他 diff。無參數完整流程一般 21/21、I10 ASan 2/2 PASS、整體 exit 0，UBSan N/A、TSan SKIP/77；owner/framework lint PASS。framework 附獨立 v0.5.0 commit/tag af386de，PR #8 恢復可審核；仍待使用者 merge 才更新 consumer pins，T12.2 不勾選。 |
 | v0.8.22 | **更新 Agent:`coco-codex`**。使用者授權診斷並修正 I18；先保留原失敗與未重現診斷，收集實際註冊回覆/重試事件，區分啟動註冊與 service-response-failure 驗收。受控初始 client-not-ready 證實 code=10 後可合法背景成功；修正前 FAIL、修正後 PASS，保持 ACTIVE、matching identity、G/G+1、恰一次 terminal/mandatory retry 及 late-event 去重，不放寬 timeout 或修改 runtime。完整 test_run 的 I18 PASS，但另有 I15 初始註冊等待 FAIL，整體 20/21；lint 與另跑 I10 ASan 2 cases PASS。PR #8 改為 I15 validation pending，下一版定版繼續暫緩。r1_interfaces API 權限已恢復並提出 PR #1，維持 0.1.0、不新增 release commit/tag；新版 framework merge 前不更新 consumer gitlink。 |
@@ -46,6 +47,8 @@
 | v0.1.0 | 初版:大項 T0–T12、依賴序、逐小項查核條件、逐大項語意查核與 docker 實測指令；隨附 `r1_test_framework` 腳本組(test_build / test_deps / test_run / test_packages / test_clean / todo_check)與 package 根目錄接線(symlink、`test_depends.repos`、`.gitignore` 排除 `test_env/`) |
 
 ## 1. 使用方式與共通規範
+
+**最新裁決優先(v0.8.25)**：使用者採 rebase 合併；framework 升版須遵守 §1.4 的「pull 後核對合併主線 SHA」流程。較舊歷史段落與已發布 framework README 中「只能 pin 原 tag／禁止 rebase」不再作為目前升版規則；保留歷史與原 tag，不為更新 README 改動本輪待固定的 framework tree。README 後續另行同步。
 
 ### 1.1 清單結構
 
@@ -109,7 +112,7 @@ git submodule update --init --recursive
 - `integration/` 驗證多元件的系統協作，包括單一 package 內的 CSM 註冊、heartbeat、callback 派送、master 對帳及 retry。M1–M26、CM1–CM13、Handle H7–H8、mock 控制/資料通訊 smoke、I00/I1–I18 放在此類。
 - 共用 fixture/helper 可留於 `test/`，可執行測試案例必須放入上述兩類。混合單一合約與系統流程的檔案須拆開，保留既有 case ID 與斷言。
 - CMake 更新來源/include 路徑，CTest 標示 `unit` / `integration` labels；預設執行兩類，`./r1_test_framework/test_run.sh -s unit` 或 `-s integration` 可分開驗證，指定類別空匹配必須失敗。
-- 遷移先修文件，再改各 package；框架先完成版本 PR 並經使用者 merge，package 再 pin 該版本 tag 所指的 commit(§1.4)。workspace sibling framework 可保留作開發 checkout，但不可作 package 執行依賴。
+- 遷移先修文件，再改各 package；框架先完成版本 PR 並經使用者 merge，再由本地 framework master pull 並核對合併後版本 SHA，package 固定該 SHA(§1.4)。不得以 rebase 前的 tag SHA 代替核對；workspace sibling framework 可保留作開發 checkout，但不可作 package 執行依賴。
 
 ### 1.3.2 PR 前 lint(格式已確認)
 
@@ -148,9 +151,9 @@ TSan 的人工停用規範另見 §1.3.3，不得將其 SKIP 當成 lint 或 T12
 | 分支模型 | 每個階段(一個或連續數個 TODO 大項)之新增、修改、刪除一律開新 branch,不直接 commit 至主 branch。branch 命名 `<身分>/<項目>`,如 `coco-claude/T0-T1`、`coco-claude/T2` |
 | **Migrate 分支政策(v0.2.2)** | 既有 rv2 packages 處於 migrate 階段:R1 新版程式碼以 **`r1` branch 為新版主 branch**,rv2 既有版本(`master`)凍結不動。`rv2_control_signal_transport` 之階段 PR 一律以 `r1` 為 base;純 R1 新 repos(`r1_test_framework`、`r1_interfaces` 等)無 rv2 包袱,主 branch 即 `master` |
 | Package 版本 | 每個 R1 package 獨立管理版本，首次定版從 `v0.1.0` 開始，不要求 packages 同步升版。ROS2 package 以根目錄 `package.xml` 的 `<version>` 為來源，僅同步屬於同一 R1 release 範圍的其他版本欄位；`rv2_control_signal_transport/Doxyfile` 屬於 rv2，維持原內容，不隨 R1 定版修改。非 ROS package 的 `r1_test_framework` 使用根目錄 `VERSION`，不為定版新增 ROS manifest，也不修改測試 fixture 版本。檔案內版本不含 `v` 前綴。文件自身的修訂版本沿用原序列，不屬 package release、不重設 |
-| 版本 commit 與 tag | 功能、測試、文件變更先提交，版本欄位不得提前混入這些 commit；完成驗證、準備提出 PR 時才附獨立版本 commit，只含版本欄位變更，訊息包含 `vX.Y.Z`(如 `chore(release): v0.1.0`)，並建立同名 Git tag 指向該 commit。目前手動執行，未來才由 GitHub Actions 產生；本輪不實作 workflow。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者本次准許的首次定版例外，不作為後續慣例。合併須保留該獨立 commit 與 tag SHA，使用 merge commit，不 squash/rebase 已標記的版本 commit；不得自行移動或覆寫 tag |
+| 版本 commit 與 tag | 功能、測試、文件變更先提交，版本欄位不得提前混入這些 commit；完成驗證、準備提出 PR 時才附獨立版本 commit，只含版本欄位變更，訊息包含 `vX.Y.Z`(如 `chore(release): v0.1.0`)，並建立同名 Git tag 指向該 commit。目前手動執行，未來才由 GitHub Actions 產生；本輪不實作 workflow。mocks/integration 已提前有 0.1.0 而使用空 release commit，僅為使用者准許的首次定版例外，不作為後續慣例。合併方式由使用者決定，採 rebase 時預期 commit SHA 改變；版本提交仍應可在合併後歷史辨識。不得自行移動或覆寫既有 tag，也不能以保留 tag 為由繼續 pin 合併前 SHA；依下列流程核對新的主線版本 SHA |
 | 完成流程 | 階段完成(該大項查核與實測通過)後:附版本 commit/tag → push branch 與 tag → 對主 branch 提出 PR → 回報使用者。PR 合併由使用者裁決；無 remote 的 repo 暫存本地，待具備 PR 條件才附 release commit |
-| Framework 升版順序 | 先提交 framework 版本 PR，等待使用者 merge；確認 merge 後才將各 package 的 submodule gitlink 固定到該版本 tag 所指 commit，再推送各 package 的 PR。不得提前更新，也不得改 pin 任意開發 HEAD 或 merge commit |
+| Framework 升版順序 | 先提交 framework 版本 PR，等待使用者 merge。檢查本地 framework 工作樹乾淨，再切 master 執行 `git pull --ff-only origin master`；不能只 fetch 或沿用記憶中的 SHA。核對本地 HEAD、origin/master、即時遠端主線 SHA 一致，並確認 PR 已合併、VERSION、主線版本 commit 與預期 release 內容。rebase 後 consumer 必須固定此已核對的合併主線版本 SHA，而非合併前 tag；記錄舊／新 SHA 與 tree 比較。若 pull 不能 fast-forward、工作樹不乾淨或主線有超出欲導入版本的額外變更，先查核／回報，不 reset、force pull 或直接追最新開發內容。各 nested repo fetch 後 checkout 該精確 SHA，以 gitlink-only commit 保存；測試／一般 clone 不得自動追 HEAD，仍用 submodule update 還原固定 SHA。package PR／獨立定版另依完成流程 |
 | Remote | `r1_test_framework`(private):`git@github.com:cocobird231/r1_test_framework.git`；`r1_test_mocks`:`git@github.com:cocobird231/r1_test_mocks.git`；`r1_interfaces`:`git@github.com:cocobird231/r1_interfaces.git`（v0.8.22 已確認 SSH/API 權限恢復）。使用者已裁決 interfaces 保持 package.xml 0.1.0，本次不新增 release commit/tag；本次 PR 不附版本提交，不捏造版本回退/升版。 |
 
 ### 1.5 前置裁決(開工前決定)
@@ -584,6 +587,10 @@ graph LR
 **目標**:三種 sanitizer build 全綠、`.deb` 打包驗證、全量迴歸。
 **依賴**:T11。
 
+**Rebase 後 pull／pin 更正(v0.8.25)**：依使用者最新裁決，在乾淨 standalone framework 本地 master 實際執行 `git pull --ff-only origin master`，exit 0，確認 HEAD／origin/master／即時遠端主線均為已合併 v0.5.0 `f5952a8d2d1f834870283494e22173d8511e5d69`。與原 tag `af386de` tree 一致，但 consumer 不再沿用合併前 SHA；tag 不移動。四個 nested repos 各自 fetch、核對並 checkout 此 SHA，新增 gitlink-only 更正 commits：interfaces `4f6176b`、mocks `0cbf2c8`、integration `61332a0`、transport `f4ff1e0`，皆在 `coco-codex/framework-rebase-pin`。前輪 commits／分支保留，不 amend；既有來源 diff SHA256、package 版本、rv2 Doxyfile 與獨立 rv2_project 不變，未 push／新 PR／release。
+
+官方 Jazzy Docker 重驗四個 nested owner/version/shell syntax 與 CLI 入口；toggle 8＋full-run orchestration 6 回歸每份皆 PASS，共 4×14 次（14 個不同 framework 案例，非 ROS 測試）。TSan off 明示 SKIP/77，不勾選 T12.2；本輪未重跑 ROS 全套、sanitizer runtime、lint、打包或 test_build 掛載查核。獨立複核確認各提交僅一個 mode 160000 變更，nested clean，0 must-fix。實際 pull 與入口原始 logs 見 [rebase-pin-report.md](../test_env/jazzy/framework-rebase.nZ4iXh/rebase-pin-report.md)。以下 v0.8.24 與更早段落為歷史，現行 pin 及規範以 v0.8.25 為準。
+
 **Framework v0.5.0 submodule 導入(v0.8.24)**：framework PR #8 已由使用者 merge；主線 release `f5952a8d2d1f834870283494e22173d8511e5d69` 與原 tag `af386dee731ec13448a344e9f64ed0978bd6cfba` tree 一致，四個頂層 consumers 固定原 tag，未移動既有標記。gitlink-only commits：interfaces `85b893b`、mocks `edc7dda`、integration `257413f`、transport `77b77dc`，皆在 `coco-codex/framework-v0.5.0` 分支，僅一個 mode 160000 路徑變更。先前 I15/I18、格式化、export／其他測試差異仍保留未提交，排除 gitlink 的 diff SHA256 前後相同；package.xml、rv2 Doxyfile 與獨立初始化中的 rv2_project staged workspace 不變。
 
 四個 nested checkout 的 owner/version/shell syntax、既有 toggle 8＋full-run orchestration 6 回歸各自 PASS（共 4×14 次，不是 56 個不同功能案例）；官方 Jazzy Docker 內 CLI 查核，TSan off 明示 SKIP/77。另逐 package 執行 nested test_build，真實驗證來源/framework RO 與 owner/run-root 掛載，再以 nested test_clean 卸載本輪容器，logs 保留。本輪未執行 test_deps／ROS build/test、sanitizer 矩陣、package lint 或打包，不冒稱 nested 全套正式驗收或勾選 T12.2。依本次 submodule 更新範圍，四個 commits 僅留本地，未 push／新開 PR／附 package release commit/tag；後續 PR-ready 才依 §1.4 獨立定版，interfaces 仍維持 0.1.0 例外裁決。完整紀錄：[submodule-update-report.md](../test_env/jazzy/framework-v0.5.0.yKzumw/submodule-update-report.md)。
@@ -638,7 +645,7 @@ framework 本輪 51 個具名 Python cases（21 sanitizer、16 packaging、8 tog
 
 **現況校準(v0.8.15)**：transport PR #7 已合併，來源版本為 0.1.1；各 consumer 仍 pin framework v0.2.1 tag `3dd3c27`，不移動既有 tag。舊 T12 入口只有 CXX/EXE flags，沒有跨 package I10、runtime fail-closed、隔離產物或乾淨安裝驗證，故不可視為已實作。mocks/integration 前輪格式化 diff 保留，不混入框架變更。
 
-**導入順序**：先修 framework 並以明確 `R1_TEST_PKG_DIR` 作開發預驗證，產物需標示未發布框架與來源 SHA/dirty 狀態；consumer 的既有 nested checkout/gitlink 不動。framework 自身回歸與 lint 通過後，依 §1.4 獨立版本 commit/tag → PR → 等待使用者 merge。之後才固定該 tag 的版本 commit，從各 owner nested 入口正式執行下列查核。預驗證不等同正式驗收；未完成的小項保持未勾選。
+**導入順序**：先修 framework 並以明確 `R1_TEST_PKG_DIR` 作開發預驗證，產物需標示未發布框架與來源 SHA/dirty 狀態；consumer 的既有 nested checkout/gitlink 不動。framework 自身回歸與 lint 通過後，依 §1.4 獨立版本 commit/tag → PR → 等待使用者 merge → 本地 master pull／核對合併後版本 SHA。之後 consumer 固定此 SHA（rebase 時不同於原 tag），從各 owner nested 入口正式執行下列查核。預驗證不等同正式驗收；未完成的小項保持未勾選。
 
 **開發進度(v0.8.16)**：framework 的 `73798d2`(sanitizer)、`3514ccb`(packaging)、`2f0af43`(README) 後，附只改 VERSION/安裝 tag 的版本 commit `67755d663922c55a15d50933ef083def4d92c964`／annotated tag `v0.3.0`；[PR #7](https://github.com/cocobird231/r1_test_framework/pull/7) base 為 `master`，尚待使用者 merge。consumer 仍固定 v0.2.1 `3dd3c27`，不移動 tag；本節全部結果均為開發 checkout 預驗證，並非新版 nested 入口的正式驗收。
 
