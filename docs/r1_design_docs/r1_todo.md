@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.37)
+# R1 實作 TODO List(v0.8.38)
 
-> 依據:`r1_design_draft.md` v1.3.36(正式版;project v0.1.2 原工作目錄與全新 clone 候選驗證通過，準備獨立版本 commit／PR)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.37(正式版;project v0.1.2 已完成乾淨 release 驗證、tag 與 PR #2，待使用者審核)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.38 | **更新 Agent:`coco-codex`**。T15完成：project v0.1.2 package.xml-only commit1ada31e、annotated tag與PR #2已推送。全新clone切至實際clean release後full-20260913T103359.7faUnS通過unit133／integration9、CMake/XML各1（148records含4wrappers），source/framework dirty0，Python3 release lint PASS；所有測試容器已清除。切換clone時Git曾保護性拒絕候選版本patch，僅撤回本agent暫存patch後切至正式commit，不reset/stash/改原來源。此完成紀錄在獨立本地results分支，不回寫已发布v0.1.2 tree/tag；已發布文件為TODOv0.8.37/designv1.3.36。Components的runtime沿用同內容歷史證據，TSan與整體總驗收仍待完成。 |
 | v0.8.37 | **更新 Agent:`coco-codex`**。v0.1.2 資料／README／版本表 b2f753a 與兩份相容測試642a573已分開提交。官方 nested RED 只敗於過期 legacy 文字 guard；修正後 unit133／integration9、CMake/XML 各1 全過，colcon148含4wrappers，零error/failure/skip；Python3 lint PASS。全新 recursive clone 取得 GitHub components／原 tags，僅套用 package.xml 進版候選差異後同組測試 PASS；不冒稱已提交 clean release。T15.2/.3 完成候選查核，準備 package.xml-only v0.1.2 commit/tag/PR；新文件與 release 將另做乾淨 clone 複驗。現況表與 R1 唯一案例157對齊已合併版本，TSan／總驗收未完成；原14links中四個舊工作分支仍保留。 |
 | v0.8.36 | **更新 Agent:`coco-codex`**。全部六個 repo 已 literal pull／核對：frameworkae47906、interfaces a0530d7、mocks614750f、transport5a91d31、integratione584074、projectc8aca0a；各版本 commit／原 tag tree 與遠端均一致。Project 六個直接 gitlinks 8f4ec55 獨立提交，四個內嵌 framework 均 ae47906。新增 v0.1.2 snapshot／設計對照與 README，僅保留 TSan、整體總驗收與外部執行環境未鎖版限制；先重現舊 integration guard 的 legacy 文字要求，再修測試。Package.xml 尚未進版。9份.gitmodules／14links 中 project10處已更新，原四個工作目錄舊分支與 dirty bytes 保留，不宣稱全部14處已更新。 |
 | v0.8.35 | **更新 Agent:`coco-codex`**。使用者確認全部 merge 並要求接續。Project master 已實際 pull 至 c8aca0a/v0.1.1，與原 tag fddcccd tree 相同；新分支移入原三份文件跟進 commits，保留原分支與歷史。規劃 T15：逐個乾淨 component 實際 pull／核對合併主線與原 release tree，新增 v0.1.2 snapshot（framework0.5.1、interfaces/mocks/integration0.1.2、transport0.2.0），不回寫舊兩版。限制清單不再要求已解決的 legacy 依賴，測試改驗通用非空限制且保留 schema／Git／版本／安裝 guards；實際來源 closure 另查核。Project own nested 四步／lint 與 clean clone 驗證後，才附 package.xml-only 版本 commit/tag/PR；既有 component 完整測試若 tree 相同則沿用並明示，不冒稱本輪總驗收。TSan 平台缺口與原 dirty sources／Doxyfile／master 保留。 |
@@ -232,7 +233,7 @@ graph LR
 
 | 項目 | 狀態／完成條件 |
 |---|---|
-| project snapshot | v0.1.1／[PR #1](https://github.com/cocobird231/rv2_project/pull/1) 已合併，master c8aca0a；原兩版 bytes 不變。新 v0.1.2 納入全部已合併 releases，實際 pull／原 tag tree 查核及候選 metadata／clone 已過，獨立版本 commit／PR 依 T15 收尾。 |
+| project snapshot | v0.1.1／PR #1 已合併，master c8aca0a；原兩版 bytes 不變。新 v0.1.2 已完成 pull／原 tag tree、候選與clean release驗證；版本commit/tag1ada31e與[PR #2](https://github.com/cocobird231/rv2_project/pull/2)已推，待使用者審核。 |
 | transport T12/export 補強 | 已隨 v0.2.0／[PR #9](https://github.com/cocobird231/rv2_control_signal_transport/pull/9) 合併至 r1，主線5a91d31與原 tag e3cb651 tree 相同。Normal113/ASan64/UBSan72、lint、兩包 Debian downstream 證據保留，無來源變更不重跑或冒稱本輪 runtime 驗收。 |
 | integration I15/I18 | 已隨 v0.1.2／[PR #4](https://github.com/cocobird231/r1_integration_tests/pull/4) 合併，主線e584074與原 tag028e416 tree 相同。先前 normal21／I10ASan2、lint、code10 RED/GREEN 證據保留；新 snapshot 已固定此 release。 |
 | legacy rv2_interfaces | Transport 664a1a4 移除 17 份 legacy 檔案與對應 build/install/dependencies；已完成無 legacy repo 的乾淨測試、打包與公開 export 驗證，收於上述 v0.2.0 PR。舊 snapshot 仍有原限制；master、Doxyfile、R1 production/API、原 legacy repo 使用者改動均保留。 |
@@ -796,7 +797,9 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] **T15.1** 六個 repo 的合併狀態、乾淨本地 literal pull、版本 commit、local/origin/live SHA 與原 tag tree 核對；保留所有舊 tag 與原 dirty checkouts。Project6個直接 gitlinks commit8f4ec55，含四個 child 的 recursive checkout 共10處均已對齊；另外四處屬原工作分支、保持舊版，原三份 dirty diff hash／master／Doxyfile 皆未變。Pull原始logs見 project test_env/jazzy/snapshot-v0.1.2.nGiMa5/。
 - [x] **T15.2** 新增 snapshots/v0.1.2.json、更新 project 六個 gitlinks 與 nested checkouts，記錄已合併 release 組合；舊 v0.1.0/v0.1.1 bytes 不變。移除 README 的過期待合併／legacy 限制；integration 不再硬性要求限制文字含 rv2_interfaces，保留 schema 的非空限制與各版本／SHA／文件／安裝斷言，新增無 legacy 限制的回歸例。
 - [x] **T15.3** Own nested 官方 Docker build/deps/無參數 run/clean 與獨立 lint；全新 recursive clone 候選驗證 tags／gitlinks／unit/integration 與安裝一致。兩份 owner 都僅有 PR-ready package.xml 進版差異，不冒稱已提交 release；元件全部 clean。明示本輪 metadata PASS 與沿用 component 同 tree 歷史測試的界線，TSan 不勾選。
-- [ ] **T15.4** 資料／gitlinks／測試／文件先提交，PR-ready package.xml 0.1.1→0.1.2 獨立 commit 與 annotated tag，push 並提出 project master PR。僅使用者合併，不移動舊版本 tag。
+- [x] **T15.4** 資料／gitlinks／測試／文件先提交，PR-ready package.xml 0.1.1→0.1.2 獨立 commit 與 annotated tag，push 並提出 project master PR。版本commit1ada31ea3487fd0610ef9034f254e6a8c5dfd365、遠端tag peeled SHA與PR #2 head一致，base master。僅使用者合併，不移動舊版本 tag。
+
+乾淨release複驗：全新clone已切至1ada31e，owner/framework dirty0，`full-20260913T103359.7faUnS` unit133／integration9、CMake/XML各1全PASS，148records含4wrappers；Python3 release lint PASS。更新文件／README／三份snapshots的安裝內容均一致，cleanup已卸載容器。完整log見同一T15-report；此發布後完成紀錄只留本地results分支，不變更PR已打tag的tree，也不冒稱本輪重跑component runtime或TSan。
 
 候選證據：source642a573＋唯一 package.xml 進版差異。RED `full-20260913T102703.OwO71c` 僅過期 guard 失敗（1功能 failure＋1 wrapper）；GREEN `full-20260913T102801.tWECAL` unit133／integration9，CMake/XML各1＋wrappers4=148records 全過，零error/failure/skip，三個sanitizers N/A。Python3 lint PASS，原owner container已清除。全新 clone 的 `full-20260913T102946.XYXfQg` 同組全過；project Git物件由本地 repo clone（非來源overlay），components均由GitHub recursive clone／補取原tags。原始 logs 與後續 release 複驗見 [T15-report.md](../../test_env/jazzy/snapshot-v0.1.2.nGiMa5/T15-report.md)。
 

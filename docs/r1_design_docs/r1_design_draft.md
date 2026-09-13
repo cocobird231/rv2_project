@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.36)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.37)
 
-> 狀態:正式版(v1.3.36);project v0.1.2 原工作目錄與全新 clone 候選驗證通過，準備獨立版本 commit／PR。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.37);project v0.1.2 已完成乾淨 release 驗證、tag 與 PR #2，待使用者審核。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.37 | **更新 Agent:`coco-codex`**。Project v0.1.2以僅改package.xml的1ada31e獨立定版，annotated tag與PR #2已推。實際clean release clone通過unit133／integration9、CMake/XML與Python3 lint；source/framework dirty0，容器已清除，證據見TODOv0.8.38 T15。本完成紀錄在本地results分支，不回寫tag／PR的v1.3.36文件tree或舊snapshots。十個project gitlinks為已核對merged releases，原四個工作分支仍保留；TSan與整體總驗收pending不改。 |
 | v1.3.36 | **更新 Agent:`coco-codex`**。Project v0.1.2 metadata 候選與全新 recursive clone 均通過unit133／integration9、CMake/XML各1，Python3 lint PASS；兩份owner僅package.xml PR-ready進版diff，components／原tags／gitlinks均clean，不冒稱release已提交。舊legacy文字guard有RED，新通用限制與兩個相容回歸GREEN；保留schema、SHA/tree/tag、歷史版本表及安裝guards。現況對齊全部已合併releases，舊兩版snapshot不變；TSan／整體驗收／外部環境未鎖版限制保留。獨立版本commit/tag/PR及乾淨release複驗接續執行，證據見TODO v0.8.37 T15。 |
 | v1.3.35 | **更新 Agent:`coco-codex`**。逐個乾淨 checkout 實際 pull／取原 release tag，確認 local/origin/live SHA 與 release tree 一致，新增 project v0.1.2 精確版本／SHA 對照。Frameworkae47906/v0.5.1、interfaces a0530d7／mocks614750f／integratione584074/v0.1.2、transport5a91d31/v0.2.0，project base c8aca0a/v0.1.1。原兩版 snapshot／tags 保留；六個 project gitlinks 8f4ec55、四個 nested framework 同 ae47906。限制不再綁定 legacy 文字，保留 TSan／整體驗收 pending 與外部 apt/image 未鎖版。測試／clone／PR 結果待 TODO v0.8.36 T15；原頂層四個工作分支與 dirty bytes 不切換。 |
 | v1.3.34 | **更新 Agent:`coco-codex`**。所有前輪 PR 已由使用者合併；project master 實際 pull c8aca0a/v0.1.1 並核對原 tag tree，承接本地未發布文件歷史。新增 v0.1.2 snapshot 規劃，以重新 pull 的主線 release 固定 framework0.5.1、interfaces/mocks/integration0.1.2、transport0.2.0，原 snapshots 不回寫。限制改述現存 TSan／總驗收缺口，不能為通過舊測試保留假的 legacy 未解決宣告；schema 的非空限制與版本／SHA／安裝 guards 不變，新增相容回歸。先文件再資料／gitlinks／測試，PR-ready 才獨立 package.xml version/tag；完整規劃見 TODO v0.8.35 T15。 |
@@ -307,7 +308,7 @@ rv2_project/
 |---|---|---|---|---|---|---|
 | v0.1.0 | v0.5.0 | v0.1.1 | v0.1.1 | v0.1.1 | v0.1.1 | development／acceptance_pending |
 | v0.1.1 | v0.5.0 | v0.1.1 | v0.1.1 | v0.1.1 | v0.1.2 | development／acceptance_pending；metadata 候選驗證 PASS |
-| v0.1.2 | v0.5.1 | v0.1.2 | v0.1.2 | v0.1.2 | v0.2.0 | development／acceptance_pending；metadata／clone 候選驗證 PASS |
+| v0.1.2 | v0.5.1 | v0.1.2 | v0.1.2 | v0.1.2 | v0.2.0 | development／acceptance_pending；metadata／clean release clone PASS，PR #2待審 |
 
 | Component | 固定合併主線 SHA | 原 release tag commit(歷史保留) |
 |---|---|---|
@@ -375,6 +376,8 @@ Project [PR #1](https://github.com/cocobird231/rv2_project/pull/1)／v0.1.1 原 
 v1.3.34 合併後規劃：使用者已合併上述四個 consumer PR 與 project #1，前段「待合併」為 v1.3.33 的歷史。新增 project v0.1.2 固定重新 pull 核對的主線 release，舊 v0.1.0/v0.1.1 snapshot 不變。限制清單記錄仍存在的 TSan 與整體總驗收 pending，不再強制包含已解決的 legacy rv2_interfaces 依賴問題；schema_version1／非空限制／所有 Git、版本與安裝 guards 保留。精確 SHA 表與正式驗證結果於 T15 完成時更新。元件同 tree 歷史測試可作相容性證據，但不是新 snapshot 整體重驗。
 
 v1.3.36 現況：前輪全部 PR 已合併，project v0.1.2 六個直接 gitlinks 8f4ec55 固定重新 pull 的 releases；四個 child 的內部 framework 均為 ae479066，不修改任何 component release。候選與全新 clone 已通過同組 metadata unit133／integration9、CMake/XML；其 owner 唯一未提交差異為準備獨立提交的 package.xml 版本。舊兩版 snapshot、原 tags／master／Doxyfile／原始 dirty 工作分支保留。本輪未重跑四個 component runtime suites；沿用同 runtime/test bytes 的前輪證據並保留 TSan／整體總驗收 pending，詳見 TODO T15。
+
+v1.3.37 發布結果：project package.xml-only version commit `1ada31ea3487fd0610ef9034f254e6a8c5dfd365`／annotated v0.1.2 tag與[PR #2](https://github.com/cocobird231/rv2_project/pull/2)已推，base master。實際乾淨release clone與獨立lint全PASS；本次僅驗project metadata，component runtime結果沿用同內容歷史證據。發布後文件完成紀錄留本地results分支，不改已發布tree；其餘總驗收限制不變。
 
 ### 2.2 元件關係圖
 
