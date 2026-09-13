@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.32)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.33)
 
-> 狀態:正式版(v1.3.32);framework v0.5.1 已 merge／重新 pull，四個 ROS consumers 正式導入中。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.33);framework v0.5.1 已導入四個 ROS consumers，正式驗證／獨立定版／PR 完成，待使用者合併後建立新 snapshot。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.33 | **更新 Agent:`coco-codex`**。四個 ROS consumers 已以 gitlink-only commits 導入實際 pull 的 merged framework ae47906/v0.5.1，own nested 官方 Docker 四步／lint 完成；interfaces build、mocks23/UBSan3、transport113/ASan64/UBSan72、integration21/I10ASan2 與 transport 兩包 Debian clean downstream 全過，無 legacy dependency。版本欄位只在驗證後獨立提交／annotated tag：interfaces feaecc6/v0.1.2 PR #2、mocks1212af5/v0.1.2 PR #5、transport e3cb651/v0.2.0 PR #9、integration028e416/v0.1.2 PR #4。明確區分實測 source SHA、metadata-only release 與待 merge candidates；不把 TSan／cppcheck SKIP 或舊 code10 證據當作新 PASS。Project 原 snapshot pins/tag、master、Doxyfile 與 dirty sources 保留；新組合待使用者合併後 pull／驗證，完整證據見 TODO v0.8.34。 |
 | v1.3.32 | **更新 Agent:`coco-codex`**。Framework #9 已由使用者合併；main agent 乾淨 master 實際 pull 後確認主線 ae4790668efc83f99584c300e6963d522e04e12c、VERSION0.5.1，與原 tag a058498 tree 相同。正式導入改用此 merged SHA，不移動舊 tag。四個 ROS consumers 先分開 gitlink-only commits，再以 own nested 四步/lint 驗證與 PR-ready 獨立定版；transport R1-only 另做 Debian/export，原 code10/T12 補強不重寫。Project #1 尚待 merge，已有 snapshots／tags 保持原組合，後續 snapshot 只納入已合併 releases。TSan 不提前驗收，執行及來源證據記 TODO v0.8.33。 |
 | v1.3.31 | **更新 Agent:`coco-codex`**。Project v0.1.1 獨立版本 commit/tag fddcccd、乾淨 release 四步驗證與 PR #1 完成；9 份 .gitmodules／14 個 gitlinks 均為最新已合併版本。Transport legacy 移除與 T12/export、integration I15/I18 與依賴清理已分開提交到乾淨工作分支，保留原 dirty bytes、R1 production/API、Doxyfile 與 master。Framework v0.5.1 相容性／README／版本分開 commits，84 Python 回歸與四套 shell、lint 全過，已推 PR #9/tag a058498。明訂 UBSan discovery 與五個 R1 floor，保留 mixed legacy 必測；consumer 正式導入待使用者 merge／重新 pull，不將開發 override 或 TSan SKIP 視為總驗收。原始 logs 與進度見 TODO v0.8.32 T14。 |
 | v1.3.30 | **更新 Agent:`coco-codex`**。Project v0.1.1 候選已驗證；五個 components 實際 pull／核對最新已合併 release 與原 tag tree，transport 為 cc7cec2/v0.1.2，四個 ROS consumers 均 pin framework f5952a8/v0.5.0。保留 v0.1.0 原 snapshot bytes；官方 nested build/deps/run 與 lint 通過，unit131/integration9、CMake/XML 全 PASS，sanitizers N/A。獨立版本 commit／tag／PR 準備中；不把後續 R1-only、I15/I18、T12/export 或 TSan 缺口記為已解決，完整 log 見 TODO v0.8.31。 |
@@ -297,7 +298,7 @@ rv2_project/
 └── test/unit/、test/integration/
 ```
 
-版本對照(2026-09-13 已合併主線盤點；v0.1.0 已通過 T13 metadata 驗證，不代表整體總驗收)：
+版本對照(各 snapshot 建立時的已合併版本；不隨後續元件 release 回寫。T13 metadata 驗證不代表整體總驗收)：
 
 | rv2_project | r1_test_framework | r1_interfaces | r1_test_mocks | r1_integration_tests | rv2_control_signal_transport | 狀態 |
 |---|---|---|---|---|---|---|
@@ -312,7 +313,7 @@ rv2_project/
 | r1_integration_tests | 43f8bd5e38f71643072ea4312495bdd1b7c9c324 | 5adecce4986b386ee4f75ff1f2b02fa273d1fd41 |
 | rv2_control_signal_transport | a0338d1a393e8ad90debdae7d5c6e1015ee3ce03 | 51913eec4e0d40ea7bac83e0ed0d30a60c7bba23 |
 
-v0.1.1 的 component 對照(其餘四包同 v0.1.0，皆為本輪最新已合併 release)：
+v0.1.1 的 component 對照(其餘四包同 v0.1.0，為建立該 snapshot 時的最新已合併 release)：
 
 | Component | 固定合併主線 SHA | 原 release tag commit(歷史保留) |
 |---|---|---|
@@ -342,9 +343,20 @@ Framework v0.5.0 的 UBSan 精確集合仍含 legacy test_control_signal_transpo
 
 v1.3.31 實作紀錄：上述變更已分開提交，project v0.1.1 與 framework v0.5.1 已有獨立版本 commit/tag／PR。Framework #9 以未篩選的 `ctest --show-only=json-v1` 取得所有精確 unit targets，實跑集合必須完全相同；五個 R1 targets／72 個必需案例不可省略。若 legacy target 仍註冊或有 build artifact，必須為 unit 並實跑；mixed 版目前 84 cases。新增 unit 也不能漏跑，discovery 失敗、malformed／重複名稱、空／skipped／diagnostic 皆 fail-closed。T0 的 `^test_` 選集含全部 R1 或 mixed 功能 targets，排除 ament lint。新 PR 合併前所有既有 framework gitlinks 保留已合併 v0.5.0；詳細來源／正式驗收限制以 TODO T14 為準，原 snapshots 不回寫。
 
-### 2.2 元件關係圖
+v1.3.33 正式導入結果：Framework #9 已 merge，重新 pull 核實後的 release SHA 為 ae4790668efc83f99584c300e6963d522e04e12c；舊 tag a058498 不移動。四個 ROS consumers 均已 pin 此 SHA，own nested 四步與獨立 lint 已正式驗證；interfaces 無案例／lint SKIP，mocks23/UBSan3、transport113/ASan64/UBSan72、integration21/I10ASan2 全 PASS。Transport 兩包 Debian 在無來源／build overlay 的全新官方容器通過 dpkg、discovery、headers/link 與 node 啟停。詳細 raw logs、案例／wrappers 區分、TSan／cppcheck SKIP 見 TODO T14 v0.8.34；不把先前 override 證據改稱正式結果。
 
-v1.3.32 正式導入進度：Framework #9 已 merge，重新 pull 核實後的 release SHA 為 ae4790668efc83f99584c300e6963d522e04e12c；舊 tag a058498 不移動。四個 ROS consumers 的正式 nested 驗證／獨立定版依 TODO T14 v0.8.33 進行，先前 override 證據仍標為開發驗證。Project 既有版本與歷史 snapshot pins 不回寫，元件合併後新增版本組合；T12.2 仍未完成。
+| 待合併 component release（尚未納入 project snapshot） | 版本／release commit | PR |
+|---|---|---|
+| r1_interfaces | v0.1.2／feaecc6f87a5920cf9885137fb6b2690211eca30 | [#2](https://github.com/cocobird231/r1_interfaces/pull/2) |
+| r1_test_mocks | v0.1.2／1212af52ff6bbea1c0e1cd1727d76f844d24e925 | [#5](https://github.com/cocobird231/r1_test_mocks/pull/5) |
+| rv2_control_signal_transport | v0.2.0／e3cb651c30ef6474c8022f5d465116978587a18c | [#9](https://github.com/cocobird231/rv2_control_signal_transport/pull/9)，base r1 |
+| r1_integration_tests | v0.1.2／028e41659a8dfb726b0d3f33c0bcab7c8034d66b | [#4](https://github.com/cocobird231/r1_integration_tests/pull/4) |
+
+上表各 release commit 僅改 package.xml 版本，annotated tag 已推，舊 tag 不移動；實際 ROS 驗證使用進版前的 clean source，不冒稱 metadata-only commit 後又重跑。Integration 已用乾淨候選 interfaces／mocks v0.1.2、transport v0.2.0 通過，但不等於這些 PR 已合併；先合併 transport 才導入 integration 的 legacy dependency 清理。原 top-level dirty checkouts 不被切換或清除，新工作位於乾淨 worktrees。
+
+Project [PR #1](https://github.com/cocobird231/rv2_project/pull/1)／v0.1.1 原 tag 與兩份 snapshots 保持不變，本輪文件跟進留獨立工作分支。上述元件與 project #1 經使用者合併後，再本地 pull／核對新的主線 SHA 與原 tag tree，新增 project 版本組合；不能將所有 src 歷史 gitlinks 宣稱為最新候選版。T12.2 和新 snapshot 的總驗收仍未完成。
+
+### 2.2 元件關係圖
 
 ```mermaid
 graph TB
