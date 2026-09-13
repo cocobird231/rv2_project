@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.34)
+# R1 實作 TODO List(v0.8.35)
 
-> 依據:`r1_design_draft.md` v1.3.33(正式版;framework v0.5.1 已導入四個 ROS consumers，正式驗證／獨立定版／PR 完成，待使用者合併後建立新 snapshot)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.34(正式版;使用者已合併所有前輪 PR，建立 project v0.1.2 snapshot 中)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.35 | **更新 Agent:`coco-codex`**。使用者確認全部 merge 並要求接續。Project master 已實際 pull 至 c8aca0a/v0.1.1，與原 tag fddcccd tree 相同；新分支移入原三份文件跟進 commits，保留原分支與歷史。規劃 T15：逐個乾淨 component 實際 pull／核對合併主線與原 release tree，新增 v0.1.2 snapshot（framework0.5.1、interfaces/mocks/integration0.1.2、transport0.2.0），不回寫舊兩版。限制清單不再要求已解決的 legacy 依賴，測試改驗通用非空限制且保留 schema／Git／版本／安裝 guards；實際來源 closure 另查核。Project own nested 四步／lint 與 clean clone 驗證後，才附 package.xml-only 版本 commit/tag/PR；既有 component 完整測試若 tree 相同則沿用並明示，不冒稱本輪總驗收。TSan 平台缺口與原 dirty sources／Doxyfile／master 保留。 |
 | v0.8.34 | **更新 Agent:`coco-codex`**。四個乾淨候選分支各以 gitlink-only commit 導入已實際 pull 的 framework ae47906/v0.5.1；各自 nested 官方 Docker 四步與獨立 lint 完成，ROS jobs 全域串行。Interfaces build PASS／lint 無來源 SKIP；mocks23/UBSan3、transport113/ASan64/UBSan72、integration21/I10ASan2 全 PASS。Transport 兩包 Debian clean-container downstream/export 驗證亦 PASS，無 legacy dependency；TSan SKIP/77 與 cppcheck22 SKIP 不算 PASS。驗證後才附 package.xml-only 版本 commits 與 annotated tags：interfaces feaecc6/v0.1.2 PR #2、mocks1212af5/v0.1.2 PR #5、transport e3cb651/v0.2.0 PR #9、integration028e416/v0.1.2 PR #4；GitHub 暫時 INTERNAL/500/502 已有限重試恢復、未改權限且無重複 PR。T14.2/T14.3 完成提交／PR，不等於已 merge；project #1／原 snapshots、master、Doxyfile、原 dirty bytes 不變。完整 logs 見 T14 正式導入結果；文件跟進留 project 工作分支，不回寫 v0.1.1 tag。 |
 | v0.8.33 | **更新 Agent:`coco-codex`**。使用者確認 framework #9 merge 並要求接續。乾淨 standalone master 已實際 git pull --ff-only origin master，本地／origin／即時遠端均 ae4790668efc83f99584c300e6963d522e04e12c、VERSION0.5.1；與原 tag a058498 的 tree47fb1a9 完全相同，原 tag 不移動。先規劃四個 ROS consumers 在乾淨候選工作分支以 gitlink-only commits 導入，再用各自 nested 四步／lint 正式驗證；transport 另重做 Debian downstream gate。驗證後才各附獨立版本 commit/tag/PR，transport 移除公開 legacy API 預計 v0.2.0，其餘三包 v0.1.2。Project PR #1 尚 open，既有 snapshots／tags 不回寫；元件 merge 後再新增 snapshot。原 dirty sources、master、Doxyfile 與 TSan SKIP 限制保留。 |
 | v0.8.32 | **更新 Agent:`coco-codex`**。Project v0.1.1 版本 commit/tag fddcccd 已推 PR #1，乾淨 release nested 四步及 lint 通過。src 全面唯讀盤點 9 份 .gitmodules／14 個 gitlinks 皆為最新已合併版本。乾淨 transport 分支分開提交 legacy 移除 664a1a4、T12/export 423ff10；integration 分開提交 I15/I18 6a36157、依賴清理 58e167d，原工作樹 dirty bytes 不動。Framework R1-only UBSan/T0 相容性 e690efa、README rebase/pin 17a9a0a 與只改 VERSION 的 v0.5.1 a058498 分開提交；84 Python 回歸、四套 shell 查核、lint 全過，已推 PR #9/tag。正式 consumer pin／定版仍待使用者 merge 與重新 pull；開發預驗證另記 T14，不將 TSan SKIP 算入 T12.2。 |
@@ -785,6 +786,15 @@ TSan 預設 off 不變；T12.2 仍須支援平台實測。T14 不自行合併任
 Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb，無 legacy repo；全新官方 verifier 只 RO 掛載 `/packages`，dpkg／ROS discovery／public headers/link／node 啟停均 PASS。兩份測試 deb 使用當時來源版本0.1.2、timestamp20260913090436 與 source hash，不宣稱是後續 v0.2.0 release deb。各 repo 驗證後的 release commit 僅改 package.xml 版本，annotated tags 與 branches 已推送；不宣稱 metadata-only 進版後重跑 ROS。所有測試容器已卸載。
 
 完整 [R1-release-report.md 與逐案例 logs](../../../rv2_control_signal_transport/test_env/jazzy/r1-release.V0XQM8/R1-release-report.md) 同時保存 GitHub PR 建立失敗與恢復紀錄、framework literal pull／tree 證據。四個 PR 均已成功建立、沒有重複 PR；project #1 與四個 consumer PR 仍待使用者合併，再實際 pull／核對 rebase 後 SHA 並新增 project snapshot。既有 project pins／snapshots／tags 不回寫；本輪文件留於 project 跟進工作分支，T12.2 與最終總驗收仍未完成。
+
+---
+
+## T15 合併後 project v0.1.2 snapshot(v0.8.35)
+
+- [ ] **T15.1** 六個 repo 的合併狀態、乾淨本地 literal pull、版本 commit、local/origin/live SHA 與原 tag tree 核對；保留所有舊 tag 與原 dirty checkouts。
+- [ ] **T15.2** 新增 snapshots/v0.1.2.json、更新 project 六個 gitlinks 與 nested checkouts，記錄已合併 release 組合；舊 v0.1.0/v0.1.1 bytes 不變。移除 README 的過期待合併／legacy 限制；integration 不再硬性要求限制文字含 rv2_interfaces，保留 schema 的非空限制與各版本／SHA／文件／安裝斷言，新增無 legacy 限制的回歸例。
+- [ ] **T15.3** Own nested 官方 Docker build/deps/無參數 run/clean 與獨立 lint；clean recursive clone 驗證 tags／gitlinks／unit/integration 與安裝一致。明示本輪 metadata PASS 與沿用 component 同 tree 歷史測試的界線，TSan 不勾選。
+- [ ] **T15.4** 資料／gitlinks／測試／文件先提交，PR-ready package.xml 0.1.1→0.1.2 獨立 commit 與 annotated tag，push 並提出 project master PR。僅使用者合併，不移動舊版本 tag。
 
 ---
 
