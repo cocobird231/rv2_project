@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "project_version": "0.1.2",
+  "status": "development",
+  "acceptance": "pending",
+  "limitations": [
+    "T12.2 TSan remains platform-blocked. Default SKIP is not a passing race test.",
+    "Component runtime evidence covers earlier clean candidates with the same runtime/test content; full acceptance of this merged project snapshot is still pending.",
+    "External ROS/apt dependencies and the official Docker image tag are not immutable pins. This snapshot fixes source releases, not the entire execution environment."
+  ],
+  "components": {
+    "r1_test_framework": {
+      "path": "ros2_ws/src/r1_test_framework",
+      "repository": "git@github.com:cocobird231/r1_test_framework.git",
+      "branch": "master",
+      "version": "0.5.1",
+      "commit": "ae4790668efc83f99584c300e6963d522e04e12c",
+      "tag_commit": "a058498598042e7e177017c79e5a8b863a8a1a78",
+      "tree": "47fb1a952641ba6565fa79b1b283cde03b0de71c"
+    },
+    "r1_interfaces": {
+      "path": "ros2_ws/src/r1_interfaces",
+      "repository": "git@github.com:cocobird231/r1_interfaces.git",
+      "branch": "master",
+      "version": "0.1.2",
+      "commit": "a0530d76cb69a737778ec1b658682837a50a738a",
+      "tag_commit": "feaecc6f87a5920cf9885137fb6b2690211eca30",
+      "tree": "db2ba435ba55da81f9dfc836938b185df32a5051"
+    },
+    "r1_test_mocks": {
+      "path": "ros2_ws/src/r1_test_mocks",
+      "repository": "git@github.com:cocobird231/r1_test_mocks.git",
+      "branch": "master",
+      "version": "0.1.2",
+      "commit": "614750f669afee6ca99bfb2034a6c97b3b447090",
+      "tag_commit": "1212af52ff6bbea1c0e1cd1727d76f844d24e925",
+      "tree": "d82d67870965e602c407eac948a347c4a79f4c68"
+    },
+    "r1_integration_tests": {
+      "path": "ros2_ws/src/r1_integration_tests",
+      "repository": "git@github.com:cocobird231/r1_integration_tests.git",
+      "branch": "master",
+      "version": "0.1.2",
+      "commit": "e5840740996481c6c8f80451335c36db52bfb465",
+      "tag_commit": "028e41659a8dfb726b0d3f33c0bcab7c8034d66b",
+      "tree": "ff1b999f26026edfdb3b5952aaf2dcf68c635a15"
+    },
+    "rv2_control_signal_transport": {
+      "path": "ros2_ws/src/rv2_control_signal_transport",
+      "repository": "git@github.com:cocobird231/rv2_control_signal_transport.git",
+      "branch": "r1",
+      "version": "0.2.0",
+      "commit": "5a91d316146e2f3cb52e77002faec139735ba61c",
+      "tag_commit": "e3cb651c30ef6474c8022f5d465116978587a18c",
+      "tree": "289c35bcf8e80c9e3f1111a628a97296fb928efe"
+    }
+  }
+}

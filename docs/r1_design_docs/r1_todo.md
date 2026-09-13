@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.35)
+# R1 實作 TODO List(v0.8.36)
 
-> 依據:`r1_design_draft.md` v1.3.34(正式版;使用者已合併所有前輪 PR，建立 project v0.1.2 snapshot 中)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.35(正式版;所有合併主線已 pull／核對，project v0.1.2 資料與 gitlinks 已備妥，進入驗證)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.36 | **更新 Agent:`coco-codex`**。全部六個 repo 已 literal pull／核對：frameworkae47906、interfaces a0530d7、mocks614750f、transport5a91d31、integratione584074、projectc8aca0a；各版本 commit／原 tag tree 與遠端均一致。Project 六個直接 gitlinks 8f4ec55 獨立提交，四個內嵌 framework 均 ae47906。新增 v0.1.2 snapshot／設計對照與 README，僅保留 TSan、整體總驗收與外部執行環境未鎖版限制；先重現舊 integration guard 的 legacy 文字要求，再修測試。Package.xml 尚未進版。9份.gitmodules／14links 中 project10處已更新，原四個工作目錄舊分支與 dirty bytes 保留，不宣稱全部14處已更新。 |
 | v0.8.35 | **更新 Agent:`coco-codex`**。使用者確認全部 merge 並要求接續。Project master 已實際 pull 至 c8aca0a/v0.1.1，與原 tag fddcccd tree 相同；新分支移入原三份文件跟進 commits，保留原分支與歷史。規劃 T15：逐個乾淨 component 實際 pull／核對合併主線與原 release tree，新增 v0.1.2 snapshot（framework0.5.1、interfaces/mocks/integration0.1.2、transport0.2.0），不回寫舊兩版。限制清單不再要求已解決的 legacy 依賴，測試改驗通用非空限制且保留 schema／Git／版本／安裝 guards；實際來源 closure 另查核。Project own nested 四步／lint 與 clean clone 驗證後，才附 package.xml-only 版本 commit/tag/PR；既有 component 完整測試若 tree 相同則沿用並明示，不冒稱本輪總驗收。TSan 平台缺口與原 dirty sources／Doxyfile／master 保留。 |
 | v0.8.34 | **更新 Agent:`coco-codex`**。四個乾淨候選分支各以 gitlink-only commit 導入已實際 pull 的 framework ae47906/v0.5.1；各自 nested 官方 Docker 四步與獨立 lint 完成，ROS jobs 全域串行。Interfaces build PASS／lint 無來源 SKIP；mocks23/UBSan3、transport113/ASan64/UBSan72、integration21/I10ASan2 全 PASS。Transport 兩包 Debian clean-container downstream/export 驗證亦 PASS，無 legacy dependency；TSan SKIP/77 與 cppcheck22 SKIP 不算 PASS。驗證後才附 package.xml-only 版本 commits 與 annotated tags：interfaces feaecc6/v0.1.2 PR #2、mocks1212af5/v0.1.2 PR #5、transport e3cb651/v0.2.0 PR #9、integration028e416/v0.1.2 PR #4；GitHub 暫時 INTERNAL/500/502 已有限重試恢復、未改權限且無重複 PR。T14.2/T14.3 完成提交／PR，不等於已 merge；project #1／原 snapshots、master、Doxyfile、原 dirty bytes 不變。完整 logs 見 T14 正式導入結果；文件跟進留 project 工作分支，不回寫 v0.1.1 tag。 |
 | v0.8.33 | **更新 Agent:`coco-codex`**。使用者確認 framework #9 merge 並要求接續。乾淨 standalone master 已實際 git pull --ff-only origin master，本地／origin／即時遠端均 ae4790668efc83f99584c300e6963d522e04e12c、VERSION0.5.1；與原 tag a058498 的 tree47fb1a9 完全相同，原 tag 不移動。先規劃四個 ROS consumers 在乾淨候選工作分支以 gitlink-only commits 導入，再用各自 nested 四步／lint 正式驗證；transport 另重做 Debian downstream gate。驗證後才各附獨立版本 commit/tag/PR，transport 移除公開 legacy API 預計 v0.2.0，其餘三包 v0.1.2。Project PR #1 尚 open，既有 snapshots／tags 不回寫；元件 merge 後再新增 snapshot。原 dirty sources、master、Doxyfile 與 TSan SKIP 限制保留。 |
@@ -791,7 +792,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 
 ## T15 合併後 project v0.1.2 snapshot(v0.8.35)
 
-- [ ] **T15.1** 六個 repo 的合併狀態、乾淨本地 literal pull、版本 commit、local/origin/live SHA 與原 tag tree 核對；保留所有舊 tag 與原 dirty checkouts。
+- [x] **T15.1** 六個 repo 的合併狀態、乾淨本地 literal pull、版本 commit、local/origin/live SHA 與原 tag tree 核對；保留所有舊 tag 與原 dirty checkouts。Project6個直接 gitlinks commit8f4ec55，含四個 child 的 recursive checkout 共10處均已對齊；另外四處屬原工作分支、保持舊版，原三份 dirty diff hash／master／Doxyfile 皆未變。Pull原始logs見 project test_env/jazzy/snapshot-v0.1.2.nGiMa5/。
 - [ ] **T15.2** 新增 snapshots/v0.1.2.json、更新 project 六個 gitlinks 與 nested checkouts，記錄已合併 release 組合；舊 v0.1.0/v0.1.1 bytes 不變。移除 README 的過期待合併／legacy 限制；integration 不再硬性要求限制文字含 rv2_interfaces，保留 schema 的非空限制與各版本／SHA／文件／安裝斷言，新增無 legacy 限制的回歸例。
 - [ ] **T15.3** Own nested 官方 Docker build/deps/無參數 run/clean 與獨立 lint；clean recursive clone 驗證 tags／gitlinks／unit/integration 與安裝一致。明示本輪 metadata PASS 與沿用 component 同 tree 歷史測試的界線，TSan 不勾選。
 - [ ] **T15.4** 資料／gitlinks／測試／文件先提交，PR-ready package.xml 0.1.1→0.1.2 獨立 commit 與 annotated tag，push 並提出 project master PR。僅使用者合併，不移動舊版本 tag。
