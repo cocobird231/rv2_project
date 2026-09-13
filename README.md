@@ -4,9 +4,11 @@ RV2 專案總目錄與 ROS2 `ament_cmake` snapshot metadata package。首版 **v
 記錄各 R1 package 的已合併 release 版本、精確 commit 及原 tag 的相同 tree。
 它沒有 runtime node，也不是所有 child packages 的自動 build／測試代理。
 
-目前 snapshot 為 development，總驗收 pending。Transport PR #8/v0.1.2 已合併，
-新版 snapshot 納入它；I15/I18、T12 補強與 legacy `rv2_interfaces` 依賴移除
-仍待後續 PR 收斂。完整限制見 [snapshots](snapshots/) 中 package.xml 所選版本與
+最新 snapshot **v0.1.2** 納入已合併 framework v0.5.1、interfaces/mocks/integration
+v0.1.2 與 R1-only transport v0.2.0；I15/I18、T12/export 補強及 legacy 依賴移除均已收錄。
+舊 v0.1.0/v0.1.1 保持原內容。Snapshot 仍為 development／acceptance pending，
+TSan 尚待支援平台驗收，Docker image／外部 apt 依賴也未鎖定為不可變版本。
+完整限制見 [snapshots](snapshots/) 中 package.xml 所選版本與
 [TODO](docs/r1_design_docs/r1_todo.md) §2.1。不要把 metadata 測試通過當成整體 R1 驗收。
 
 ## 取得與布局
@@ -40,7 +42,8 @@ nested ROS packages，可在測試 Docker／開發容器內由本目錄執行：
 colcon list --paths . ros2_ws/src/*
 ```
 
-此列表不等於依賴已齊備；尤其 legacy `rv2_interfaces` 尚未納入可重現 snapshot。
+v0.1.2 的 R1-only 來源不再依賴 legacy `rv2_interfaces`。此列表不會安裝外部 ROS／apt
+依賴，也不等於完整執行環境已鎖版。
 
 ## 測試
 

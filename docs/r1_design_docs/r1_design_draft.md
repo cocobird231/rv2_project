@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.34)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.35)
 
-> 狀態:正式版(v1.3.34);使用者已合併所有前輪 PR，建立 project v0.1.2 snapshot 中。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.35);所有合併主線已 pull／核對，project v0.1.2 資料與 gitlinks 已備妥，進入驗證。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.35 | **更新 Agent:`coco-codex`**。逐個乾淨 checkout 實際 pull／取原 release tag，確認 local/origin/live SHA 與 release tree 一致，新增 project v0.1.2 精確版本／SHA 對照。Frameworkae47906/v0.5.1、interfaces a0530d7／mocks614750f／integratione584074/v0.1.2、transport5a91d31/v0.2.0，project base c8aca0a/v0.1.1。原兩版 snapshot／tags 保留；六個 project gitlinks 8f4ec55、四個 nested framework 同 ae47906。限制不再綁定 legacy 文字，保留 TSan／整體驗收 pending 與外部 apt/image 未鎖版。測試／clone／PR 結果待 TODO v0.8.36 T15；原頂層四個工作分支與 dirty bytes 不切換。 |
 | v1.3.34 | **更新 Agent:`coco-codex`**。所有前輪 PR 已由使用者合併；project master 實際 pull c8aca0a/v0.1.1 並核對原 tag tree，承接本地未發布文件歷史。新增 v0.1.2 snapshot 規劃，以重新 pull 的主線 release 固定 framework0.5.1、interfaces/mocks/integration0.1.2、transport0.2.0，原 snapshots 不回寫。限制改述現存 TSan／總驗收缺口，不能為通過舊測試保留假的 legacy 未解決宣告；schema 的非空限制與版本／SHA／安裝 guards 不變，新增相容回歸。先文件再資料／gitlinks／測試，PR-ready 才獨立 package.xml version/tag；完整規劃見 TODO v0.8.35 T15。 |
 | v1.3.33 | **更新 Agent:`coco-codex`**。四個 ROS consumers 已以 gitlink-only commits 導入實際 pull 的 merged framework ae47906/v0.5.1，own nested 官方 Docker 四步／lint 完成；interfaces build、mocks23/UBSan3、transport113/ASan64/UBSan72、integration21/I10ASan2 與 transport 兩包 Debian clean downstream 全過，無 legacy dependency。版本欄位只在驗證後獨立提交／annotated tag：interfaces feaecc6/v0.1.2 PR #2、mocks1212af5/v0.1.2 PR #5、transport e3cb651/v0.2.0 PR #9、integration028e416/v0.1.2 PR #4。明確區分實測 source SHA、metadata-only release 與待 merge candidates；不把 TSan／cppcheck SKIP 或舊 code10 證據當作新 PASS。Project 原 snapshot pins/tag、master、Doxyfile 與 dirty sources 保留；新組合待使用者合併後 pull／驗證，完整證據見 TODO v0.8.34。 |
 | v1.3.32 | **更新 Agent:`coco-codex`**。Framework #9 已由使用者合併；main agent 乾淨 master 實際 pull 後確認主線 ae4790668efc83f99584c300e6963d522e04e12c、VERSION0.5.1，與原 tag a058498 tree 相同。正式導入改用此 merged SHA，不移動舊 tag。四個 ROS consumers 先分開 gitlink-only commits，再以 own nested 四步/lint 驗證與 PR-ready 獨立定版；transport R1-only 另做 Debian/export，原 code10/T12 補強不重寫。Project #1 尚待 merge，已有 snapshots／tags 保持原組合，後續 snapshot 只納入已合併 releases。TSan 不提前驗收，執行及來源證據記 TODO v0.8.33。 |
@@ -305,6 +306,7 @@ rv2_project/
 |---|---|---|---|---|---|---|
 | v0.1.0 | v0.5.0 | v0.1.1 | v0.1.1 | v0.1.1 | v0.1.1 | development／acceptance_pending |
 | v0.1.1 | v0.5.0 | v0.1.1 | v0.1.1 | v0.1.1 | v0.1.2 | development／acceptance_pending；metadata 候選驗證 PASS |
+| v0.1.2 | v0.5.1 | v0.1.2 | v0.1.2 | v0.1.2 | v0.2.0 | development／acceptance_pending；metadata 候選待驗 |
 
 | Component | 固定合併主線 SHA | 原 release tag commit(歷史保留) |
 |---|---|---|
@@ -333,6 +335,18 @@ v0.1.1 只導入已合併 transport v0.1.2（framework pin 更新至 v0.5.0）�
 CMake 安裝 `snapshots/`、README 與文件至 `share/rv2_project/`，由 ament index／`ros2 pkg prefix --share rv2_project` 找到；不安裝 child Git working trees、test_env 或 Git metadata。`test/unit/` 檢查 manifest 合約與失敗案例，`test/integration/` 檢查 package.xml、gitlinks、checkout/tag tree、文件對照及實際安裝內容；pytest/CTest 分為兩個 labels，保存逐案例 log。Project 的 nested 四步入口測試本 metadata package；sanitizers 不適用，不等於重跑所有 child packages。要列出 nested ROS packages 時顯式指定 `colcon list --paths . ros2_ws/src/*`；framework 的 COLCON_IGNORE 仍有效。
 
 **v0.1.0 已知限制**：transport PR #8/v0.1.2 仍未合併，故其 v0.1.1 內部 framework 仍為 v0.2.1 `3dd3c27`，其餘三個 ROS consumers 為 v0.5.0 `f5952a8`。I15/I18 與 transport T12/export 補強尚未提交；legacy `rv2_interfaces` 不在目前 project gitlinks 中，乾淨 8a9d995 缺測試需要欄位，歷史成功用了 dirty dependency。TSan runtime 仍阻塞。此 snapshot 固定 R1 release 組合，**不是完整可重現的依賴 closure 或整體驗收證明**；待 TODO §2.1 缺口收斂後新增 snapshot 驗收，不回寫原版。
+
+v0.1.2 的 component 對照（已逐個本地 pull；local／origin／即時遠端一致，與原 tag tree 相同）：
+
+| Component | 固定合併主線 SHA | 原 release tag commit(歷史保留) |
+|---|---|---|
+| r1_test_framework | ae4790668efc83f99584c300e6963d522e04e12c | a058498598042e7e177017c79e5a8b863a8a1a78 |
+| r1_interfaces | a0530d76cb69a737778ec1b658682837a50a738a | feaecc6f87a5920cf9885137fb6b2690211eca30 |
+| r1_test_mocks | 614750f669afee6ca99bfb2034a6c97b3b447090 | 1212af52ff6bbea1c0e1cd1727d76f844d24e925 |
+| r1_integration_tests | e5840740996481c6c8f80451335c36db52bfb465 | 028e41659a8dfb726b0d3f33c0bcab7c8034d66b |
+| rv2_control_signal_transport | 5a91d316146e2f3cb52e77002faec139735ba61c | e3cb651c30ef6474c8022f5d465116978587a18c |
+
+新版只保留 TSan、整體總驗收 pending 與外部 apt/image 未鎖版限制，不再硬性要求 legacy 依賴文字；舊 snapshot bytes 不回寫。來源與 Git metadata 查核不等於所有 owner 的新一輪 runtime 驗收。
 
 ### 2.1.2 R1-only transport 收斂(v1.3.29)
 
