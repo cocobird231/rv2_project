@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.31)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.32)
 
-> 狀態:正式版(v1.3.31);project v0.1.1／framework v0.5.1 已提出 PR，R1-only 正式導入待 merge。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.32);framework v0.5.1 已 merge／重新 pull，四個 ROS consumers 正式導入中。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.32 | **更新 Agent:`coco-codex`**。Framework #9 已由使用者合併；main agent 乾淨 master 實際 pull 後確認主線 ae4790668efc83f99584c300e6963d522e04e12c、VERSION0.5.1，與原 tag a058498 tree 相同。正式導入改用此 merged SHA，不移動舊 tag。四個 ROS consumers 先分開 gitlink-only commits，再以 own nested 四步/lint 驗證與 PR-ready 獨立定版；transport R1-only 另做 Debian/export，原 code10/T12 補強不重寫。Project #1 尚待 merge，已有 snapshots／tags 保持原組合，後續 snapshot 只納入已合併 releases。TSan 不提前驗收，執行及來源證據記 TODO v0.8.33。 |
 | v1.3.31 | **更新 Agent:`coco-codex`**。Project v0.1.1 獨立版本 commit/tag fddcccd、乾淨 release 四步驗證與 PR #1 完成；9 份 .gitmodules／14 個 gitlinks 均為最新已合併版本。Transport legacy 移除與 T12/export、integration I15/I18 與依賴清理已分開提交到乾淨工作分支，保留原 dirty bytes、R1 production/API、Doxyfile 與 master。Framework v0.5.1 相容性／README／版本分開 commits，84 Python 回歸與四套 shell、lint 全過，已推 PR #9/tag a058498。明訂 UBSan discovery 與五個 R1 floor，保留 mixed legacy 必測；consumer 正式導入待使用者 merge／重新 pull，不將開發 override 或 TSan SKIP 視為總驗收。原始 logs 與進度見 TODO v0.8.32 T14。 |
 | v1.3.30 | **更新 Agent:`coco-codex`**。Project v0.1.1 候選已驗證；五個 components 實際 pull／核對最新已合併 release 與原 tag tree，transport 為 cc7cec2/v0.1.2，四個 ROS consumers 均 pin framework f5952a8/v0.5.0。保留 v0.1.0 原 snapshot bytes；官方 nested build/deps/run 與 lint 通過，unit131/integration9、CMake/XML 全 PASS，sanitizers N/A。獨立版本 commit／tag／PR 準備中；不把後續 R1-only、I15/I18、T12/export 或 TSan 缺口記為已解決，完整 log 見 TODO v0.8.31。 |
 | v1.3.29 | **更新 Agent:`coco-codex`**。依使用者本輪裁決新增 project v0.1.1 snapshot 規劃：transport 已合併 v0.1.2 cc7cec2，其他四包版本不變，舊 v0.1.0 完整保留。Transport legacy 移除與取消 rv2_interfaces 依賴是接下來的變更，尚不屬 v0.1.2；規範保留 master、R1 namespace/API/案例，接續 I15/I18 與 T12/export 再獨立定版。Framework README 最後同步；UBSan/T0 的 legacy target 假設需相容修正、先 framework PR/merge 才正式導入，不能假通過。工作與證據追蹤見 TODO v0.8.30 T14。 |
@@ -342,6 +343,8 @@ Framework v0.5.0 的 UBSan 精確集合仍含 legacy test_control_signal_transpo
 v1.3.31 實作紀錄：上述變更已分開提交，project v0.1.1 與 framework v0.5.1 已有獨立版本 commit/tag／PR。Framework #9 以未篩選的 `ctest --show-only=json-v1` 取得所有精確 unit targets，實跑集合必須完全相同；五個 R1 targets／72 個必需案例不可省略。若 legacy target 仍註冊或有 build artifact，必須為 unit 並實跑；mixed 版目前 84 cases。新增 unit 也不能漏跑，discovery 失敗、malformed／重複名稱、空／skipped／diagnostic 皆 fail-closed。T0 的 `^test_` 選集含全部 R1 或 mixed 功能 targets，排除 ament lint。新 PR 合併前所有既有 framework gitlinks 保留已合併 v0.5.0；詳細來源／正式驗收限制以 TODO T14 為準，原 snapshots 不回寫。
 
 ### 2.2 元件關係圖
+
+v1.3.32 正式導入進度：Framework #9 已 merge，重新 pull 核實後的 release SHA 為 ae4790668efc83f99584c300e6963d522e04e12c；舊 tag a058498 不移動。四個 ROS consumers 的正式 nested 驗證／獨立定版依 TODO T14 v0.8.33 進行，先前 override 證據仍標為開發驗證。Project 既有版本與歷史 snapshot pins 不回寫，元件合併後新增版本組合；T12.2 仍未完成。
 
 ```mermaid
 graph TB
