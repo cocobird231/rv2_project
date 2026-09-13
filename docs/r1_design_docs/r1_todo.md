@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.36)
+# R1 實作 TODO List(v0.8.37)
 
-> 依據:`r1_design_draft.md` v1.3.35(正式版;所有合併主線已 pull／核對，project v0.1.2 資料與 gitlinks 已備妥，進入驗證)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.36(正式版;project v0.1.2 原工作目錄與全新 clone 候選驗證通過，準備獨立版本 commit／PR)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.37 | **更新 Agent:`coco-codex`**。v0.1.2 資料／README／版本表 b2f753a 與兩份相容測試642a573已分開提交。官方 nested RED 只敗於過期 legacy 文字 guard；修正後 unit133／integration9、CMake/XML 各1 全過，colcon148含4wrappers，零error/failure/skip；Python3 lint PASS。全新 recursive clone 取得 GitHub components／原 tags，僅套用 package.xml 進版候選差異後同組測試 PASS；不冒稱已提交 clean release。T15.2/.3 完成候選查核，準備 package.xml-only v0.1.2 commit/tag/PR；新文件與 release 將另做乾淨 clone 複驗。現況表與 R1 唯一案例157對齊已合併版本，TSan／總驗收未完成；原14links中四個舊工作分支仍保留。 |
 | v0.8.36 | **更新 Agent:`coco-codex`**。全部六個 repo 已 literal pull／核對：frameworkae47906、interfaces a0530d7、mocks614750f、transport5a91d31、integratione584074、projectc8aca0a；各版本 commit／原 tag tree 與遠端均一致。Project 六個直接 gitlinks 8f4ec55 獨立提交，四個內嵌 framework 均 ae47906。新增 v0.1.2 snapshot／設計對照與 README，僅保留 TSan、整體總驗收與外部執行環境未鎖版限制；先重現舊 integration guard 的 legacy 文字要求，再修測試。Package.xml 尚未進版。9份.gitmodules／14links 中 project10處已更新，原四個工作目錄舊分支與 dirty bytes 保留，不宣稱全部14處已更新。 |
 | v0.8.35 | **更新 Agent:`coco-codex`**。使用者確認全部 merge 並要求接續。Project master 已實際 pull 至 c8aca0a/v0.1.1，與原 tag fddcccd tree 相同；新分支移入原三份文件跟進 commits，保留原分支與歷史。規劃 T15：逐個乾淨 component 實際 pull／核對合併主線與原 release tree，新增 v0.1.2 snapshot（framework0.5.1、interfaces/mocks/integration0.1.2、transport0.2.0），不回寫舊兩版。限制清單不再要求已解決的 legacy 依賴，測試改驗通用非空限制且保留 schema／Git／版本／安裝 guards；實際來源 closure 另查核。Project own nested 四步／lint 與 clean clone 驗證後，才附 package.xml-only 版本 commit/tag/PR；既有 component 完整測試若 tree 相同則沿用並明示，不冒稱本輪總驗收。TSan 平台缺口與原 dirty sources／Doxyfile／master 保留。 |
 | v0.8.34 | **更新 Agent:`coco-codex`**。四個乾淨候選分支各以 gitlink-only commit 導入已實際 pull 的 framework ae47906/v0.5.1；各自 nested 官方 Docker 四步與獨立 lint 完成，ROS jobs 全域串行。Interfaces build PASS／lint 無來源 SKIP；mocks23/UBSan3、transport113/ASan64/UBSan72、integration21/I10ASan2 全 PASS。Transport 兩包 Debian clean-container downstream/export 驗證亦 PASS，無 legacy dependency；TSan SKIP/77 與 cppcheck22 SKIP 不算 PASS。驗證後才附 package.xml-only 版本 commits 與 annotated tags：interfaces feaecc6/v0.1.2 PR #2、mocks1212af5/v0.1.2 PR #5、transport e3cb651/v0.2.0 PR #9、integration028e416/v0.1.2 PR #4；GitHub 暫時 INTERNAL/500/502 已有限重試恢復、未改權限且無重複 PR。T14.2/T14.3 完成提交／PR，不等於已 merge；project #1／原 snapshots、master、Doxyfile、原 dirty bytes 不變。完整 logs 見 T14 正式導入結果；文件跟進留 project 工作分支，不回寫 v0.1.1 tag。 |
@@ -60,7 +61,7 @@
 
 ## 1. 使用方式與共通規範
 
-**最新裁決優先(v0.8.25)**：使用者採 rebase 合併；framework 升版須遵守 §1.4 的「pull 後核對合併主線 SHA」流程。較舊歷史段落與已發布 framework README 中「只能 pin 原 tag／禁止 rebase」不再作為目前升版規則；保留歷史與原 tag，不為更新 README 改動本輪待固定的 framework tree。README 後續另行同步。
+**最新裁決優先(v0.8.25；v0.8.37 同步完成狀態)**：使用者採 rebase 合併；framework 升版須遵守 §1.4 的「pull 後核對合併主線 SHA」流程。較舊歷史段落中的「只能 pin 原 tag／禁止 rebase」不再作為目前升版規則；framework v0.5.1 README 已同步並合併。保留歷史與原 tag，不改寫已發布 tree。
 
 **Interfaces 進版裁決(v0.8.27)**：使用者現在要求補進版 commit；先前「維持 0.1.0、不附 release/tag」為歷史，不再適用本輪 PR。按現有 package.xml 0.1.0 正常升至 0.1.1，以獨立版本 commit/tag 記錄；不新增空 commit 或改寫原始版本歷史。
 
@@ -231,13 +232,13 @@ graph LR
 
 | 項目 | 狀態／完成條件 |
 |---|---|
-| project snapshot | v0.1.1／[PR #1](https://github.com/cocobird231/rv2_project/pull/1) 保留建立時已合併版本：transport cc7cec2/v0.1.2、framework f5952a8/v0.5.0 等。Framework 現已合併 v0.5.1，但不能回寫 frozen snapshot；四個 consumer PR 與 project #1 合併後，再本地 pull／核對新主線 SHA 和原 tag tree，新增 snapshot。 |
-| transport T12/export 補強 | 423ff10 與 legacy 移除分開提交；正式 nested normal113/ASan64/UBSan72、lint、兩包 Debian downstream 全過，獨立 v0.2.0 e3cb651／[PR #9](https://github.com/cocobird231/rv2_control_signal_transport/pull/9) 已推，待使用者 merge 至 r1。 |
-| integration I15/I18 | 6a36157 原樣移入核准補強，依賴清理另作 58e167d。新 nested clean-dependency normal21／I10ASan2 與 lint 全過，保留 code10 RED/GREEN 證據；獨立 v0.1.2 028e416／[PR #4](https://github.com/cocobird231/r1_integration_tests/pull/4) 已推，待 merge。應先合併 R1-only transport，再合併 integration 依賴清理。 |
+| project snapshot | v0.1.1／[PR #1](https://github.com/cocobird231/rv2_project/pull/1) 已合併，master c8aca0a；原兩版 bytes 不變。新 v0.1.2 納入全部已合併 releases，實際 pull／原 tag tree 查核及候選 metadata／clone 已過，獨立版本 commit／PR 依 T15 收尾。 |
+| transport T12/export 補強 | 已隨 v0.2.0／[PR #9](https://github.com/cocobird231/rv2_control_signal_transport/pull/9) 合併至 r1，主線5a91d31與原 tag e3cb651 tree 相同。Normal113/ASan64/UBSan72、lint、兩包 Debian downstream 證據保留，無來源變更不重跑或冒稱本輪 runtime 驗收。 |
+| integration I15/I18 | 已隨 v0.1.2／[PR #4](https://github.com/cocobird231/r1_integration_tests/pull/4) 合併，主線e584074與原 tag028e416 tree 相同。先前 normal21／I10ASan2、lint、code10 RED/GREEN 證據保留；新 snapshot 已固定此 release。 |
 | legacy rv2_interfaces | Transport 664a1a4 移除 17 份 legacy 檔案與對應 build/install/dependencies；已完成無 legacy repo 的乾淨測試、打包與公開 export 驗證，收於上述 v0.2.0 PR。舊 snapshot 仍有原限制；master、Doxyfile、R1 production/API、原 legacy repo 使用者改動均保留。 |
 | T12.2 | TSan runtime 平台阻塞；須在支援環境由兩個 owner 明確 `-t on` 通過。預設 SKIP/77 不算完成，不更動主機安全設定。 |
-| framework README／R1-only 相容性 | v0.5.1／[PR #9](https://github.com/cocobird231/r1_test_framework/pull/9) 已 merge，standalone master 實際 pull 後為 ae4790668efc83f99584c300e6963d522e04e12c，與未移動的原 tag a058498 tree 相同。四個 consumer PR 皆 pin 此 SHA，正式 nested gates 已過；interfaces v0.1.2／[PR #2](https://github.com/cocobird231/r1_interfaces/pull/2)、mocks v0.1.2／[PR #5](https://github.com/cocobird231/r1_test_mocks/pull/5) 亦待 merge。 |
-| 總驗收 | T13 metadata 與本輪 clean candidate PASS 不代表整體 R1 完成。尚待使用者合併 PR、新 snapshot／merged SHA 查核，再對精確組合串行跑各 owner 四步／lint 及另列的打包、TSan。原 dirty checkouts 與 frozen gitlinks 未被暗中切換；新候選位於獨立 worktrees。 |
+| framework README／R1-only 相容性 | v0.5.1 已合併並再次本地 pull，主線ae479066／原 taga058498 tree相同。Interfaces v0.1.2／PR #2 主線a0530d7、mocks v0.1.2／PR #5 主線614750f 亦已合併；四個 ROS releases 的 nested framework 都是ae479066。 |
+| 總驗收 | 元件 PR／legacy 依賴缺口已收斂，新 project snapshot 完成後可對精確組合安排使用者總驗收。Metadata PASS 與同 tree 歷史 runtime 證據不代替新一輪整體測試；TSan仍需支援平台。外部 Docker image／apt 依賴未固定為不可變版本；原工作分支與 dirty checkouts 不被切換。 |
 
 §12 的 HA、async API、adapter、durable fencing 等未來政策不自動擴張成此次 v0.1.0 的必做實作。
 
@@ -793,9 +794,11 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 ## T15 合併後 project v0.1.2 snapshot(v0.8.35)
 
 - [x] **T15.1** 六個 repo 的合併狀態、乾淨本地 literal pull、版本 commit、local/origin/live SHA 與原 tag tree 核對；保留所有舊 tag 與原 dirty checkouts。Project6個直接 gitlinks commit8f4ec55，含四個 child 的 recursive checkout 共10處均已對齊；另外四處屬原工作分支、保持舊版，原三份 dirty diff hash／master／Doxyfile 皆未變。Pull原始logs見 project test_env/jazzy/snapshot-v0.1.2.nGiMa5/。
-- [ ] **T15.2** 新增 snapshots/v0.1.2.json、更新 project 六個 gitlinks 與 nested checkouts，記錄已合併 release 組合；舊 v0.1.0/v0.1.1 bytes 不變。移除 README 的過期待合併／legacy 限制；integration 不再硬性要求限制文字含 rv2_interfaces，保留 schema 的非空限制與各版本／SHA／文件／安裝斷言，新增無 legacy 限制的回歸例。
-- [ ] **T15.3** Own nested 官方 Docker build/deps/無參數 run/clean 與獨立 lint；clean recursive clone 驗證 tags／gitlinks／unit/integration 與安裝一致。明示本輪 metadata PASS 與沿用 component 同 tree 歷史測試的界線，TSan 不勾選。
+- [x] **T15.2** 新增 snapshots/v0.1.2.json、更新 project 六個 gitlinks 與 nested checkouts，記錄已合併 release 組合；舊 v0.1.0/v0.1.1 bytes 不變。移除 README 的過期待合併／legacy 限制；integration 不再硬性要求限制文字含 rv2_interfaces，保留 schema 的非空限制與各版本／SHA／文件／安裝斷言，新增無 legacy 限制的回歸例。
+- [x] **T15.3** Own nested 官方 Docker build/deps/無參數 run/clean 與獨立 lint；全新 recursive clone 候選驗證 tags／gitlinks／unit/integration 與安裝一致。兩份 owner 都僅有 PR-ready package.xml 進版差異，不冒稱已提交 release；元件全部 clean。明示本輪 metadata PASS 與沿用 component 同 tree 歷史測試的界線，TSan 不勾選。
 - [ ] **T15.4** 資料／gitlinks／測試／文件先提交，PR-ready package.xml 0.1.1→0.1.2 獨立 commit 與 annotated tag，push 並提出 project master PR。僅使用者合併，不移動舊版本 tag。
+
+候選證據：source642a573＋唯一 package.xml 進版差異。RED `full-20260913T102703.OwO71c` 僅過期 guard 失敗（1功能 failure＋1 wrapper）；GREEN `full-20260913T102801.tWECAL` unit133／integration9，CMake/XML各1＋wrappers4=148records 全過，零error/failure/skip，三個sanitizers N/A。Python3 lint PASS，原owner container已清除。全新 clone 的 `full-20260913T102946.XYXfQg` 同組全過；project Git物件由本地 repo clone（非來源overlay），components均由GitHub recursive clone／補取原tags。原始 logs 與後續 release 複驗見 [T15-report.md](../../test_env/jazzy/snapshot-v0.1.2.nGiMa5/T15-report.md)。
 
 ---
 
@@ -814,7 +817,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 | T10 | `r1_test_mocks/test/integration/test_mock_{manager,source_sink,master}.cpp`、`test/unit/test_status_fault.cpp` | 4 smoke targets | — | 23 |
 | T11 | `r1_integration_tests/test/integration/`(launch_testing) | 19 launch targets | I1–I18(+I00 harness smoke) | 21（I08/I10 各兩案例） |
 
-設計最低案例集合合計 154（不含 I00 與額外案例）；本輪上述 R1 targets 實際為 157 cases，加上 transport legacy 21 cases，共 178 個功能案例。T12.5 會重複執行部分 targets，不以鏈的加總冒充唯一案例數；colcon 另含 wrapper/lint records。
+設計最低案例集合合計 154（不含 I00 與額外案例）；目前已合併 R1 releases 實際為157個唯一功能案例：transport113＋mocks23＋integration21。舊 transport legacy21已移除，歷史178不能作為目前案例數；project metadata案例另計。T12.5 會重複執行部分 targets，不以鏈的加總冒充唯一案例數；colcon 另含 wrapper/lint records。
 
 ## 附錄 B:`todo_check.sh` item 對照
 
