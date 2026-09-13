@@ -43,6 +43,21 @@ def test_valid_snapshot_is_not_modified(snapshot):
     assert snapshot == original
 
 
+@pytest.mark.parametrize(
+    ("version", "limitations"),
+    [
+        ("0.1.0", ["Legacy rv2_interfaces is not pinned."]),
+        ("0.1.2", ["TSan and full-project runtime acceptance remain pending."]),
+    ],
+)
+def test_limitations_can_change_between_snapshots(snapshot, version, limitations):
+    snapshot["project_version"] = version
+    snapshot["limitations"] = limitations
+    original = copy.deepcopy(snapshot)
+    assert validate_snapshot(snapshot, version) is None
+    assert snapshot == original
+
+
 @pytest.mark.parametrize("version", ["0.0.0", "1.0.0", "12.34.56"])
 def test_canonical_project_versions(snapshot, version):
     snapshot["project_version"] = version
