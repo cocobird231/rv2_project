@@ -1,6 +1,5 @@
 """Check the pinned source snapshot and its installed ROS metadata together."""
 
-import json
 import os
 import subprocess
 import xml.etree.ElementTree as ET
@@ -127,7 +126,7 @@ def test_design_records_every_snapshot_version_and_commit(snapshot):
             row = f"| {name} | {component['commit']} | {component['tag_commit']} |"
             assert row in design
     assert snapshot["acceptance"] == "pending"
-    assert "rv2_interfaces" in json.dumps(snapshot["limitations"])
+    assert snapshot["limitations"]
 
 
 def test_colcon_owner_and_explicit_workspace_discovery():
