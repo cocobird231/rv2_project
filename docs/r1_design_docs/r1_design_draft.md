@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.33)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.34)
 
-> 狀態:正式版(v1.3.33);framework v0.5.1 已導入四個 ROS consumers，正式驗證／獨立定版／PR 完成，待使用者合併後建立新 snapshot。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.34);使用者已合併所有前輪 PR，建立 project v0.1.2 snapshot 中。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.34 | **更新 Agent:`coco-codex`**。所有前輪 PR 已由使用者合併；project master 實際 pull c8aca0a/v0.1.1 並核對原 tag tree，承接本地未發布文件歷史。新增 v0.1.2 snapshot 規劃，以重新 pull 的主線 release 固定 framework0.5.1、interfaces/mocks/integration0.1.2、transport0.2.0，原 snapshots 不回寫。限制改述現存 TSan／總驗收缺口，不能為通過舊測試保留假的 legacy 未解決宣告；schema 的非空限制與版本／SHA／安裝 guards 不變，新增相容回歸。先文件再資料／gitlinks／測試，PR-ready 才獨立 package.xml version/tag；完整規劃見 TODO v0.8.35 T15。 |
 | v1.3.33 | **更新 Agent:`coco-codex`**。四個 ROS consumers 已以 gitlink-only commits 導入實際 pull 的 merged framework ae47906/v0.5.1，own nested 官方 Docker 四步／lint 完成；interfaces build、mocks23/UBSan3、transport113/ASan64/UBSan72、integration21/I10ASan2 與 transport 兩包 Debian clean downstream 全過，無 legacy dependency。版本欄位只在驗證後獨立提交／annotated tag：interfaces feaecc6/v0.1.2 PR #2、mocks1212af5/v0.1.2 PR #5、transport e3cb651/v0.2.0 PR #9、integration028e416/v0.1.2 PR #4。明確區分實測 source SHA、metadata-only release 與待 merge candidates；不把 TSan／cppcheck SKIP 或舊 code10 證據當作新 PASS。Project 原 snapshot pins/tag、master、Doxyfile 與 dirty sources 保留；新組合待使用者合併後 pull／驗證，完整證據見 TODO v0.8.34。 |
 | v1.3.32 | **更新 Agent:`coco-codex`**。Framework #9 已由使用者合併；main agent 乾淨 master 實際 pull 後確認主線 ae4790668efc83f99584c300e6963d522e04e12c、VERSION0.5.1，與原 tag a058498 tree 相同。正式導入改用此 merged SHA，不移動舊 tag。四個 ROS consumers 先分開 gitlink-only commits，再以 own nested 四步/lint 驗證與 PR-ready 獨立定版；transport R1-only 另做 Debian/export，原 code10/T12 補強不重寫。Project #1 尚待 merge，已有 snapshots／tags 保持原組合，後續 snapshot 只納入已合併 releases。TSan 不提前驗收，執行及來源證據記 TODO v0.8.33。 |
 | v1.3.31 | **更新 Agent:`coco-codex`**。Project v0.1.1 獨立版本 commit/tag fddcccd、乾淨 release 四步驗證與 PR #1 完成；9 份 .gitmodules／14 個 gitlinks 均為最新已合併版本。Transport legacy 移除與 T12/export、integration I15/I18 與依賴清理已分開提交到乾淨工作分支，保留原 dirty bytes、R1 production/API、Doxyfile 與 master。Framework v0.5.1 相容性／README／版本分開 commits，84 Python 回歸與四套 shell、lint 全過，已推 PR #9/tag a058498。明訂 UBSan discovery 與五個 R1 floor，保留 mixed legacy 必測；consumer 正式導入待使用者 merge／重新 pull，不將開發 override 或 TSan SKIP 視為總驗收。原始 logs 與進度見 TODO v0.8.32 T14。 |
@@ -355,6 +356,8 @@ v1.3.33 正式導入結果：Framework #9 已 merge，重新 pull 核實後的 r
 上表各 release commit 僅改 package.xml 版本，annotated tag 已推，舊 tag 不移動；實際 ROS 驗證使用進版前的 clean source，不冒稱 metadata-only commit 後又重跑。Integration 已用乾淨候選 interfaces／mocks v0.1.2、transport v0.2.0 通過，但不等於這些 PR 已合併；先合併 transport 才導入 integration 的 legacy dependency 清理。原 top-level dirty checkouts 不被切換或清除，新工作位於乾淨 worktrees。
 
 Project [PR #1](https://github.com/cocobird231/rv2_project/pull/1)／v0.1.1 原 tag 與兩份 snapshots 保持不變，本輪文件跟進留獨立工作分支。上述元件與 project #1 經使用者合併後，再本地 pull／核對新的主線 SHA 與原 tag tree，新增 project 版本組合；不能將所有 src 歷史 gitlinks 宣稱為最新候選版。T12.2 和新 snapshot 的總驗收仍未完成。
+
+v1.3.34 合併後規劃：使用者已合併上述四個 consumer PR 與 project #1，前段「待合併」為 v1.3.33 的歷史。新增 project v0.1.2 固定重新 pull 核對的主線 release，舊 v0.1.0/v0.1.1 snapshot 不變。限制清單記錄仍存在的 TSan 與整體總驗收 pending，不再強制包含已解決的 legacy rv2_interfaces 依賴問題；schema_version1／非空限制／所有 Git、版本與安裝 guards 保留。精確 SHA 表與正式驗證結果於 T15 完成時更新。元件同 tree 歷史測試可作相容性證據，但不是新 snapshot 整體重驗。
 
 ### 2.2 元件關係圖
 
