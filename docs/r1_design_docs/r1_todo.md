@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.32)
+# R1 實作 TODO List(v0.8.33)
 
-> 依據:`r1_design_draft.md` v1.3.31(正式版;project v0.1.1／framework v0.5.1 已提出 PR，R1-only 正式導入待 merge)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.32(正式版;framework v0.5.1 已 merge／重新 pull，四個 ROS consumers 正式導入中)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.33 | **更新 Agent:`coco-codex`**。使用者確認 framework #9 merge 並要求接續。乾淨 standalone master 已實際 git pull --ff-only origin master，本地／origin／即時遠端均 ae4790668efc83f99584c300e6963d522e04e12c、VERSION0.5.1；與原 tag a058498 的 tree47fb1a9 完全相同，原 tag 不移動。先規劃四個 ROS consumers 在乾淨候選工作分支以 gitlink-only commits 導入，再用各自 nested 四步／lint 正式驗證；transport 另重做 Debian downstream gate。驗證後才各附獨立版本 commit/tag/PR，transport 移除公開 legacy API 預計 v0.2.0，其餘三包 v0.1.2。Project PR #1 尚 open，既有 snapshots／tags 不回寫；元件 merge 後再新增 snapshot。原 dirty sources、master、Doxyfile 與 TSan SKIP 限制保留。 |
 | v0.8.32 | **更新 Agent:`coco-codex`**。Project v0.1.1 版本 commit/tag fddcccd 已推 PR #1，乾淨 release nested 四步及 lint 通過。src 全面唯讀盤點 9 份 .gitmodules／14 個 gitlinks 皆為最新已合併版本。乾淨 transport 分支分開提交 legacy 移除 664a1a4、T12/export 423ff10；integration 分開提交 I15/I18 6a36157、依賴清理 58e167d，原工作樹 dirty bytes 不動。Framework R1-only UBSan/T0 相容性 e690efa、README rebase/pin 17a9a0a 與只改 VERSION 的 v0.5.1 a058498 分開提交；84 Python 回歸、四套 shell 查核、lint 全過，已推 PR #9/tag。正式 consumer pin／定版仍待使用者 merge 與重新 pull；開發預驗證另記 T14，不將 TSan SKIP 算入 T12.2。 |
 | v0.8.31 | **更新 Agent:`coco-codex`**。T14.1 的五個 project checkout 均實際 pull，HEAD／origin／即時遠端及原 release tag tree 全一致；transport 固定 cc7cec2，所有四個 ROS consumers 的 nested framework 均 f5952a8/v0.5.0。v0.1.0 snapshot bytes 不變，新 v0.1.1 資料 commit 907ff3d、gitlink commit 5d1c44f。只有 package.xml 進版的 PR-ready 候選以官方 Docker nested 四步前三級及 lint 通過：unit131/integration9、CMake/XML 全 PASS，sanitizers N/A；準備獨立 version commit/tag 與 project PR。原 T14.2–T14.4、TSan／legacy 依賴缺口不提前勾選，逐項 logs 保留。 |
 | v0.8.30 | **更新 Agent:`coco-codex`**。使用者確認 transport merge 並要求 project 新 snapshot／PR／tag，後續移除 transport legacy、提交 I15/I18 與 T12/export，最後同步 framework README。遠端核對 transport v0.1.2 主線 cc7cec2 與原 tag 8f56a55 tree 相同；project master 已有 30afa23，可正常提出 PR，不需 bootstrap 空主線。先規劃 v0.1.1 snapshot 並保留 v0.1.0，再按順序實作 T14；legacy 移除尚不在已合併 v0.1.2，禁止誤記已解決依賴。Framework v0.5.0 的 UBSan／T0 硬性 legacy target 需相容修正，必須維持 fail-closed、先 merge 新框架再正式導入，不改既有發布 tree／tag；TSan runtime 仍未完成。 |
@@ -768,6 +769,8 @@ v0.8.16 當時尚未完成：framework merge 後的 consumer pin/新 nested 入�
   v0.5.1／PR #9 已推，consumer 尚未提前 pin。官方 Jazzy Docker：sanitizer unit32、packaging unit16、lint unit18、TSan toggle8、full orchestration6、T0 integration4 全 PASS；另 owner/selector/lint wrapper/sanitizer instrumentation 四套 shell PASS，含真實 ASan/UBSan clean/defect controls。Lint C/C++3／Python11／Shell14 PASS，獨立複核無 must-fix。初次 packaging 自測因誤用 Ruff venv Python 缺 yaml，改用容器 system Python 後 16 全過；兩份 log 均保留，未因此改產品。版本 commit 後 sanitizer32 再驗 PASS。證據：transport `test_env/jazzy/r1-only.HmGv6E/framework-*.log`；完整 submodule 盤點見同目錄 `submodule-audit.md`。
 
 TSan 預設 off 不變；T12.2 仍須支援平台實測。T14 不自行合併任何 PR；project 後續版本只能納入已合併、重新 pull 核對的 releases。
+
+**接續導入(v0.8.33)**：Framework #9 已於 2026-09-13 合併，主線 pull／release tree 證據見 transport `test_env/jazzy/r1-release.V0XQM8/`。T14.2/T14.3 的待 framework merge 前置條件已解除，以下工作完成前仍不勾選：四個 ROS repo 分開 gitlink-only 更新至 ae47906；interfaces build/無案例、mocks23/UBSan3、transport113/ASan64/UBSan72、integration21/I10ASan2 及各自 lint 全程官方 Docker、ROS jobs 全域串行。使用每包自己的 nested 入口，不沿用 override 作正式結果。Transport Debian 另核對無 legacy dependency／乾淨安裝／public export。版本欄位僅在 PR-ready 時獨立更新，舊 release tags 與原工作樹 dirty bytes 保留。Project root／workspace 的 frozen snapshot pins 不直接改写；待 component releases 與 project #1 合併再建立新 snapshot。
 
 ---
 
