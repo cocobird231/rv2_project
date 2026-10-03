@@ -164,5 +164,9 @@ class TestJoystickLaunchExit(unittest.TestCase):
     """Reject crashed or forcibly killed launch children."""
 
     def test_exit_codes(self, proc_info):
-        """Allow a clean exit or normal SIGINT when the test ends."""
-        assertExitCodes(proc_info, allowable_exit_codes=[0, -signal.SIGINT])
+        """ros2cli converts KeyboardInterrupt to positive SIGINT; nodes do not."""
+        for process in proc_info.processes():
+            allowed = [0, -signal.SIGINT]
+            if process.process_details["name"].startswith("unitree_requests-"):
+                allowed.append(signal.SIGINT)
+            assertExitCodes(proc_info, process=process, allowable_exit_codes=allowed)
