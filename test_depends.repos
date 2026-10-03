@@ -1,0 +1,19 @@
+repositories:
+  r1_interfaces:
+    type: local
+    path: ros2_ws/src/r1_interfaces
+  rv2_control_signal_transport:
+    type: local
+    path: ros2_ws/src/rv2_control_signal_transport
+  rv2_csm_topic_bridge:
+    type: local
+    path: ros2_ws/src/rv2_csm_topic_bridge
+  rv2_server_control:
+    type: local
+    path: ros2_ws/src/rv2_server_control
+  joy_interpreter:
+    type: local
+    path: ros2_ws/src/joy_interpreter
+  unitree_api:
+    type: local
+    path: ros2_ws/src/unitree_api
