@@ -74,6 +74,14 @@ v0.1.2 的 R1-only 來源不再依賴 legacy `rv2_interfaces`。此列表不會�
 
 ## 實機 joystick 操作
 
+準備好上述來源與 ROS dependencies 後，可在 ROS 開發容器由 project 根目錄建置。
+明確選用這裡固定的 R1 sources，避免混入外層 workspace 的 legacy checkout：
+
+```bash
+colcon build --paths . ros2_ws/src/* --packages-up-to rv2_project
+source install/setup.bash
+```
+
 在已安裝上述 packages、source 對應 `install/setup.bash` 且可存取 joystick 的 ROS 環境執行：
 
 ```bash
