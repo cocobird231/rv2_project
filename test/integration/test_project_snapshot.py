@@ -170,6 +170,8 @@ def test_installed_package_is_discoverable_and_metadata_matches(snapshot):
     assert Path(get_package_share_directory("rv2_project")) == SHARE
     assert (SHARE / "package.xml").read_bytes() == (SOURCE / "package.xml").read_bytes()
     assert (SHARE / "README.md").read_bytes() == (SOURCE / "README.md").read_bytes()
+    launch_file = Path("launch/test_joystick.launch.py")
+    assert (SHARE / launch_file).read_bytes() == (SOURCE / launch_file).read_bytes()
     installed = load_snapshot(
         SHARE / "snapshots" / f"v{snapshot['project_version']}.json",
         snapshot["project_version"],
