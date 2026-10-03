@@ -212,7 +212,9 @@ def test_colcon_owner_and_explicit_workspace_discovery():
         timeout=30,
     ).splitlines()
     assert owner == ["rv2_project"]
-    children = [str(path) for path in sorted((SOURCE / "ros2_ws/src").iterdir())]
+    # External source dependencies may also live here; check managed components.
+    names = (*COMPONENT_NAMES, *(name for name, _, _ in WORKSPACE_CONSUMERS))
+    children = [str(SOURCE / "ros2_ws/src" / name) for name in names]
     workspace = subprocess.check_output(
         ["colcon", "list", "--paths", str(SOURCE), *children, "--names-only"],
         text=True,
