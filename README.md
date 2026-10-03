@@ -1,8 +1,8 @@
 # rv2_project
 
-RV2 專案總目錄與 ROS2 `ament_cmake` snapshot metadata package。首版 **v0.1.0**
-記錄各 R1 package 的已合併 release 版本、精確 commit 及原 tag 的相同 tree。
-它沒有 runtime node，也不是所有 child packages 的自動 build／測試代理。
+RV2 專案總目錄與 ROS2 `ament_cmake` package，保存版本 snapshot，並提供
+`test_joystick.launch.py` 組合既有 joy、bridge、server 與 master，觀察控制輸出。
+首版 **v0.1.0** 記錄各 R1 package 的已合併 release 版本、精確 commit 及原 tag 的相同 tree。
 
 最新 snapshot **v0.1.2** 納入已合併 framework v0.5.1、interfaces/mocks/integration
 v0.1.2 與 R1-only transport v0.2.0；I15/I18、T12/export 補強及 legacy 依賴移除均已收錄。
@@ -29,7 +29,7 @@ git submodule foreach --recursive 'git fetch --tags origin'
 原本的 pin；不為了 project snapshot 改寫已發布內容。
 
 目前 workspace 另納入以下兩個已合併的 R1 consumers，固定合併後的 SHA；它們尚未
-列入歷史 v0.1.2 snapshot。本次只更新 workspace submodules，不新增 snapshot 或 project
+列入歷史 v0.1.2 snapshot。本次更新 workspace submodules 與 joystick launch，不新增 snapshot 或 project
 release；`package.xml` 仍為 0.1.2，schema 1 的五個 components 與既有 JSON 均保持原內容。
 
 | Consumer | 版本 | 固定 r1 commit | 原 v0.1.0 tag commit（tree 相同） |
@@ -41,18 +41,28 @@ Server 的來源依賴還需要在 `ros2_ws/src/` 準備 `joy_interpreter`（已
 `944306b61746dcdaa932a404994b8f829a2a9611`）及 `unitree_api`（官方 `unitree_ros2`
 `5204e6e098ee53f4bd929bd77eb1d387cd0fa842` 的 `cyclonedds_ws/src/unitree/unitree_api`，
 可用 symlink）。這兩個外部來源不是本 project 的 submodules；recursive clone 後仍須
-準備，才能建置 server 或執行其 nested 測試。具體布局見
+手動準備，才能建置 server、project launch 或執行 project 的完整測試。已有乾淨且符合
+上述 SHA 的來源時，可由 project 根目錄連入（替換為實際絕對路徑）：
+
+```bash
+ln -s /absolute/path/to/joy_interpreter ros2_ws/src/joy_interpreter
+ln -s /absolute/path/to/unitree_ros2/cyclonedds_ws/src/unitree/unitree_api ros2_ws/src/unitree_api
+```
+
+`test_depends.repos` 直接列出 interfaces、transport、bridge、server 與這兩個外部來源，
+由 project 自己的 framework 唯讀掛入 Docker；不自動下載或沿用其他 owner 的 build。
+具體布局見
 [server 建置依賴](ros2_ws/src/rv2_server_control/README.md#建置依賴)，不需整個 Unitree workspace。
 
 `package.xml` 是 project 版本的唯一來源，選擇 `snapshots/v<version>.json`。
 完整版本對照見 [設計稿 §2.1.1](docs/r1_design_docs/r1_design_draft.md)。
-文件、snapshot 與 README 安裝到 `share/rv2_project/`，可在已 source 的 ROS 環境查詢：
+文件、snapshot、README 與 `launch/` 安裝到 `share/rv2_project/`，可在已 source 的 ROS 環境查詢：
 
 ```bash
 ros2 pkg prefix --share rv2_project
 ```
 
-本 package 不引入 child packages 作為 runtime dependencies。要明確列出 project 與
+本 package 宣告 launch 使用的 child runtime dependencies。要明確列出 project 與
 nested ROS packages，可在測試 Docker／開發容器內由本目錄執行：
 
 ```bash
@@ -61,6 +71,82 @@ colcon list --paths . ros2_ws/src/*
 
 v0.1.2 的 R1-only 來源不再依賴 legacy `rv2_interfaces`。此列表不會安裝外部 ROS／apt
 依賴，也不等於完整執行環境已鎖版。
+
+## 實機 joystick 操作
+
+在已安裝上述 packages、source 對應 `install/setup.bash` 且可存取 joystick 的 ROS 環境執行：
+
+```bash
+ros2 launch rv2_project test_joystick.launch.py
+```
+
+預設啟動 `joy_node`（20 Hz autorepeat）、Joy bridge、control server、一個獨立 master，
+以及 `ros2 topic echo /api/sport/request unitree_api/msg/Request`。
+Echo 只訂閱 request，不模擬機器人、不發布 response。Server launch 的內建 master 已關閉。
+
+查參數或選擇裝置：
+
+```bash
+ros2 launch rv2_project test_joystick.launch.py --show-args
+ros2 run joy joy_enumerate_devices
+ros2 launch rv2_project test_joystick.launch.py device_id:=1
+ros2 launch rv2_project test_joystick.launch.py device_name:="裝置的完整 SDL 名稱"
+```
+
+`device_name` 非空時優先於 `device_id`。`start_joy`、`start_bridge`、`start_server`、
+`start_master`、`observe_requests` 預設皆為 `true`，可個別設為 `false`。
+已有 master 時用 `start_master:=false`；只需 server 自己的輸出 log 時用
+`observe_requests:=false`。`joy_topic` 預設 `/joy`；`server_name`、`master_name`、
+`bridge_name` 預設分別為 `control_server`、`csm_master`、`topic_bridge`。
+自訂 YAML 使用 `bridge_config_file:=/absolute/path/bridge.yaml` 與
+`server_config_file:=/absolute/path/server.yaml`；上述 launch 名稱與 Joy topic/type 會覆寫 YAML。
+
+以下三組分開執行，每組用兩個 terminal。先確認非零搖桿輸入產生 API **1008**（Move，
+`x/y/z` 對應 axes 0/1/3），再對 terminal B 按 Ctrl+C，等待後以原命令重啟。
+
+Joy 程序停止／恢復：
+
+```bash
+# Terminal A
+ros2 launch rv2_project test_joystick.launch.py start_joy:=false
+# Terminal B
+ros2 run joy joy_node --ros-args -p autorepeat_rate:=20.0
+```
+
+Bridge 停止／恢復：
+
+```bash
+# Terminal A
+ros2 launch rv2_project test_joystick.launch.py start_bridge:=false
+# Terminal B
+ros2 launch rv2_csm_topic_bridge topic_bridge.launch.py topic_name:=/joy msg_type:=joy
+```
+
+Server 遲啟動／重啟（保留 terminal A 的 master）：
+
+```bash
+# Terminal A
+ros2 launch rv2_project test_joystick.launch.py start_server:=false
+# Terminal B
+ros2 launch rv2_server_control control_server.launch.py start_master:=false
+```
+
+使用預設設定時，停止 Joy 輸入超過 `timeout_ms=2000` 應觸發一次 API **1003**
+（StopMove）；持續失聯不反覆發送。`disconnect_timeout_ms=10000` 從最後資料計算，
+超過後移除註冊；恢復新輸入應重新註冊，保持與中斷前相同的非零值仍應再次輸出 Move。
+Bridge 停止也應讓仍在執行的 server 停止輸出；server 本身停止期間沒有程序可以發 StopMove，
+重啟後觀察 master 對帳及新輸入恢復。需要時另開 terminal：
+
+```bash
+ros2 topic echo /topic_bridge/status r1_interfaces/msg/ManagerStatus
+ros2 topic echo /control_server/status r1_interfaces/msg/ManagerStatus
+```
+
+拔除／插回 joystick 另做一次；部分 driver 拔除後仍送 neutral samples，此時應以
+driver log 判斷實體斷線，不能只期待 transport TIMEOUT；未自動重開裝置時重啟 joy node。
+Bridge mailbox 只保留最新 pending sample，註冊／service 等待期間的短按可能被後續訊息覆蓋，
+包含 R2（axes 5，小於 0.5 為急停）與 buttons；此路徑不保證保留每個按鍵邊緣。
+實機、裝置 mapping 與 hotplug 驗收仍由使用者執行。
 
 ## 測試
 
@@ -74,9 +160,13 @@ v0.1.2 的 R1-only 來源不再依賴 legacy `rv2_interfaces`。此列表不會�
 ./r1_test_framework/test_clean.sh
 ```
 
-無參數 `test_run.sh` 驗證 manifest unit 與真實 Git/ROS 安裝 integration，並保留
+無參數 `test_run.sh` 建置 project 的 runtime dependency closure，驗證 manifest unit、
+真實 Git/ROS 安裝 integration，以及從 installed project launch 啟動的組合測試。
+組合測試在 Docker 內以合成 Joy 驗證輸出、輸入停止與同值恢復；它不替代實機驗收。
+流程只執行 project 的測試，不代替各 child owner 的完整測試，並保留
 `test_env/jazzy/runs/full-*/summary.tsv`、逐案例 pytest log、JUnit XML 與 build log。
-此 metadata-only package 沒有 native runtime，ASan/UBSan/TSan 均為 N/A。
+Project 沒有自有 native runtime，framework 未為此 owner 定義 sanitizer profile，
+ASan/UBSan/TSan 均為 N/A；這不表示 launch 內的 child runtime 已通過 sanitizer。
 目前 workspace 的兩個額外 consumers 也驗證 gitlink、checkout、原 tag tree、版本、remote
 與 nested framework；這些檢查不擴充歷史 snapshot 的 schema。
 其他 owners 的 T12.2 本次依使用者裁決暫時 SKIP；未取得 TSan 無 race 證據，
