@@ -15,14 +15,20 @@ install(DIRECTORY docs/
   DESTINATION share/${PROJECT_NAME}/docs
   FILES_MATCHING PATTERN "*.md")
 install(FILES README.md DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+  FILES_MATCHING PATTERN "*.launch.py")
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   find_package(ament_cmake_lint_cmake REQUIRED)
   find_package(ament_cmake_xmllint REQUIRED)
+  find_package(launch_testing_ament_cmake REQUIRED)
 
+  set(snapshot_unit_path test/unit)
+  set(snapshot_integration_path test/integration/test_project_snapshot.py)
   foreach(suite unit integration)
-    ament_add_pytest_test(snapshot_${suite} test/${suite}
+    ament_add_pytest_test(snapshot_${suite} ${snapshot_${suite}_path}
       TIMEOUT 120
       ENV
         "RV2_PROJECT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
@@ -32,6 +38,10 @@ if(BUILD_TESTING)
       APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test")
     set_tests_properties(snapshot_${suite} PROPERTIES LABELS "${suite}")
   endforeach()
+
+  add_launch_test(test/integration/test_joystick_launch.py
+    TARGET test_joystick_launch TIMEOUT 90)
+  set_property(TEST test_joystick_launch APPEND PROPERTY LABELS integration)
 
   ament_lint_cmake(CMakeLists.txt)
   ament_xmllint(package.xml)

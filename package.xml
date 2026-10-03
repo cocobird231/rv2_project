@@ -3,11 +3,20 @@
 <package format="3">
   <name>rv2_project</name>
   <version>0.1.2</version>
-  <description>RV2 project snapshots, pinned R1 releases and design documentation.</description>
+  <description>RV2 project snapshots, pinned R1 releases and joystick acceptance launch.</description>
   <maintainer email="cocobird231@gmail.com">cocobird231</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>joy</exec_depend>
+  <exec_depend>ros2topic</exec_depend>
+  <exec_depend>rv2_csm_topic_bridge</exec_depend>
+  <exec_depend>rv2_server_control</exec_depend>
+  <exec_depend>rv2_control_signal_transport</exec_depend>
+  <exec_depend>unitree_api</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>ament_cmake_lint_cmake</test_depend>
@@ -15,6 +24,11 @@
   <test_depend>ament_index_python</test_depend>
   <test_depend>python3-pytest</test_depend>
   <test_depend>git</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <test_depend>rclpy</test_depend>
+  <test_depend>r1_interfaces</test_depend>
+  <test_depend>sensor_msgs</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
