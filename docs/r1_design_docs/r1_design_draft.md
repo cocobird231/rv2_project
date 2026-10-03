@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.39)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.40)
 
-> 狀態:正式版(v1.3.39)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.40)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.40 | **更新 Agent:`coco-codex`**。Project 新增並安裝 joystick 組合 launch，宣告 joy／bridge／server／master 與 request echo 的 runtime dependencies；各部分可分開啟停，child include 隔離參數 scope，server 不重複啟動 master。補手動來源 closure、installed launch 的合成 Joy／停止／同值恢復 integration 與 README 操作，正式驗證仍走 own nested Docker。說明 driver neutral／mailbox 短按限制；實機驗收 pending。Package 0.1.2、三份 schema 1 歷史 snapshots 與 tags 不變，不新增 release；執行結果見 TODO T16.8。 |
 | v1.3.39 | **更新 Agent:`coco-codex`**。Bridge #1／server #2 已合併；project workspace 新增兩包 v0.1.0 submodules，固定實際 pull／核對後的 r1 主線 78ba1a9／ae457ea，原 tag tree 相同且不移動。§2.1.1 分開列出目前 workspace consumers 與五元件歷史 snapshots；package.xml0.1.2、schema1、原 JSON 不改，不新增 project release。說明 server 外部 source dependencies、metadata guards 與實機驗收邊界；執行結果見 TODO T16.7。 |
 | v1.3.38 | **更新 Agent:`coco-codex`**。同步 project PR #2 已合併、literal pull 主線 612f051 與原 v0.1.2 tag 1ada31e tree 相同。依使用者裁決將 T12.2 記為本次環境豁免 SKIP／延期，不冒稱 PASS，也不阻擋其餘項目手動總驗收；整體 acceptance_pending 保留。正式確定 test_run 測試與 test_packages 打包入口分離，記錄現行 Docker 建置／乾淨安裝合約及無 Docker 打包的待討論範圍，未修改 framework。對齊 TODO v0.8.39／README／T15 完成紀錄；不回寫三份已發布 snapshots、原 tags 或 component pins，不新增可選總測腳本。 |
 | v1.3.37 | **更新 Agent:`coco-codex`**。Project v0.1.2以僅改package.xml的1ada31e獨立定版，annotated tag與PR #2已推。實際clean release clone通過unit133／integration9、CMake/XML與Python3 lint；source/framework dirty0，容器已清除，證據見TODOv0.8.38 T15。本完成紀錄在本地results分支，不回寫tag／PR的v1.3.36文件tree或舊snapshots。十個project gitlinks為已核對merged releases，原四個工作分支仍保留；TSan與整體總驗收pending不改。 |
@@ -285,15 +286,17 @@ v0.5.0 新增執行檔 `csm_master_node`:這是一個獨立的 node,負責 host 
 src/r1/csm_master.cpp / include/rv2_control_signal_transport/r1/csm_master.h
 ```
 
-### 2.1.1 rv2_project：專案版本 snapshot(v1.3.27)
+### 2.1.1 rv2_project：專案版本 snapshot 與 joystick launch(v1.3.40)
 
-`rv2_project` 是 RV2 專案總目錄與獨立 ROS2 `ament_cmake` metadata package，首版 `package.xml` 為 **0.1.0**。它保存「這個專案版本對應哪組 R1 releases」，不新增 transport、mock 或管理 node，也不把 framework 當 ROS package 依賴。專案 snapshot 版本、各 component release 版本、本文件修訂版本三者各自管理，不必同步。Snapshot 版本不必是 release；建立 v0.1.0 不代表總驗收已通過，不額外產生空 release commit/tag。
+`rv2_project` 是 RV2 專案總目錄與獨立 ROS2 `ament_cmake` package，首版 `package.xml` 為 **0.1.0**。它保存「這個專案版本對應哪組 R1 releases」，目前也提供 joystick 驗收 launch，組合既有 child runtime；不自建 transport、mock 或管理 node。Framework 仍不是 ROS package 依賴。專案 snapshot 版本、各 component release 版本、本文件修訂版本三者各自管理，不必同步。Snapshot 版本不必是 release；建立 v0.1.0 不代表總驗收已通過，不額外產生空 release commit/tag。
 
 ```text
 rv2_project/
 ├── package.xml / CMakeLists.txt / README.md
 ├── snapshots/v0.1.0.json       # 版本組合與限制；後續版本另建檔，不覆寫
 ├── docs/r1_design_docs/        # 本設計稿與 TODO；原歷史納入 project
+├── launch/test_joystick.launch.py # joy／bridge／server／master 與純 request echo
+├── test_depends.repos          # project Docker 直接掛入的 source closure
 ├── r1_test_framework/          # project 自己的固定版測試入口
 ├── ros2_ws/src/                # 五個 snapshot gitlinks + 兩個 workspace consumers
 │   ├── r1_test_framework/      # workspace 開發 checkout，與根目錄同 SHA
@@ -338,7 +341,9 @@ v0.1.1 只導入已合併 transport v0.1.2（framework pin 更新至 v0.5.0）�
 
 先在乾淨 checkout 實際 `git pull --ff-only origin <主線>`，再 `git fetch origin tag vX.Y.Z` 取得欲固定的原 release tag，比對 HEAD／遠端與 release tree，再固定精確 SHA。rebase 後舊 tag 可能不在主線祖先中，不能假定 pull 已帶回所有 tags。主線取純 R1 `master`、transport `r1`，不能使用 transport legacy `master`。一般 clone 以 `git submodule update --init --recursive` 還原固定 SHA；取得 tags 的準備命令見 README，不使用 --remote／--force。測試自身不連網、不追 HEAD，也不改寫 component 內部已發布的 framework pin。
 
-CMake 安裝 `snapshots/`、README 與文件至 `share/rv2_project/`，由 ament index／`ros2 pkg prefix --share rv2_project` 找到；不安裝 child Git working trees、test_env 或 Git metadata。`test/unit/` 檢查 manifest 合約與失敗案例，`test/integration/` 檢查 package.xml、gitlinks、checkout/tag tree、文件對照及實際安裝內容；pytest/CTest 分為兩個 labels，保存逐案例 log。Project 的 nested 四步入口測試本 metadata package；sanitizers 不適用，不等於重跑所有 child packages。要列出 nested ROS packages 時顯式指定 `colcon list --paths . ros2_ws/src/*`；framework 的 COLCON_IGNORE 仍有效。
+CMake 安裝 `snapshots/`、README、文件與 `launch/` 至 `share/rv2_project/`，由 ament index／`ros2 pkg prefix --share rv2_project` 找到；不安裝 child Git working trees、test_env 或 Git metadata。`test/unit/` 檢查 manifest 合約與失敗案例，metadata integration 檢查 package.xml、gitlinks、checkout/tag tree、文件對照及實際安裝內容。另以 `add_launch_test` 從 installed project launch 啟動真實節點，透過合成 Joy 驗證輸出、輸入停止與同值恢復；普通 pytest 僅收集 metadata 檔案，避免重複執行 launch test。CTest 仍分 unit／integration labels，保存逐案例 log。
+
+Project 宣告組合 launch 所需的 child runtime dependencies；own nested 官方 Docker 四步先建置 source dependency closure，再只執行 project 測試，不代替各 child owner 的完整矩陣。Project 無自有 native runtime，framework 未定義此 owner 的 sanitizer profile，因此 ASan／UBSan／TSan 均 N/A，不宣稱 child runtime sanitizer 通過。要列出 nested ROS packages 時顯式指定 `colcon list --paths . ros2_ws/src/*`；framework 的 COLCON_IGNORE 仍有效。
 
 **v0.1.0 已知限制**：transport PR #8/v0.1.2 仍未合併，故其 v0.1.1 內部 framework 仍為 v0.2.1 `3dd3c27`，其餘三個 ROS consumers 為 v0.5.0 `f5952a8`。I15/I18 與 transport T12/export 補強尚未提交；legacy `rv2_interfaces` 不在目前 project gitlinks 中，乾淨 8a9d995 缺測試需要欄位，歷史成功用了 dirty dependency。TSan runtime 仍阻塞。此 snapshot 固定 R1 release 組合，**不是完整可重現的依賴 closure 或整體驗收證明**；待 TODO §2.1 缺口收斂後新增 snapshot 驗收，不回寫原版。
 
@@ -361,9 +366,13 @@ v0.1.2 的 component 對照（已逐個本地 pull；local／origin／即時遠�
 | rv2_csm_topic_bridge | v0.1.0 | 78ba1a94825eb9790f23a3be5dbfb31df5162ec7 | c3f2b4b6dc669d98552b801b5bc68858aec4da61 |
 | rv2_server_control | v0.1.0 | ae457eacd3f0e56e6cec53fec2c7b61773d52f6b | d8921b2123ff9c3216e35718047329d1ef1308c9 |
 
-這是 workspace 更新，不是新版本 snapshot；project package.xml 維持 0.1.2，schema1 與三份歷史 JSON 不改。未來若要將 consumers 納入正式 snapshot，需新增 schema/version 及相容測試。Project metadata integration 另查核兩包 gitlink／checkout／tag tree／version／remote／nested framework，並確認可顯式 discovery；不把它們偷偷加入 schema1 的五個 components。
+本輪更新 workspace 與 joystick launch，不新增版本 snapshot；project package.xml 維持 0.1.2，schema1 與三份歷史 JSON 不改。未來若要將 consumers 納入正式 snapshot，需新增 schema/version 及相容測試。Project metadata integration 另查核兩包 gitlink／checkout／tag tree／version／remote／nested framework，並確認可顯式 discovery；不把它們偷偷加入 schema1 的五個 components。
 
-Server 另需要 sibling `joy_interpreter`（test 分支944306b61746dcdaa932a404994b8f829a2a9611）與 `unitree_api`（官方 unitree_ros2 commit5204e6e098ee53f4bd929bd77eb1d387cd0fa842之cyclonedds_ws/src/unitree/unitree_api，可用 symlink）。兩者不在本次 project submodules 內，recursive clone 後仍須依 server README 準備，不能宣稱已有完整 source dependency closure。Bridge/server runtime 沿用 tree 相同的 T16 驗證證據；本輪 project metadata 測試不代替實機 joystick/hotplug 驗收。
+Server 另需要 sibling `joy_interpreter`（test 分支944306b61746dcdaa932a404994b8f829a2a9611）與 `unitree_api`（官方 unitree_ros2 commit5204e6e098ee53f4bd929bd77eb1d387cd0fa842之cyclonedds_ws/src/unitree/unitree_api，可用 symlink）。兩者不在 project submodules 內，recursive clone 後須手動補在 `ros2_ws/src/`。Project 的 `test_depends.repos` 直接列出 interfaces、transport、bridge、server 及這兩個外部來源；framework 不遞迴讀 child 的 test_depends，也不自動下載缺少的來源。無須整個 Unitree workspace；rosdep 安裝與 build／test 全在官方 Docker 執行。各 child 既有 T16 證據與本次 project 組合測試分開記錄，實機 joystick/hotplug 驗收仍待使用者執行。
+
+`ros2 launch rv2_project test_joystick.launch.py` 預設啟動 joy_node（20 Hz autorepeat）、bridge production launch、server production launch、一個獨立 master 與純 `/api/sport/request` echo。Child includes 使用獨立 scope，server 明確 `start_master:=false`；echo 不發布假的 Unitree response。`start_joy`、`start_bridge`、`start_server`、`start_master`、`observe_requests` 可分開關閉；`device_name` 優先於 `device_id`，支援 Joy topic、三個 manager 名稱及 bridge/server YAML。README 提供三組 terminal 分拆命令，分別測 joy 停止、bridge 重啟及 server 遲啟動／重啟。
+
+Bridge 預設資料 timeout 2000 ms、disconnect 10000 ms，皆由最後活動計時。停止輸入應見單次 StopMove，超過 disconnect 後恢復同值新輸入仍須重新輸出；server 自己停止期間不會發 StopMove。部分 joy driver 在拔除裝置後仍送 neutral samples，須搭配 driver log 判讀。Mailbox 只保留最新 pending sample，阻塞註冊／service 期間的 R2 或 buttons 短按可能被覆蓋，不保證每個按鍵邊緣送達。合成 Joy 測試不代表實體 mapping／hotplug 已驗收，正式結果追蹤 TODO T16.8。
 
 ### 2.1.2 R1-only transport 收斂(v1.3.29)
 
