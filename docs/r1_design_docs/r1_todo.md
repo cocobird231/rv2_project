@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.8.39)
+# R1 實作 TODO List(v0.8.40)
 
 > 依據:`r1_design_draft.md` v1.3.38(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.40 | **更新 Agent:`coco-codex`**。新增 T16：將 rv2_csm_topic_bridge 與 rv2_server_control 遷移至 R1 transport/interface，新增 r1 主分支及獨立開發分支；保留原工作目錄未提交內容。先修文件、重寫 unit/integration、導入已 pull 核對的 framework v0.5.1；Docker 串行完整測試與獨立 lint 通過後才個別附 v0.1.0 版本 commit/tag/PR。實機 joystick、拔插與使用者驗收仍待執行，不回寫既有 snapshot。 |
 | v0.8.39 | **更新 Agent:`coco-codex`**。同步 project PR #2 已合併：本地 literal pull 至 master 612f051，與原 v0.1.2 tag 1ada31e tree 相同。依使用者裁決，T12.2 因環境限制暫時 SKIP，不算 PASS、不阻擋本次其餘項目總驗收；v0.1.2 整體驗收由使用者手動逐包執行並保留 logs，尚未通過。正式確定 test_run 與 test_packages 分離；現行打包仍需既有 Docker 並另做乾淨安裝驗證，無 Docker／一鍵打包僅列討論，未修改 framework。同步 T15 完成紀錄、設計稿與 README；不回寫三份既有 snapshots、tag 或 component pins，自動總測脚本暫不新增。 |
 | v0.8.38 | **更新 Agent:`coco-codex`**。T15完成：project v0.1.2 package.xml-only commit1ada31e、annotated tag與PR #2已推送。全新clone切至實際clean release後full-20260913T103359.7faUnS通過unit133／integration9、CMake/XML各1（148records含4wrappers），source/framework dirty0，Python3 release lint PASS；所有測試容器已清除。切換clone時Git曾保護性拒絕候選版本patch，僅撤回本agent暫存patch後切至正式commit，不reset/stash/改原來源。此完成紀錄在獨立本地results分支，不回寫已发布v0.1.2 tree/tag；已發布文件為TODOv0.8.37/designv1.3.36。Components的runtime沿用同內容歷史證據，TSan與整體總驗收仍待完成。 |
 | v0.8.37 | **更新 Agent:`coco-codex`**。v0.1.2 資料／README／版本表 b2f753a 與兩份相容測試642a573已分開提交。官方 nested RED 只敗於過期 legacy 文字 guard；修正後 unit133／integration9、CMake/XML 各1 全過，colcon148含4wrappers，零error/failure/skip；Python3 lint PASS。全新 recursive clone 取得 GitHub components／原 tags，僅套用 package.xml 進版候選差異後同組測試 PASS；不冒稱已提交 clean release。T15.2/.3 完成候選查核，準備 package.xml-only v0.1.2 commit/tag/PR；新文件與 release 將另做乾淨 clone 複驗。現況表與 R1 唯一案例157對齊已合併版本，TSan／總驗收未完成；原14links中四個舊工作分支仍保留。 |
@@ -845,3 +846,14 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 | `t12-asan` / `t12-tsan` | transport 核心測試 + integration owner 的 I10，分別執行 | `r1_todo_t12-asan_jazzy` 等 |
 | `t12-ubsan` | transport / mocks owner 的全部 unit，分別執行 | `r1_todo_t12-ubsan_jazzy` |
 | `t12-pkg` | build + test + `.deb` 打包 | `r1_todo_t12-pkg_jazzy` |
+
+## T16 Consumer packages 遷移至 R1（2026-10-03）
+
+**範圍**：`rv2_csm_topic_bridge`、`rv2_server_control`。控制訊號與服務以 transport `r1` v0.2.0 (`5a91d31`) 及 r1_interfaces v0.1.2 (`a0530d7`) 為準，保留 C++ namespace `rv2_interfaces::r1`。舊 master 不動；bridge 自 master `345ec24`、server 自最新已提交 develop `cf99d82` 建立 r1 base，再以 `coco-codex/r1-migration` 開發。原 staged/unstaged bytes 留在原路徑，不混入新 release。回退可使用原分支與其 legacy transport/interfaces 組合，R1/legacy wire protocol 不宣稱互通。
+
+- [ ] T16.1 Bridge 使用 R1 Info/Manager/SourceHandle，移除 legacy controller_priority_type/frequency 欄位；保留可配置 controller_name/channel/type/topic/service。註冊與 service send 在 executor 外執行；不定期重送快取 Joy 偽造活性。來源失活移除後，收到新資料可重新註冊；bridge 先於 server 啟動亦可恢復。
+- [ ] T16.2 Server 使用 R1 Manager/SinkHandle/EntryStatus 與 1–100 一般 priority；維持既有已提交 Joy/Twist 輸出用途。修正短 buttons 越界與斷線後重複命令去重問題，收訊與 watchdog 協作安全；逾時/終止後停止输出可觀察。原未提交 wireless intervention/requester policy 屬另行設計，不當作已發布 R1 協定。
+- [ ] T16.3 每包 own nested framework 固定已合併 `ae4790668efc83f99584c300e6963d522e04e12c` (v0.5.1)，已執行本地 master literal pull，HEAD/origin/live remote 一致，tree 與原 annotated tag 相同。以 test_depends.repos 明列依賴 closure；tests 分 unit/integration 並有 CTest labels。新 owners 的 sanitizer 矩陣由既有框架記 N/A，不冒稱 ASan/UBSan/TSan PASS。
+- [ ] T16.4 Docker nested 四步與獨立 lint、Joy topic/service、bridge/server 啟動順序、輸入停止、來源失效與新輸入恢復、server 重啟及消息數量邊界通過；ROS jobs 全域串行。保留逐項 logs/XML、SHA、實際結果與限制。
+- [ ] T16.5 功能/測試/文件先提交；驗證後只改 package.xml version 為 0.1.0，獨立 commit 與 annotated v0.1.0 tag，push 新 r1 base、開發分支/tag，PR base=r1，由使用者合併。文件 repo 自身僅 docs PR，不因文件變更升 project snapshot/package 版本。
+- [ ] T16.6 使用者實機 joy_node → bridge → control server 手動驗收，包括拔除/停止 joy、恢復輸入、bridge/server 斷線；README 提供完整指令與可觀察結果。自動模擬通過不代表實機已驗收。
