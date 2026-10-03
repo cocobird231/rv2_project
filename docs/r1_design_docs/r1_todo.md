@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.42)
+# R1 實作 TODO List(v0.8.43)
 
-> 依據:`r1_design_draft.md` v1.3.38(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.39(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.43 | **更新 Agent:`coco-codex`**。T16.7 完成 project gitlinks 與 metadata 驗證：bridge78ba1a9／serverae457ea 以 a1254d7 納入；補 Git/tag/tree/framework guards，discovery 限 project 管理的 components，容許額外 server source dependencies 共存。乾淨 source9941000／frameworkae479066 的官方 nested 四步通過 unit133／integration11、CMake/XML，150 aggregate records零錯誤／失敗／略過；Python3 lint PASS、sanitizers N/A。測試容器已清除，原 dirty sources/index bytes 保留。Package.xml0.1.2、三份 snapshots 與原 tags 不變；更新 PR #4，實機驗收仍 pending。 |
 | v0.8.42 | **更新 Agent:`coco-codex`**。使用者確認 bridge #1／server #2 已合併並要求 project 更新 submodule。乾淨 r1 worktrees 實際 pull 至 78ba1a9／ae457ea，local/origin/live remote 一致，與原 v0.1.0 tags 的 tree 相同。新增 T16.7：project 新階段分支承接 PR #4 文件，以獨立 gitlink commit 納入兩包；更新 discovery／Git metadata guards，官方 nested 四步與獨立 lint 後更新原 PR。本次只更新 workspace 組合，package.xml0.1.2、schema1 與三份既有 snapshots 不改；不新增 snapshot/release tag。實機驗收仍待使用者。 |
 | v0.8.41 | **更新 Agent:`coco-codex`**。T16.1–T16.5 完成：bridge/server R1 遷移、own nested framework、重寫測試及下游 export 驗證通過。兩包各附獨立 package.xml-only v0.1.0 commit/annotated tag 並推送 PR 至新 r1 base（bridge #1、server #2），由使用者決定合併。Bridge26/server18 功能檢查全過；cppcheck 原生7/11 SKIP、三項 sanitizer 均 N/A 如實保留。修復 Python import lint 與 executable export 問題，保留失敗證據；全部測試容器已清除。原工作目錄 staged/unstaged bytes 與 index 保留；實機 joystick/hotplug 驗收仍待使用者，既有 project snapshots 不變。 |
 | v0.8.40 | **更新 Agent:`coco-codex`**。新增 T16：將 rv2_csm_topic_bridge 與 rv2_server_control 遷移至 R1 transport/interface，新增 r1 主分支及獨立開發分支；保留原工作目錄未提交內容。先修文件、重寫 unit/integration、導入已 pull 核對的 framework v0.5.1；Docker 串行完整測試與獨立 lint 通過後才個別附 v0.1.0 版本 commit/tag/PR。實機 joystick、拔插與使用者驗收仍待執行，不回寫既有 snapshot。 |
@@ -860,7 +861,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.4 Docker nested 四步與獨立 lint、Joy topic/service、bridge/server 啟動順序、輸入停止、來源失效與新輸入恢復、server 重啟及消息數量邊界通過；ROS jobs 全域串行。保留逐項 logs/XML、SHA、實際結果與限制。
 - [x] T16.5 功能/測試/文件先提交；驗證後只改 package.xml version 為 0.1.0，獨立 commit 與 annotated v0.1.0 tag，push 新 r1 base、開發分支/tag，PR base=r1，由使用者合併。文件 repo 自身僅 docs PR，不因文件變更升 project snapshot/package 版本。
 - [ ] T16.6 使用者實機 joy_node → bridge → control server 手動驗收，包括拔除/停止 joy、恢復輸入、bridge/server 斷線；README 提供完整指令與可觀察結果。自動模擬通過不代表實機已驗收。
-- [ ] T16.7 Project 納入兩包已合併 r1 submodules；核對精確主線 SHA／原 tag tree／內嵌 framework，以 gitlink-only commit 保存。補 current workspace 文件、discovery 與 metadata integration guards；project 自有 nested Docker 四步與獨立 lint 通過後更新 PR #4。保留歷史五元件 snapshot schema 與版本，另說明 server 外部來源依賴的準備要求。
+- [x] T16.7 Project 納入兩包已合併 r1 submodules；核對精確主線 SHA／原 tag tree／內嵌 framework，以 gitlink-only commit 保存。補 current workspace 文件、discovery 與 metadata integration guards；project 自有 nested Docker 四步與獨立 lint 通過後更新 PR #4。保留歷史五元件 snapshot schema 與版本，另說明 server 外部來源依賴的準備要求。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -892,5 +893,11 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 依賴 closure：transport5a91d31/v0.2.0、interfaces a0530d7/v0.1.2、framework ae479066/v0.5.1；server 另用 clean joy_interpreter944306b、官方 Unitree repo5204e6e之unitree_api子目錄。這些 source paths 在 test_depends.repos 明列；框架不自行追遠端 HEAD。
 
 **2026-10-04 合併跟進**：bridge #1 與 server #2 均已合併。乾淨 r1 checkout 實際 pull 後，bridge 為 `78ba1a94825eb9790f23a3be5dbfb31df5162ec7`，server 為 `ae457eacd3f0e56e6cec53fec2c7b61773d52f6b`；local/origin/live remote 相同，tree 分別為 `5a14e1e70950f6dc45dd2cb39c91f14183913b7e`／`b2316be97da3f76c605d6e3792ffb690ea1ed945`，與各原 v0.1.0 tag 相同。原 tag 不移動；project 以新分支 `coco-codex/project-consumer-pins` 承接仍開啟的 PR #4。
+
+Project 新增兩個 gitlinks 的 commit 為 `a1254d7`，每包 own nested framework 皆 `ae479066`，recursive checkout 與原 tags 已備齊。README／設計稿 v1.3.39 分開描述 workspace 額外 consumers 與歷史五元件 snapshots；server 的 joy_interpreter／unitree_api 仍需依文件另外準備。Metadata guards 在 `711aedb` 加入；review 發現掃描全部 sibling packages 再要求恰七包會與外部依賴衝突，以 `9941000` 限定顯式 discovery 路徑為 project 管理的 components，保留精確七包斷言。
+
+正式驗證在 `src/rv2_project/` 的 own nested 官方 Jazzy Docker 執行：build／deps／無參數 run／clean 全部 exit0。最後 run `full-20261003T162550.E47RWc` 記錄 source=`9941000111d678b6911ad1b2eb33576579673d96`、framework=`ae4790668efc83f99584c300e6963d522e04e12c`，dirty皆0；unit133／integration11、CMake/XML各1通過，4/4 CTest、150 aggregate records（含4 wrappers）零errors/failures/skips。ASan/UBSan/TSan 均 N/A；獨立 lint 的 Python3 檔案全過。前一輪 `full-20261003T162234.nVFtJt` 與所有 logs 保留；四步及 lint logs 位於 `test_env/jazzy/evidence-consumer-pins/`，測試與 lint 容器均已清除。此後只追加文件完成紀錄，不冒稱重跑另一份 source SHA。
+
+Bridge/server merged release tree 相同，沿用上述 T16 runtime 證據，未重跑實機或兩包 runtime。Project `package.xml` 與三份 snapshot bytes 對照原主線無差異，不附新版本／tag；原兩包 dirty source/index SHA256 亦相同。PR #4 承接原文件 commits，更新為 workspace consumer pins 與驗證成果，由使用者合併。
 
 **待使用者**：實機 joystick/hotplug 驗收（T16.6）。兩包 README 均提供 `joy_node autorepeat_rate:=20.0` → bridge → server 的三終端指令、status/API 觀察與失聯/同值恢復步驟；server launch 預設啟動單一 master。自動模擬與 crash/restart 證據不等於實體 joystick/driver/robot 已驗收。
