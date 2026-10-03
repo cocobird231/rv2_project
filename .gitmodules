@@ -16,3 +16,11 @@
 [submodule "r1_test_framework"]
 	path = r1_test_framework
 	url = git@github.com:cocobird231/r1_test_framework.git
+[submodule "ros2_ws/src/rv2_csm_topic_bridge"]
+	path = ros2_ws/src/rv2_csm_topic_bridge
+	url = git@github.com:cocobird231/rv2_csm_topic_bridge.git
+	branch = r1
+[submodule "ros2_ws/src/rv2_server_control"]
+	path = ros2_ws/src/rv2_server_control
+	url = git@github.com:cocobird231/rv2_server_control.git
+	branch = r1
