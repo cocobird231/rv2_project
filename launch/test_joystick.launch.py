@@ -125,7 +125,6 @@ def generate_launch_description():
             "server_name": LaunchConfiguration("server_name"),
             "master_name": LaunchConfiguration("master_name"),
             "start_master": "false",
-            "log_output": "true",
         },
     )
     observer = ExecuteProcess(
