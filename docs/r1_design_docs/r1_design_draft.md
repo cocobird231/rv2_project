@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.38)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.39)
 
-> 狀態:正式版(v1.3.38)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.39)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.39 | **更新 Agent:`coco-codex`**。Bridge #1／server #2 已合併；project workspace 新增兩包 v0.1.0 submodules，固定實際 pull／核對後的 r1 主線 78ba1a9／ae457ea，原 tag tree 相同且不移動。§2.1.1 分開列出目前 workspace consumers 與五元件歷史 snapshots；package.xml0.1.2、schema1、原 JSON 不改，不新增 project release。說明 server 外部 source dependencies、metadata guards 與實機驗收邊界；執行結果見 TODO T16.7。 |
 | v1.3.38 | **更新 Agent:`coco-codex`**。同步 project PR #2 已合併、literal pull 主線 612f051 與原 v0.1.2 tag 1ada31e tree 相同。依使用者裁決將 T12.2 記為本次環境豁免 SKIP／延期，不冒稱 PASS，也不阻擋其餘項目手動總驗收；整體 acceptance_pending 保留。正式確定 test_run 測試與 test_packages 打包入口分離，記錄現行 Docker 建置／乾淨安裝合約及無 Docker 打包的待討論範圍，未修改 framework。對齊 TODO v0.8.39／README／T15 完成紀錄；不回寫三份已發布 snapshots、原 tags 或 component pins，不新增可選總測腳本。 |
 | v1.3.37 | **更新 Agent:`coco-codex`**。Project v0.1.2以僅改package.xml的1ada31e獨立定版，annotated tag與PR #2已推。實際clean release clone通過unit133／integration9、CMake/XML與Python3 lint；source/framework dirty0，容器已清除，證據見TODOv0.8.38 T15。本完成紀錄在本地results分支，不回寫tag／PR的v1.3.36文件tree或舊snapshots。十個project gitlinks為已核對merged releases，原四個工作分支仍保留；TSan與整體總驗收pending不改。 |
 | v1.3.36 | **更新 Agent:`coco-codex`**。Project v0.1.2 metadata 候選與全新 recursive clone 均通過unit133／integration9、CMake/XML各1，Python3 lint PASS；兩份owner僅package.xml PR-ready進版diff，components／原tags／gitlinks均clean，不冒稱release已提交。舊legacy文字guard有RED，新通用限制與兩個相容回歸GREEN；保留schema、SHA/tree/tag、歷史版本表及安裝guards。現況對齊全部已合併releases，舊兩版snapshot不變；TSan／整體驗收／外部環境未鎖版限制保留。獨立版本commit/tag/PR及乾淨release複驗接續執行，證據見TODO v0.8.37 T15。 |
@@ -294,12 +295,14 @@ rv2_project/
 ├── snapshots/v0.1.0.json       # 版本組合與限制；後續版本另建檔，不覆寫
 ├── docs/r1_design_docs/        # 本設計稿與 TODO；原歷史納入 project
 ├── r1_test_framework/          # project 自己的固定版測試入口
-├── ros2_ws/src/                # 保留既有五個 gitlinks
+├── ros2_ws/src/                # 五個 snapshot gitlinks + 兩個 workspace consumers
 │   ├── r1_test_framework/      # workspace 開發 checkout，與根目錄同 SHA
 │   ├── r1_interfaces/
 │   ├── r1_test_mocks/
 │   ├── r1_integration_tests/
-│   └── rv2_control_signal_transport/
+│   ├── rv2_control_signal_transport/
+│   ├── rv2_csm_topic_bridge/   # r1 v0.1.0；尚未列入歷史 snapshot
+│   └── rv2_server_control/     # r1 v0.1.0；尚未列入歷史 snapshot
 └── test/unit/、test/integration/
 ```
 
@@ -350,6 +353,17 @@ v0.1.2 的 component 對照（已逐個本地 pull；local／origin／即時遠�
 | rv2_control_signal_transport | 5a91d316146e2f3cb52e77002faec139735ba61c | e3cb651c30ef6474c8022f5d465116978587a18c |
 
 新版只保留 TSan、整體總驗收 pending 與外部 apt/image 未鎖版限制，不再硬性要求 legacy 依賴文字；舊 snapshot bytes 不回寫。來源與 Git metadata 查核不等於所有 owner 的新一輪 runtime 驗收。
+
+**目前 workspace 額外 consumers（2026-10-04）**：使用者已合併 bridge #1／server #2，乾淨 r1 worktrees 實際 pull 後的 HEAD／origin／即時遠端一致。下列兩包透過獨立 submodule commit 納入 project，原 v0.1.0 tags 與合併主線的 tree 相同；每包 nested framework 都是 ae479066/v0.5.1。
+
+| Component | 版本 | 固定合併 r1 SHA | 原 release tag commit(歷史保留) |
+|---|---|---|---|
+| rv2_csm_topic_bridge | v0.1.0 | 78ba1a94825eb9790f23a3be5dbfb31df5162ec7 | c3f2b4b6dc669d98552b801b5bc68858aec4da61 |
+| rv2_server_control | v0.1.0 | ae457eacd3f0e56e6cec53fec2c7b61773d52f6b | d8921b2123ff9c3216e35718047329d1ef1308c9 |
+
+這是 workspace 更新，不是新版本 snapshot；project package.xml 維持 0.1.2，schema1 與三份歷史 JSON 不改。未來若要將 consumers 納入正式 snapshot，需新增 schema/version 及相容測試。Project metadata integration 另查核兩包 gitlink／checkout／tag tree／version／remote／nested framework，並確認可顯式 discovery；不把它們偷偷加入 schema1 的五個 components。
+
+Server 另需要 sibling `joy_interpreter`（test 分支944306b61746dcdaa932a404994b8f829a2a9611）與 `unitree_api`（官方 unitree_ros2 commit5204e6e098ee53f4bd929bd77eb1d387cd0fa842之cyclonedds_ws/src/unitree/unitree_api，可用 symlink）。兩者不在本次 project submodules 內，recursive clone 後仍須依 server README 準備，不能宣稱已有完整 source dependency closure。Bridge/server runtime 沿用 tree 相同的 T16 驗證證據；本輪 project metadata 測試不代替實機 joystick/hotplug 驗收。
 
 ### 2.1.2 R1-only transport 收斂(v1.3.29)
 

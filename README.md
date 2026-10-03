@@ -23,10 +23,26 @@ git submodule update --init --recursive
 git submodule foreach --recursive 'git fetch --tags origin'
 ```
 
-`ros2_ws/src/` 保留五個 component gitlinks；根目錄 `r1_test_framework/` 是此 package
+`ros2_ws/src/` 包含七個 component gitlinks；根目錄 `r1_test_framework/` 是此 package
 自己的測試入口，與 workspace 內的 framework 固定相同 SHA。Framework 不是 ROS package，
 不寫入 ROS runtime dependencies。各 component 自己的 nested framework 維持該 release
 原本的 pin；不為了 project snapshot 改寫已發布內容。
+
+目前 workspace 另納入以下兩個已合併的 R1 consumers，固定合併後的 SHA；它們尚未
+列入歷史 v0.1.2 snapshot。本次只更新 workspace submodules，不新增 snapshot 或 project
+release；`package.xml` 仍為 0.1.2，schema 1 的五個 components 與既有 JSON 均保持原內容。
+
+| Consumer | 版本 | 固定 r1 commit | 原 v0.1.0 tag commit（tree 相同） |
+|---|---|---|---|
+| rv2_csm_topic_bridge | 0.1.0 | `78ba1a94825eb9790f23a3be5dbfb31df5162ec7` | `c3f2b4b6dc669d98552b801b5bc68858aec4da61` |
+| rv2_server_control | 0.1.0 | `ae457eacd3f0e56e6cec53fec2c7b61773d52f6b` | `d8921b2123ff9c3216e35718047329d1ef1308c9` |
+
+Server 的來源依賴還需要在 `ros2_ws/src/` 準備 `joy_interpreter`（已驗證 `test` 分支
+`944306b61746dcdaa932a404994b8f829a2a9611`）及 `unitree_api`（官方 `unitree_ros2`
+`5204e6e098ee53f4bd929bd77eb1d387cd0fa842` 的 `cyclonedds_ws/src/unitree/unitree_api`，
+可用 symlink）。這兩個外部來源不是本 project 的 submodules；recursive clone 後仍須
+準備，才能建置 server 或執行其 nested 測試。具體布局見
+[server 建置依賴](ros2_ws/src/rv2_server_control/README.md#建置依賴)，不需整個 Unitree workspace。
 
 `package.xml` 是 project 版本的唯一來源，選擇 `snapshots/v<version>.json`。
 完整版本對照見 [設計稿 §2.1.1](docs/r1_design_docs/r1_design_draft.md)。
@@ -61,6 +77,8 @@ v0.1.2 的 R1-only 來源不再依賴 legacy `rv2_interfaces`。此列表不會�
 無參數 `test_run.sh` 驗證 manifest unit 與真實 Git/ROS 安裝 integration，並保留
 `test_env/jazzy/runs/full-*/summary.tsv`、逐案例 pytest log、JUnit XML 與 build log。
 此 metadata-only package 沒有 native runtime，ASan/UBSan/TSan 均為 N/A。
+目前 workspace 的兩個額外 consumers 也驗證 gitlink、checkout、原 tag tree、版本、remote
+與 nested framework；這些檢查不擴充歷史 snapshot 的 schema。
 其他 owners 的 T12.2 本次依使用者裁決暫時 SKIP；未取得 TSan 無 race 證據，
 未來支援平台仍須明確 `-t on` 驗證。
 
@@ -77,7 +95,9 @@ PR 前獨立執行 lint：
 
 本次手動驗收的 ROS component 目錄為 `ros2_ws/src/r1_interfaces/`、
 `ros2_ws/src/r1_test_mocks/`、`ros2_ws/src/rv2_control_signal_transport/` 與
-`ros2_ws/src/r1_integration_tests/`；逐一切入目錄後執行上述四步與獨立 lint。
+`ros2_ws/src/r1_integration_tests/`；新增 consumers 為
+`ros2_ws/src/rv2_csm_topic_bridge/`、`ros2_ws/src/rv2_server_control/`。
+準備好各包 source dependencies 後，逐一切入目錄執行上述四步與獨立 lint。
 Framework 本身不是 ROS package，其自測方式見 workspace framework README；
 不要對它套用 ROS owner 的四步流程。自動逐包執行腳本暫不新增。
 
@@ -102,11 +122,13 @@ transport 額外驗公開 headers、下游連結及 node 啟停，這不等同�
 ## 新增 snapshot
 
 1. 確認各 component PR 已合併；在乾淨主線 checkout 實際 `git pull --ff-only origin master`
-   （transport 使用 `r1`），再 `git fetch origin tag vX.Y.Z` 取得欲固定的原 release tag，
+   （transport／bridge／server 使用 `r1`），再 `git fetch origin tag vX.Y.Z` 取得欲固定的原 release tag，
    核對遠端、release 版本 commit 與原 tag tree。不能用 dirty 內容
    或僅沿用合併前 SHA；不能移動既有 tag。
 2. 新建 `snapshots/vX.Y.Z.json`，記錄五個 releases 的版本／SHA／tree／來源及限制；
    同步 gitlinks 與設計稿對照表。已提交 snapshot 不覆寫，版本相同亦不能偷換 commit。
+   若要把 bridge／server 納入版本 snapshot，須先升級 schema 及相容測試；不可直接向
+   schema 1 加入 component，亦不可把目前 workspace 組合當成已發布的 v0.1.2 snapshot。
 3. 資料／gitlinks／文件先提交，再以只有 `package.xml` version 差異的 PR-ready 候選執行
    lint／測試；通過後以獨立版本 commit 保存該欄位變更。Snapshot 不必是 release，
    不自動附 release tag；使用者要求 release 時依 TODO §1.4 建立同名 annotated tag。
