@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.8.40)
+# R1 實作 TODO List(v0.8.41)
 
 > 依據:`r1_design_draft.md` v1.3.38(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.41 | **更新 Agent:`coco-codex`**。T16.1–T16.5 完成：bridge/server R1 遷移、own nested framework、重寫測試及下游 export 驗證通過。兩包各附獨立 package.xml-only v0.1.0 commit/annotated tag 並推送 PR 至新 r1 base（bridge #1、server #2），由使用者決定合併。Bridge26/server18 功能檢查全過；cppcheck 原生7/11 SKIP、三項 sanitizer 均 N/A 如實保留。修復 Python import lint 與 executable export 問題，保留失敗證據；全部測試容器已清除。原工作目錄 staged/unstaged bytes 與 index 保留；實機 joystick/hotplug 驗收仍待使用者，既有 project snapshots 不變。 |
 | v0.8.40 | **更新 Agent:`coco-codex`**。新增 T16：將 rv2_csm_topic_bridge 與 rv2_server_control 遷移至 R1 transport/interface，新增 r1 主分支及獨立開發分支；保留原工作目錄未提交內容。先修文件、重寫 unit/integration、導入已 pull 核對的 framework v0.5.1；Docker 串行完整測試與獨立 lint 通過後才個別附 v0.1.0 版本 commit/tag/PR。實機 joystick、拔插與使用者驗收仍待執行，不回寫既有 snapshot。 |
 | v0.8.39 | **更新 Agent:`coco-codex`**。同步 project PR #2 已合併：本地 literal pull 至 master 612f051，與原 v0.1.2 tag 1ada31e tree 相同。依使用者裁決，T12.2 因環境限制暫時 SKIP，不算 PASS、不阻擋本次其餘項目總驗收；v0.1.2 整體驗收由使用者手動逐包執行並保留 logs，尚未通過。正式確定 test_run 與 test_packages 分離；現行打包仍需既有 Docker 並另做乾淨安裝驗證，無 Docker／一鍵打包僅列討論，未修改 framework。同步 T15 完成紀錄、設計稿與 README；不回寫三份既有 snapshots、tag 或 component pins，自動總測脚本暫不新增。 |
 | v0.8.38 | **更新 Agent:`coco-codex`**。T15完成：project v0.1.2 package.xml-only commit1ada31e、annotated tag與PR #2已推送。全新clone切至實際clean release後full-20260913T103359.7faUnS通過unit133／integration9、CMake/XML各1（148records含4wrappers），source/framework dirty0，Python3 release lint PASS；所有測試容器已清除。切換clone時Git曾保護性拒絕候選版本patch，僅撤回本agent暫存patch後切至正式commit，不reset/stash/改原來源。此完成紀錄在獨立本地results分支，不回寫已发布v0.1.2 tree/tag；已發布文件為TODOv0.8.37/designv1.3.36。Components的runtime沿用同內容歷史證據，TSan與整體總驗收仍待完成。 |
@@ -80,7 +81,7 @@
 
 ### 1.1 清單結構
 
-- **大項(T0–T15)**:一個可獨立驗收的里程碑,依 §2.1 檔案布局與編譯依賴排序。每個大項最後有「驗證」小節,分為兩部分:
+- **大項(T0–T16)**:一個可獨立驗收的里程碑,依 §2.1 檔案布局與編譯依賴排序。每個大項最後有「驗證」小節,分為兩部分:
   - **語意查核**:人工(或 code review)對照設計規劃書,確認測試案例所斷言的行為與 § 條文一致。這一步驗證「測試寫對了」,防止測試通過但語意偏離設計。
   - **實際測試**:在 docker 內執行該大項的測試集,以結束碼判定。這一步驗證「程式寫對了」。
 - **小項(T*.n)**:一個可在單次工作階段內完成的實作單位。每個小項附**查核**條件:客觀、可觀察的完成判準。勾選 `[x]` 前必須滿足查核條件。
@@ -234,6 +235,7 @@ graph LR
 | T11 | `r1_integration_tests` package | `ros2_ws/src/r1_integration_tests/` | I1–I18 |
 | T12 | Sanitizer 矩陣、迴歸、打包 | —(建置組態與 `.deb`) | §11.4 矩陣 |
 | T13 | 專案 snapshot ROS2 package | `rv2_project/`、`snapshots/v0.1.0.json` | snapshot unit／integration |
+| T16 | R1 topic bridge 與 control server consumers | `rv2_csm_topic_bridge/`、`rv2_server_control/` | config/mailbox/arbitration unit；跨元件/程序 integration |
 
 ### 2.1 總驗收前未完成清單(2026-09-13 盤點)
 
@@ -851,9 +853,40 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 
 **範圍**：`rv2_csm_topic_bridge`、`rv2_server_control`。控制訊號與服務以 transport `r1` v0.2.0 (`5a91d31`) 及 r1_interfaces v0.1.2 (`a0530d7`) 為準，保留 C++ namespace `rv2_interfaces::r1`。舊 master 不動；bridge 自 master `345ec24`、server 自最新已提交 develop `cf99d82` 建立 r1 base，再以 `coco-codex/r1-migration` 開發。原 staged/unstaged bytes 留在原路徑，不混入新 release。回退可使用原分支與其 legacy transport/interfaces 組合，R1/legacy wire protocol 不宣稱互通。
 
-- [ ] T16.1 Bridge 使用 R1 Info/Manager/SourceHandle，移除 legacy controller_priority_type/frequency 欄位；保留可配置 controller_name/channel/type/topic/service。註冊與 service send 在 executor 外執行；不定期重送快取 Joy 偽造活性。來源失活移除後，收到新資料可重新註冊；bridge 先於 server 啟動亦可恢復。
-- [ ] T16.2 Server 使用 R1 Manager/SinkHandle/EntryStatus 與 1–100 一般 priority；維持既有已提交 Joy/Twist 輸出用途。修正短 buttons 越界與斷線後重複命令去重問題，收訊與 watchdog 協作安全；逾時/終止後停止输出可觀察。原未提交 wireless intervention/requester policy 屬另行設計，不當作已發布 R1 協定。
-- [ ] T16.3 每包 own nested framework 固定已合併 `ae4790668efc83f99584c300e6963d522e04e12c` (v0.5.1)，已執行本地 master literal pull，HEAD/origin/live remote 一致，tree 與原 annotated tag 相同。以 test_depends.repos 明列依賴 closure；tests 分 unit/integration 並有 CTest labels。新 owners 的 sanitizer 矩陣由既有框架記 N/A，不冒稱 ASan/UBSan/TSan PASS。
-- [ ] T16.4 Docker nested 四步與獨立 lint、Joy topic/service、bridge/server 啟動順序、輸入停止、來源失效與新輸入恢復、server 重啟及消息數量邊界通過；ROS jobs 全域串行。保留逐項 logs/XML、SHA、實際結果與限制。
-- [ ] T16.5 功能/測試/文件先提交；驗證後只改 package.xml version 為 0.1.0，獨立 commit 與 annotated v0.1.0 tag，push 新 r1 base、開發分支/tag，PR base=r1，由使用者合併。文件 repo 自身僅 docs PR，不因文件變更升 project snapshot/package 版本。
+- [x] T16.1 Bridge 使用 R1 Info/Manager/SourceHandle，移除 legacy controller_priority_type/frequency 欄位；保留可配置 controller_name/channel/type/topic/service。註冊與 service send 在 executor 外執行；不定期重送快取 Joy 偽造活性。來源失活移除後，收到新資料可重新註冊；bridge 先於 server 啟動亦可恢復。
+- [x] T16.2 Server 使用 R1 Manager/SinkHandle/EntryStatus 與 1–100 一般 priority；維持既有已提交 Joy/Twist 輸出用途。修正短 buttons 越界與斷線後重複命令去重問題，收訊與 watchdog 協作安全；逾時/終止後停止输出可觀察。原未提交 wireless intervention/requester policy 屬另行設計，不當作已發布 R1 協定。
+- [x] T16.3 每包 own nested framework 固定已合併 `ae4790668efc83f99584c300e6963d522e04e12c` (v0.5.1)，已執行本地 master literal pull，HEAD/origin/live remote 一致，tree 與原 annotated tag 相同。以 test_depends.repos 明列依賴 closure；tests 分 unit/integration 並有 CTest labels。新 owners 的 sanitizer 矩陣由既有框架記 N/A，不冒稱 ASan/UBSan/TSan PASS。
+- [x] T16.4 Docker nested 四步與獨立 lint、Joy topic/service、bridge/server 啟動順序、輸入停止、來源失效與新輸入恢復、server 重啟及消息數量邊界通過；ROS jobs 全域串行。保留逐項 logs/XML、SHA、實際結果與限制。
+- [x] T16.5 功能/測試/文件先提交；驗證後只改 package.xml version 為 0.1.0，獨立 commit 與 annotated v0.1.0 tag，push 新 r1 base、開發分支/tag，PR base=r1，由使用者合併。文件 repo 自身僅 docs PR，不因文件變更升 project snapshot/package 版本。
 - [ ] T16.6 使用者實機 joy_node → bridge → control server 手動驗收，包括拔除/停止 joy、恢復輸入、bridge/server 斷線；README 提供完整指令與可觀察結果。自動模擬通過不代表實機已驗收。
+
+### T16 完成紀錄（2026-10-03）
+
+兩個 package 已新增 `r1` base，遷移成果位於 `coco-codex/r1-migration`，等待使用者合併：
+
+| Package | 已測功能 commit | 版本 commit / annotated tag | PR（base=r1） |
+|---|---|---|---|
+| rv2_csm_topic_bridge | `831cdde0fcfc4620717da89b58957f9cb30762a7` | `c3f2b4b` / `v0.1.0` | [#1](https://github.com/cocobird231/rv2_csm_topic_bridge/pull/1) |
+| rv2_server_control | `f5bd86e3c424663ae2b625aec951022cce538639` | `d8921b2` / `v0.1.0` | [#2](https://github.com/cocobird231/rv2_server_control/pull/2) |
+
+版本 commits 各只將 package.xml 的 0.0.0 改為 0.1.0；所有功能、測試、README 與 framework gitlink 已先分開提交。完整 runtime 驗證對象是上表功能 commit；metadata-only 版本提交後未重跑 runtime，不冒稱測試過另一個 source SHA。Master 與原已發布 tags、三份 project snapshots、Doxyfile 不變；project 本次僅文件更新，不升 package 版本。
+
+**語意查核**：對照現行 R1 Info 八欄、priority1–100、四態 liveness、弱 handles、executor 外同步註冊/service send、terminal removal/peer retry 與 master 對帳；完成獨立 review。Bridge 接收 best-effort Joy，以 receipt steady clock 限制新鮮度、只保留最新待送樣本，不重送快取保持假活性；service 等待期間 default callback group 可繼續進行。Server 以 consumer policy 仲裁，交出控制權前停止舊命令，修正短 Joy arrays、同值重連 dedup、第一筆資料早於 ACTIVE tick 與 shutdown callback lifetime。下游 export 僅含 linkable component，避免將 executable 當 library。
+
+**實際測試**：各包 own nested build/deps/無參數 test_run/clean 皆在官方 Jazzy Docker 內完成，ROS jobs 全域串行；framework 為 `ae479066`，兩份最後 run metadata 均 source_dirty=0、framework_dirty=0。
+
+| Owner / 最後 run | 功能案例與 CTest | 其餘結果 |
+|---|---|---|
+| bridge `full-20261003T125333.JSHlc7` | unit11 + integration15 = 26 gtests；8/8 CTest PASS | colcon56 records，0errors/0failures；cppcheck7原生SKIP |
+| server `full-20261003T125111.gnuLWz` | unit5 + C++ integration11 + launch2 = 18檢查；8/8 CTest PASS | colcon54 records，0errors/0failures；cppcheck11原生SKIP |
+
+- 兩包獨立 framework lint PASS：bridge C/C++7/Python1；server C/C++11/Python3/Shell1。最終 CMake export-only 修正另經 ament_lint_cmake 與完整 CTest 通過，C++/Python/Shell bytes 與已通過 lint 相同。
+- cppcheck SKIP 來自 ament 對 cppcheck2.13.0 performance issues 的工具原生行為，不是自訂 suppression。兩包為新 owner，framework sanitizer matrix 未定義，ASan/UBSan/TSan 全為 N/A，不算 sanitizer PASS，也不新增 T12.2 證據。
+- 兩包以最後 run 的 installed prefix 驗證公開 headers；明確 imported target 與 `ament_target_dependencies()` 兩種 CMake downstream compile/link 均 PASS，server loader 亦 PASS。測試/格式工具容器全數移除，test_env logs/XML 保留。
+- Server 首輪 `full-20261003T124247.1ZqSGF` 功能檢查通過但 flake8 I100 FAIL；以不增加 ignores 的 import 寫法修正。`full-20261003T124641.vYLIEH` 全測通過後，下游 smoke 找到 executable export 問題；兩包各以 CMake-only fix commit 修復並完成上表乾淨重驗。先前 logs 不刪除、不改寫為 PASS。
+
+本次工作樹在 `/home/coco/Workspace/ros2_ws/.r1-migration/src/<package>/`，各自證據保留於 `test_env/jazzy/runs/<run>/`：bridge 另有 `lint.log`、`export-fix-smoke.log`、`export-fix-cleanup.log`；server 另有 `evidence/lint_imports.log`、`evidence/downstream_final.log`、`evidence/test_clean.log`。原 `src/rv2_csm_topic_bridge`、`src/rv2_server_control` 的修改檔案及 Git index 以 SHA256 核對 bytes 保留；r1_interfaces 的原工作分支亦未切換，測試採另開的最新已合併 checkout。
+
+依賴 closure：transport5a91d31/v0.2.0、interfaces a0530d7/v0.1.2、framework ae479066/v0.5.1；server 另用 clean joy_interpreter944306b、官方 Unitree repo5204e6e之unitree_api子目錄。這些 source paths 在 test_depends.repos 明列；框架不自行追遠端 HEAD。
+
+**待使用者**：PR 合併及實機 joystick/hotplug 驗收（T16.6）。兩包 README 均提供 `joy_node autorepeat_rate:=20.0` → bridge → server 的三終端指令、status/API 觀察與失聯/同值恢復步驟；server launch 預設啟動單一 master。自動模擬與 crash/restart 證據不等於實體 joystick/driver/robot 已驗收。
