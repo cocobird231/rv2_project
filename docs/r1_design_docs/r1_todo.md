@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.8.47)
+# R1 實作 TODO List(v0.8.48)
 
 > 依據:`r1_design_draft.md` v1.3.40(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.48 | **更新 Agent:`coco-codex`**。T16.9 完成：server 內附 Unitree fallback、來源優先序入口、manifest／授權及 own nested 來源整合。官方 Docker 乾淨 0f17607 全測試42功能案例／10 CTest全過，83aggregate零錯誤失敗、11原生cppcheck SKIP，sanitizers N/A；真實fallback雙包建置、三次joystick回歸與獨立lint通過，容器已清除。修正完整／縮寫discovery參數繞過、Ruff/ament import排序及既有observer未match先送Joy的測試競爭，保留原失敗logs與全部runtime斷言。獨立server v0.1.1版本commit c3a2794／annotated tag已推送，PR由使用者合併；project pins／snapshots及使用者staged joy submodule保留，打包內部path限制明示。 |
 | v0.8.47 | **更新 Agent:`coco-codex`**。使用者已合併 project PR #4；T16.8 完成，後續所有 PR 合併僅由使用者執行。新增 T16.9：server 內附 Unitree source fallback，建置入口依 workspace source→已 source underlay→thirdparty/unitree/unitree_api 選擇；補三包 rosidl_generator_dds_idl build dependency、own nested test_depends 路徑與來源／授權文件。先驗證 discovery 優先序及無外部 unitree_api 的乾淨 Docker 全測試/lint，再獨立 server v0.1.1 commit/tag/PR。Project 既有 pins/snapshots 與使用者 staged joy_interpreter submodule 保留。 |
 | v0.8.46 | **更新 Agent:`coco-codex`**。Joystick launch與全部驗證已推送PR #4，GitHub回報CLEAN／MERGEABLE，無待跑checks；依使用者授權以精確head嘗試rebase merge，遭 `Resource not accessible by personal access token (mergePullRequest)` 拒絕。PR仍OPEN，T16.8只剩合併未完成；不冒稱已合併、不移動master或改token權限。來源／測試不變，此次僅記錄合併權限阻擋，待有權限帳號完成。 |
 | v0.8.45 | **更新 Agent:`coco-codex`**。T16.8 完成：新增 installed joystick launch、runtime/local source dependencies、分拆斷線操作文件與真實節點組合測試。修復多餘 log_output 文字覆寫造成的 bool 轉型失敗；核對 ROS CLI 實作後只讓 observer 接受正常 SIGINT 的正2退出碼。乾淨 source f249b93／framework ae479066 的 own nested Docker 四步 PASS，unit133／metadata integration11／launch2、CMake/XML、5/5 CTest全過；153 aggregate records零錯誤／失敗／略過。Python5 lint、installed CLI參數／全關閉模式 PASS，容器已清除；初始失敗證據保留。README補明確選用project內R1來源的建置指令；依使用者授權與submodule更新一併合併PR #4。版本0.1.2、既有snapshots/tags與原dirty bytes保留，實機驗收仍pending。 |
@@ -870,7 +871,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.7 Project 納入兩包已合併 r1 submodules；核對精確主線 SHA／原 tag tree／內嵌 framework，以 gitlink-only commit 保存。補 current workspace 文件、discovery 與 metadata integration guards；project 自有 nested Docker 四步與獨立 lint 通過後更新 PR #4。保留歷史五元件 snapshot schema 與版本，另說明 server 外部來源依賴的準備要求。
 - [x] T16.8 新增並安裝 `launch/test_joystick.launch.py`，整合 joy_node、bridge、server、單一 master 與純觀察 `/api/sport/request`；支援分開啟停及 joystick 選擇。補 README 實機／斷線操作與 mailbox 短按限制，Docker 內從 installed launch 驗證接線、輸入停止／同值恢復；四步與 lint 通過後，依使用者授權將本階段與 submodule 更新一併合併 PR #4。不啟動 fake response server，不把模擬輸入當硬體驗收。**實作／驗證／推送已完成；PR #4 已由使用者於 2026-10-03 合併。**
 
-- [ ] T16.9 Server Unitree fallback：在 colcon discovery 前選定 source，保留一般 find_package(unitree_api REQUIRED) 與 ROS dependency graph；只自動加入 server 所需 api，不自動編譯 go/hg。內附三包補齊 rosidl build dependency，測試 manifest 直接掛載內附 api，不要求 sibling symlink。驗證 workspace source／underlay／fallback、重複名稱及錯誤傳遞，從 own nested framework 執行完整 Docker 四步與獨立 lint，完成後獨立 server v0.1.1 commit/tag/PR。Project submodule 更新留待使用者合併 server 後處理，不固定未合併候選。
+- [x] T16.9 Server Unitree fallback：在 colcon discovery 前選定 source，保留一般 find_package(unitree_api REQUIRED) 與 ROS dependency graph；只自動加入 server 所需 api，不自動編譯 go/hg。內附三包補齊 rosidl build dependency，測試 manifest 直接掛載內附 api，不要求 sibling symlink。驗證 workspace source／underlay／fallback、重複名稱及錯誤傳遞，從 own nested framework 執行完整 Docker 四步與獨立 lint，完成後獨立 server v0.1.1 commit/tag/PR。Project submodule 更新留待使用者合併 server 後處理，不固定未合併候選。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -922,3 +923,20 @@ Bridge/server merged release tree 相同，沿用上述 T16 runtime 證據，未
 **合併狀態**：PR #4 已更新為 joystick launch 與兩包 pins，遠端head `185ad99bd398538ca8f31dff7374571aa08e6441` 查核為CLEAN／MERGEABLE，無待跑checks。依授權執行 `gh pr merge --rebase --match-head-commit` 時，GitHub明確回覆 `Resource not accessible by personal access token (mergePullRequest)`，再次讀取為OPEN、mergedAt／mergeCommit皆null。故不宣稱已合併，不切master或調整credential權限；本段後續文件commit不改已測runtime，PR由有權限帳號完成合併。
 
 **待使用者**：實機 joystick/hotplug 驗收（T16.6）；PR #4 已由使用者合併。現在可用project README的單一launch或分拆指令；自動模擬與歷史crash/restart證據不等於實體joystick/driver/robot已驗收。
+
+
+### T16.9 Unitree fallback 完成紀錄（2026-10-05）
+
+Server 分支 `coco-codex/unitree-fallback` 基於已合併 r1 `ae457ea`。`9c3d504` 納入使用者提供的三包 Unitree sources，43 個 `.msg` 與上游 `5204e6e098ee53f4bd929bd77eb1d387cd0fa842` 逐 byte 相同；各 manifest 補 `rosidl_generator_dds_idl` build dependency，附 BSD LICENSE／來源文件。Server 移除原本的 test dependency workaround；`test_depends.repos` 直接指向內附 API。Parent `thirdparty/unitree/AMENT_IGNORE` 避免 server 遞迴 lint 上游內容，API 自身沒有 marker，仍可顯式 discovery／由 framework 獨立掛載。
+
+`19015be` 新增 `scripts/build_with_unitree.py`：從 workspace root 執行，預設掃描 src，以 workspace source→已 source underlay→內附 API 為優先序；只加入 server 所需 unitree_api，保留 `find_package(REQUIRED)` 與 `--packages-up-to` 的依賴排序。支援重複 `--source-root`、`--dry-run` 及 `--` 後的一般 colcon build 參數；重複套件、discovery失敗、覆寫來源／選集（含colcon縮寫）明確拒絕。`da1199b`／`a04940b` 加20 unit＋4真實colcon discovery案例，`ce43173` 同時符合Ruff與ament import排序。
+
+原有joystick測試首包曾在observer匹配前發出，server已有OUTPUT紀錄但後續同值去重，導致測試等待不到initial Move。`0f17607` 僅修test harness：Joy初始停用，等Joy subscriber與Request publisher皆match後才開始；所有payload／去重／急停／同值恢復／bridge及server crash-restart斷言與原timeout保留。此為根據log與程式時序的診斷，不將未收集的DDS封包trace冒充直接證據。
+
+正式 own nested 四步使用隔離owner `.r1-migration/unitree-test/rv2_server_control`，來源 `0f17607679b5b1a10b264629de6b7fa870836b7f`／framework `ae479066` 均dirty0。依賴為clean interfaces a0530d7、transport5a91d31、bridge78ba1a9、joy_interpreter944306b與owner內附API，沒有外部unitree_api來源。Run `full-20261004T202557.TdL2yR` 建置6packages，unit25／integration與launch17個功能案例全過，10/10 CTest；83 aggregate records零errors/failures、11個cppcheck原生SKIP，ASan/UBSan/TSan皆N/A。獨立lint C/C++11／Python6／Shell1 PASS，project docs分支的Python5 lint亦PASS。
+
+另在排除已安裝API的underlay中實際呼叫helper，只給server source root，成功從內部api建置／安裝兩包（`fallback-build.log`；helper內容與最終來源相同，當時owner ce43173）。Joystick launch串行重跑三次，`joystick-readiness-{1,2,3}.xml` 每次2/2 PASS。失敗run `full-20261004T202010.ZCFstn`（ament imports）與 `full-20261004T202208.0TUHfD`（初始observer競爭）保留。正式測試、來源記錄與probe logs在owner `test_env/jazzy/evidence-unitree-fallback/`，獨立lint logs另在原server同名evidence目錄；test_clean成功，所有本次測試容器已移除。
+
+驗證後才以 `c3a2794e5c49c1ab35288d012db3777f273d0d32` 只改server package.xml 0.1.0→0.1.1並建立annotated `v0.1.1`；版本欄位變更後未重跑ROS，不冒称另一份source SHA已全測。原主workspace bridge的legacy分支／未提交修改、interfaces來源與project staged joy_interpreter submodule均未更動。
+
+Project本階段只更新文件，不提前固定未合併server，不改project package版本／歷史snapshots，也不新增project release tag。Server PR由使用者合併後，project才能更新server gitlink並將其 `test_depends.repos` API路徑改為 `ros2_ws/src/rv2_server_control/thirdparty/unitree/unitree_api`。Framework v0.5.1 的 `test_packages.sh` 對內部path與sibling mount有既存嚴格路徑比對限制，本次未提供Debian打包支援；硬體joystick／robot驗收仍待使用者執行。
