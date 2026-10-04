@@ -43,6 +43,14 @@ if(BUILD_TESTING)
     TARGET test_joystick_launch TIMEOUT 90)
   set_property(TEST test_joystick_launch APPEND PROPERTY LABELS integration)
 
+  ament_add_pytest_test(test_pre_install
+    test/integration/test_pre_install.py TIMEOUT 300
+    ENV
+      "RV2_PROJECT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+      "RV2_UNITREE_TEST_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/unitree-preinstall"
+      "PYTHONDONTWRITEBYTECODE=1")
+  set_property(TEST test_pre_install APPEND PROPERTY LABELS integration)
+
   ament_lint_cmake(CMakeLists.txt)
   ament_xmllint(package.xml)
 endif()

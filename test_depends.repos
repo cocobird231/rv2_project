@@ -16,4 +16,4 @@ repositories:
     path: ros2_ws/src/joy_interpreter
   unitree_api:
     type: local
-    path: ros2_ws/src/unitree_api
+    path: ros2_ws/src/rv2_server_control/thirdparty/unitree/unitree_api
