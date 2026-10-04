@@ -29,8 +29,9 @@ git submodule foreach --recursive 'git fetch --tags origin'
 原本的 pin；不為了 project snapshot 改寫已發布內容。
 
 目前 workspace 另納入以下兩個已合併的 R1 consumers，固定合併後的 SHA；它們尚未
-列入歷史 v0.1.2 snapshot。本次更新 workspace submodules 並新增 Unitree pre-install，不新增 snapshot 或 project
-release；`package.xml` 仍為 0.1.2，schema 1 的五個 components 與既有 JSON 均保持原內容。
+列入歷史 v0.1.2 snapshot。Workspace submodules 與 Unitree pre-install 已隨
+PR #5 合併（`50f034b`）；本輪只補齊新環境的 rosdep 初始化，不新增 snapshot 或 project
+release。`package.xml` 仍為 0.1.2，schema 1 的五個 components 與既有 JSON 均保持原內容。
 
 | Consumer | 版本 | 固定 r1 commit | 原 release tag commit（tree 相同） |
 |---|---|---|---|
@@ -46,19 +47,25 @@ server 內附的 `unitree_api`；framework 不遞迴讀取 child 的依賴清單
 
 ## 預先安裝 Unitree
 
-在已 source ROS 2、具備 colcon 與已初始化 rosdep 的開發環境，由 project 根目錄執行：
+先安裝 colcon 與 rosdep，並 source ROS 2；rosdep 的首次初始化由腳本處理。
+由 project 根目錄執行：
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 ./pre_install.sh --dry-run
-./pre_install.sh
-source "pre_install/${ROS_DISTRO}/install/setup.bash"
+./pre_install.sh && source "pre_install/${ROS_DISTRO}/install/setup.bash"
 ```
 
 腳本固定從目前 server submodule 的內附 sources 建置 `unitree_api`、`unitree_go`、
 `unitree_hg` 三包，明確指定套件路徑以跨過 nested package 的 discovery 邊界。
-它先以 rosdep 安裝目前 ROS 環境所需的 build/runtime dependencies，再用 colcon
+它優先沿用目前使用者已有的 rosdep cache。缺少 cache 時才檢查 sources：已有
+任一 `*.list` 就直接更新；沒有 sources list 才執行 `rosdep init`（非 root 透過
+sudo）。之後以目前使用者執行 `rosdep update --rosdistro "$ROS_DISTRO"` 建立 cache；
+已有 cache 時不重新初始化或更新，即使 sources list 不存在也可沿用。
+接著以 rosdep 安裝目前 ROS 環境所需的 build/runtime dependencies，再用 colcon
 建立獨立的 merged underlay；上游 tests 不在此安裝流程執行。
+初始化、cache 更新、依賴安裝或編譯任一步失敗，腳本立即停止；範例以 `&&` 確保
+只在安裝成功後 source，避免使用先前殘留或不完整的產物。
 Unitree 產物預設位於 `pre_install/<ROS_DISTRO>/{build,install,log}`，BSD LICENSE
 隨每包安裝，完成後列出 `source` 指令。重新執行會沿用該處建置產物。
 
@@ -66,12 +73,15 @@ Unitree 產物預設位於 `pre_install/<ROS_DISTRO>/{build,install,log}`，BSD 
 `--output-dir DIR` 的相對路徑以呼叫端 cwd 為準，例如：
 
 ```bash
-/path/to/rv2_project/pre_install.sh --output-dir /work/unitree-underlay
-source /work/unitree-underlay/install/setup.bash
+/path/to/rv2_project/pre_install.sh --output-dir /work/unitree-underlay && \
+  source /work/unitree-underlay/install/setup.bash
 ```
 
 腳本不修改 shell 設定；下一個 terminal 仍需 source 此 underlay。
-rosdep 安裝系統依賴時可能要求 sudo，請在預期的 ROS 開發環境執行，勿對整支腳本加 sudo。
+rosdep 初始化 sources 或安裝系統依賴時可能要求 sudo；cache 更新使用目前帳號，
+請勿對整支腳本或 `rosdep update` 加 sudo。若初始化因網路或權限失敗，先處理錯誤再重跑。
+需要手動處理時，可在尚未建立 sources 的環境執行 `sudo rosdep init`，成功後以目前帳號
+執行 `rosdep update --rosdistro "$ROS_DISTRO"`；已有 sources 時直接執行後者。
 本專案的 agent 驗證全在官方 ROS Docker 中執行，host 不安裝依賴。
 `pre_install.sh` 是 source checkout 的建置入口，不安裝至 `share/rv2_project`；一般
 framework 四步測試會直接掛載內附 API，不需事先在 host 執行此腳本。

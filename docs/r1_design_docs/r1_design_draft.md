@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.42)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.43)
 
-> 狀態:正式版(v1.3.42)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.43)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.43 | **更新 Agent:`coco-codex`**。Project PR #5 已由使用者合併於 50f034b；針對新 VM 新增 pre_install.sh rosdep bootstrap 合約：優先沿用目前使用者 cache；缺 cache 時，已有任一 sources *.list 直接 update，沒有 list 才 init，再由目前使用者 update --rosdistro，各步失敗即停止。非 root 只對 init／系統依賴安裝使用 sudo，cache 更新保留目前使用者身分；README 以 && 串接安裝與 source。此輪為獨立修正 PR，驗證追蹤 TODO T16.11，尚未完成；component pins、project 0.1.2、歷史 snapshots 與 tags 不變，不新增 release。 |
 | v1.3.42 | **更新 Agent:`coco-codex`**。正式project build發現staged joy master fb09f70僅有update(joy)，與merged server的update(joy,now)不相容；project改pin既有server已驗證test分支944306b，原工作目錄staged bytes保留。同步當前source guard／README及目錄圖（server0.1.1、joy source、pre_install.sh／獨立underlay）；不改server runtime與歷史snapshots，重驗結果見TODO T16.10。 |
 | v1.3.41 | **更新 Agent:`coco-codex`**。Project更新已合併server v0.1.1／38cfa0f（原tag c3a2794 tree相同），納入使用者joy_interpreter fb09f70 gitlink；歷史五元件snapshots不變。以server內附API取代外部symlink，新增source入口pre_install.sh依使用者選擇將三包Unitree建到專案內獨立underlay，rosdep處理目前ROS環境依賴、顯式source paths、dry-run、自訂output與source指令。新增真實安裝／Python型別／C++下游驗證，正式結果見TODO T16.10；project版本仍0.1.2、不新增release，merge由使用者執行。 |
 | v1.3.40 | **更新 Agent:`coco-codex`**。Project 新增並安裝 joystick 組合 launch，宣告 joy／bridge／server／master 與 request echo 的 runtime dependencies；各部分可分開啟停，child include 隔離參數 scope，server 不重複啟動 master。補手動來源 closure、installed launch 的合成 Joy／停止／同值恢復 integration 與 README 操作，正式驗證仍走 own nested Docker。說明 driver neutral／mailbox 短按限制；實機驗收 pending。Package 0.1.2、三份 schema 1 歷史 snapshots 與 tags 不變，不新增 release；執行結果見 TODO T16.8。 |
@@ -375,9 +376,13 @@ v0.1.2 的 component 對照（已逐個本地 pull；local／origin／即時遠�
 
 Project另固定joy_interpreter submodule `944306b61746dcdaa932a404994b8f829a2a9611`（test分支，server要求雙參數update API；master fb09f70不相容）（package0.1.0，無release tag／nested framework）；它是外部source dependency，不加入歷史snapshot。Unitree三包已內附於server，test_depends.repos明列interfaces、transport、bridge、server、joy_interpreter及server內附API；framework不遞迴讀child依賴、不自動下載缺失來源。新增metadata guard分別驗consumer release與joy精確來源，顯式discovery為八個ROS packages（含project）。
 
-`pre_install.sh`是source checkout入口，從任意cwd以絕對source paths選api/go/hg三包；rosdep安裝目前ROS環境的build/runtime依賴後，colcon以BUILD_TESTING=OFF建立merged underlay。使用者已選專案內獨立安裝：預設project/pre_install/<ROS_DISTRO>/{build,install,log}，可用--output-dir改位置，--dry-run無產物／安裝副作用。完成後提供source install/setup.bash命令，保留各包BSD LICENSE；不自動修改shell設定或gitlinks。parent AMENT_IGNORE不放入每包，因此顯式source roots可被colcon辨識。腳本只在source tree使用，不安裝到share以免失去submodule來源；project runtime build前source此underlay即可解析nested API依賴。
+`pre_install.sh` 是 source checkout 入口，從任意 cwd 以絕對 source paths 選 api/go/hg 三包。前提為 colcon／rosdep 已安裝且 ROS 2 已 source，不要求 rosdep 已初始化。優先沿用目前使用者已有的 cache，即使沒有 sources list 亦可；缺 cache 時才檢查 sources，已有任一 `*.list` 直接 update，沒有 list 才執行 rosdep init（root 直接執行、非 root 透過 sudo）。之後以目前使用者執行 `rosdep update --rosdistro "$ROS_DISTRO"` 建立 cache。初始化、cache 更新、依賴安裝與 build 依序執行，任一步失敗立即停止，後續階段不執行；cache 更新不加 sudo。
+
+rosdep 安裝目前 ROS 環境的 build/runtime 依賴後，colcon 以 BUILD_TESTING=OFF 建立 merged underlay。使用者已選專案內獨立安裝：預設 project/pre_install/<ROS_DISTRO>/{build,install,log}，可用 --output-dir 改位置，--dry-run 不初始化、更新 cache、安裝或建立產物。完成後提供 source install/setup.bash 命令，保留各包 BSD LICENSE；不自動修改 shell 設定或 gitlinks。安裝與載入範例以 `./pre_install.sh && source "pre_install/${ROS_DISTRO}/install/setup.bash"` 串接，避免失敗後載入殘留產物。Parent AMENT_IGNORE 不放入每包，因此顯式 source roots 可被 colcon 辨識。腳本只在 source tree 使用，不安裝到 share 以免失去 submodule 來源；project runtime build 前 source 此 underlay 即可解析 nested API 依賴。
 
 腳本單元測試檢查來源／命令／失敗傳遞，integration真正執行三包build/install與第二次重跑，驗證installed package index、Python型別與C++下游。所有agent rosdep/build/test均在官方Docker，使用owner產物區保存logs，不安裝host依賴。Project一般四步直接掛載內附API，不以pre-install取代測試；舊component證據與本次project組合驗證分開記錄，硬體joystick/hotplug驗收仍由使用者執行。
+
+Project PR #5 已合併於 `50f034b`；本輪只修新環境的 rosdep bootstrap，不新增 snapshot 或 release。需補 sources/cache 缺漏、自訂 list 與 cache-only 重用、root／non-root 命令選擇及失敗短路測試，並重跑正式 Docker 四步與 lint；此驗證尚待完成，計畫與後續證據見 TODO T16.11，不沿用前版 pre-install PASS 冒稱本輪已驗證。
 
 `ros2 launch rv2_project test_joystick.launch.py` 預設啟動 joy_node（20 Hz autorepeat）、bridge production launch、server production launch、一個獨立 master 與純 `/api/sport/request` echo。Child includes 使用獨立 scope，server 明確 `start_master:=false`；echo 不發布假的 Unitree response。`start_joy`、`start_bridge`、`start_server`、`start_master`、`observe_requests` 可分開關閉；`device_name` 優先於 `device_id`，支援 Joy topic、三個 manager 名稱及 bridge/server YAML。README 提供三組 terminal 分拆命令，分別測 joy 停止、bridge 重啟及 server 遲啟動／重啟。
 
