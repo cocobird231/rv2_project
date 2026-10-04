@@ -8,7 +8,8 @@ Usage: pre_install.sh [--output-dir DIR] [--dry-run]
 
 Build bundled unitree_api, unitree_go and unitree_hg after installing their ROS
 dependencies with rosdep. Source your ROS 2 environment before running this file.
-rosdep may request sudo for system packages; do not run this entire script as sudo.
+Missing rosdep sources/cache are initialized automatically. Initialization and
+system packages may request sudo; do not run this entire script as sudo.
 
   --output-dir DIR  Build/install/log root (default: project/pre_install/$ROS_DISTRO).
                     Relative paths are resolved from your current directory.
@@ -25,6 +26,13 @@ die() {
 print_command() {
   printf '%q ' "$@"
   printf '\n'
+}
+
+run_command() {
+  print_command "$@"
+  if ! "$dry_run"; then
+    "$@"
+  fi
 }
 
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -51,7 +59,7 @@ done
 
 [[ ${ROS_VERSION:-} == 2 && ${ROS_DISTRO:-} =~ ^[a-z][a-z0-9_]*$ ]] ||
   die 'Source a ROS 2 environment first (ROS_VERSION=2 and ROS_DISTRO must be set)'
-for tool in colcon rosdep; do
+for tool in colcon rosdep python3; do
   command -v "$tool" >/dev/null || die "Required command not found: $tool"
 done
 
@@ -74,6 +82,44 @@ for package in "${packages[@]}"; do
 done
 [[ -f "$vendor_dir/LICENSE" ]] || die "Missing Unitree license: $vendor_dir/LICENSE"
 
+# Use rosdep's own paths so ROS_HOME and custom source lists remain effective.
+# A directory alone is not a populated cache; rosdep requires its index file.
+rosdep_state=$(python3 -B - <<'PY'
+from pathlib import Path
+
+from rosdep2.sources_list import (
+    CACHE_INDEX,
+    get_sources_cache_dir,
+    get_sources_list_dir,
+    get_sources_list_dirs,
+)
+
+if (Path(get_sources_cache_dir()) / CACHE_INDEX).exists():
+    print("ready")
+else:
+    directories = get_sources_list_dirs(get_sources_list_dir(strip_missing_dirs=False))
+    if any(list(Path(directory).glob("*.list")) for directory in directories):
+        print("update")
+    else:
+        print("init")
+PY
+)
+if [[ "$rosdep_state" == init ]]; then
+  init_command=(rosdep init)
+  if [[ $(id -u) != 0 ]]; then
+    command -v sudo >/dev/null || die 'rosdep initialization requires sudo; run rosdep init as root first'
+    if [[ -v ROSDEP_SOURCE_PATH ]]; then
+      init_command=(sudo env "ROSDEP_SOURCE_PATH=$ROSDEP_SOURCE_PATH" "${init_command[@]}")
+    else
+      init_command=(sudo "${init_command[@]}")
+    fi
+  fi
+  run_command "${init_command[@]}"
+fi
+if [[ "$rosdep_state" != ready ]]; then
+  run_command rosdep update --rosdistro "$ROS_DISTRO"
+fi
+
 rosdep_command=(
   rosdep install --from-paths "${package_paths[@]}" --ignore-src -y
   --rosdistro "$ROS_DISTRO"
@@ -86,22 +132,15 @@ build_command=(
   --cmake-args -DBUILD_TESTING=OFF
 )
 
-print_command "${rosdep_command[@]}"
-print_command mkdir -p -- "$output_dir"
-print_command touch -- "$output_dir/COLCON_IGNORE"
-print_command "${build_command[@]}"
-for package in "${packages[@]}"; do
-  print_command install -D -m 644 "$vendor_dir/LICENSE" "$output_dir/install/share/$package/LICENSE"
-done
+run_command "${rosdep_command[@]}"
+run_command mkdir -p -- "$output_dir"
+run_command touch -- "$output_dir/COLCON_IGNORE"
+run_command "${build_command[@]}"
 if ! "$dry_run"; then
-  "${rosdep_command[@]}"
-  mkdir -p -- "$output_dir"
-  touch -- "$output_dir/COLCON_IGNORE"
-  "${build_command[@]}"
   [[ -f "$output_dir/install/setup.bash" ]] || die 'colcon did not create install/setup.bash'
-  for package in "${packages[@]}"; do
-    install -D -m 644 "$vendor_dir/LICENSE" "$output_dir/install/share/$package/LICENSE"
-  done
 fi
+for package in "${packages[@]}"; do
+  run_command install -D -m 644 "$vendor_dir/LICENSE" "$output_dir/install/share/$package/LICENSE"
+done
 printf '\nSource the Unitree underlay in your current shell:\n'
 print_command source "$output_dir/install/setup.bash"
