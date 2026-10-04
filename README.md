@@ -23,36 +23,57 @@ git submodule update --init --recursive
 git submodule foreach --recursive 'git fetch --tags origin'
 ```
 
-`ros2_ws/src/` 包含七個 component gitlinks；根目錄 `r1_test_framework/` 是此 package
+`ros2_ws/src/` 包含八個 component gitlinks；根目錄 `r1_test_framework/` 是此 package
 自己的測試入口，與 workspace 內的 framework 固定相同 SHA。Framework 不是 ROS package，
 不寫入 ROS runtime dependencies。各 component 自己的 nested framework 維持該 release
 原本的 pin；不為了 project snapshot 改寫已發布內容。
 
 目前 workspace 另納入以下兩個已合併的 R1 consumers，固定合併後的 SHA；它們尚未
-列入歷史 v0.1.2 snapshot。本次更新 workspace submodules 與 joystick launch，不新增 snapshot 或 project
+列入歷史 v0.1.2 snapshot。本次更新 workspace submodules 並新增 Unitree pre-install，不新增 snapshot 或 project
 release；`package.xml` 仍為 0.1.2，schema 1 的五個 components 與既有 JSON 均保持原內容。
 
-| Consumer | 版本 | 固定 r1 commit | 原 v0.1.0 tag commit（tree 相同） |
+| Consumer | 版本 | 固定 r1 commit | 原 release tag commit（tree 相同） |
 |---|---|---|---|
 | rv2_csm_topic_bridge | 0.1.0 | `78ba1a94825eb9790f23a3be5dbfb31df5162ec7` | `c3f2b4b6dc669d98552b801b5bc68858aec4da61` |
-| rv2_server_control | 0.1.0 | `ae457eacd3f0e56e6cec53fec2c7b61773d52f6b` | `d8921b2123ff9c3216e35718047329d1ef1308c9` |
+| rv2_server_control | 0.1.1 | `38cfa0f233eb1343e77b54ae97790d01171118fc` | `c3a2794e5c49c1ab35288d012db3777f273d0d32` |
 
-Server 的來源依賴還需要在 `ros2_ws/src/` 準備 `joy_interpreter`（已驗證 `test` 分支
-`944306b61746dcdaa932a404994b8f829a2a9611`）及 `unitree_api`（官方 `unitree_ros2`
-`5204e6e098ee53f4bd929bd77eb1d387cd0fa842` 的 `cyclonedds_ws/src/unitree/unitree_api`，
-可用 symlink）。這兩個外部來源不是本 project 的 submodules；recursive clone 後仍須
-手動準備，才能建置 server、project launch 或執行 project 的完整測試。已有乾淨且符合
-上述 SHA 的來源時，可由 project 根目錄連入（替換為實際絕對路徑）：
+`joy_interpreter` 也納入 submodule，固定使用者提供的
+`fb09f704c1c3789b3ce8c2521bd4b6e339e932ea`（package 0.1.0，沒有對應 release tag）。
+Unitree sources 位於 server 的 `thirdparty/unitree/`，不再需要外部 API checkout 或 symlink。
+`test_depends.repos` 直接列出 interfaces、transport、bridge、server、joy_interpreter 與
+server 內附的 `unitree_api`；framework 不遞迴讀取 child 的依賴清單。
+
+## 預先安裝 Unitree
+
+在已 source ROS 2、具備 colcon 與已初始化 rosdep 的開發環境，由 project 根目錄執行：
 
 ```bash
-ln -s /absolute/path/to/joy_interpreter ros2_ws/src/joy_interpreter
-ln -s /absolute/path/to/unitree_ros2/cyclonedds_ws/src/unitree/unitree_api ros2_ws/src/unitree_api
+source /opt/ros/jazzy/setup.bash
+./pre_install.sh --dry-run
+./pre_install.sh
+source "pre_install/${ROS_DISTRO}/install/setup.bash"
 ```
 
-`test_depends.repos` 直接列出 interfaces、transport、bridge、server 與這兩個外部來源，
-由 project 自己的 framework 唯讀掛入 Docker；不自動下載或沿用其他 owner 的 build。
-具體布局見
-[server 建置依賴](ros2_ws/src/rv2_server_control/README.md#建置依賴)，不需整個 Unitree workspace。
+腳本固定從目前 server submodule 的內附 sources 建置 `unitree_api`、`unitree_go`、
+`unitree_hg` 三包，明確指定套件路徑以跨過 nested package 的 discovery 邊界。
+它先以 rosdep 安裝目前 ROS 環境所需的 build/runtime dependencies，再用 colcon
+建立獨立的 merged underlay；上游 tests 不在此安裝流程執行。
+Unitree 產物預設位於 `pre_install/<ROS_DISTRO>/{build,install,log}`，BSD LICENSE
+隨每包安裝，完成後列出 `source` 指令。重新執行會沿用該處建置產物。
+
+`--dry-run` 只顯示命令，不建立產物或執行安裝。腳本也可從其他 cwd 呼叫；自訂
+`--output-dir DIR` 的相對路徑以呼叫端 cwd 為準，例如：
+
+```bash
+/path/to/rv2_project/pre_install.sh --output-dir /work/unitree-underlay
+source /work/unitree-underlay/install/setup.bash
+```
+
+腳本不修改 shell 設定；下一個 terminal 仍需 source 此 underlay。
+rosdep 安裝系統依賴時可能要求 sudo，請在預期的 ROS 開發環境執行，勿對整支腳本加 sudo。
+本專案的 agent 驗證全在官方 ROS Docker 中執行，host 不安裝依賴。
+`pre_install.sh` 是 source checkout 的建置入口，不安裝至 `share/rv2_project`；一般
+framework 四步測試會直接掛載內附 API，不需事先在 host 執行此腳本。
 
 `package.xml` 是 project 版本的唯一來源，選擇 `snapshots/v<version>.json`。
 完整版本對照見 [設計稿 §2.1.1](docs/r1_design_docs/r1_design_draft.md)。
@@ -74,7 +95,8 @@ v0.1.2 的 R1-only 來源不再依賴 legacy `rv2_interfaces`。此列表不會�
 
 ## 實機 joystick 操作
 
-準備好上述來源與 ROS dependencies 後，可在 ROS 開發容器由 project 根目錄建置。
+完成上述 pre-install 並 source Unitree underlay、準備其他 ROS dependencies 後，
+可在 ROS 開發容器由 project 根目錄建置。
 明確選用這裡固定的 R1 sources，避免混入外層 workspace 的 legacy checkout：
 
 ```bash
@@ -169,7 +191,8 @@ Bridge mailbox 只保留最新 pending sample，註冊／service 等待期間的
 ```
 
 無參數 `test_run.sh` 建置 project 的 runtime dependency closure，驗證 manifest unit、
-真實 Git/ROS 安裝 integration，以及從 installed project launch 啟動的組合測試。
+真實 Git/ROS 安裝 integration、pre-install 三包建置／重跑／安裝後 import 與下游編譯，
+以及從 installed project launch 啟動的組合測試。
 組合測試在 Docker 內以合成 Joy 驗證輸出、輸入停止與同值恢復；它不替代實機驗收。
 流程只執行 project 的測試，不代替各 child owner 的完整測試，並保留
 `test_env/jazzy/runs/full-*/summary.tsv`、逐案例 pytest log、JUnit XML 與 build log。

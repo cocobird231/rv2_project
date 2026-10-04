@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.40)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.41)
 
-> 狀態:正式版(v1.3.40)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.41)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.41 | **更新 Agent:`coco-codex`**。Project更新已合併server v0.1.1／38cfa0f（原tag c3a2794 tree相同），納入使用者joy_interpreter fb09f70 gitlink；歷史五元件snapshots不變。以server內附API取代外部symlink，新增source入口pre_install.sh依使用者選擇將三包Unitree建到專案內獨立underlay，rosdep處理目前ROS環境依賴、顯式source paths、dry-run、自訂output與source指令。新增真實安裝／Python型別／C++下游驗證，正式結果見TODO T16.10；project版本仍0.1.2、不新增release，merge由使用者執行。 |
 | v1.3.40 | **更新 Agent:`coco-codex`**。Project 新增並安裝 joystick 組合 launch，宣告 joy／bridge／server／master 與 request echo 的 runtime dependencies；各部分可分開啟停，child include 隔離參數 scope，server 不重複啟動 master。補手動來源 closure、installed launch 的合成 Joy／停止／同值恢復 integration 與 README 操作，正式驗證仍走 own nested Docker。說明 driver neutral／mailbox 短按限制；實機驗收 pending。Package 0.1.2、三份 schema 1 歷史 snapshots 與 tags 不變，不新增 release；執行結果見 TODO T16.8。 |
 | v1.3.39 | **更新 Agent:`coco-codex`**。Bridge #1／server #2 已合併；project workspace 新增兩包 v0.1.0 submodules，固定實際 pull／核對後的 r1 主線 78ba1a9／ae457ea，原 tag tree 相同且不移動。§2.1.1 分開列出目前 workspace consumers 與五元件歷史 snapshots；package.xml0.1.2、schema1、原 JSON 不改，不新增 project release。說明 server 外部 source dependencies、metadata guards 與實機驗收邊界；執行結果見 TODO T16.7。 |
 | v1.3.38 | **更新 Agent:`coco-codex`**。同步 project PR #2 已合併、literal pull 主線 612f051 與原 v0.1.2 tag 1ada31e tree 相同。依使用者裁決將 T12.2 記為本次環境豁免 SKIP／延期，不冒稱 PASS，也不阻擋其餘項目手動總驗收；整體 acceptance_pending 保留。正式確定 test_run 測試與 test_packages 打包入口分離，記錄現行 Docker 建置／乾淨安裝合約及無 Docker 打包的待討論範圍，未修改 framework。對齊 TODO v0.8.39／README／T15 完成紀錄；不回寫三份已發布 snapshots、原 tags 或 component pins，不新增可選總測腳本。 |
@@ -359,16 +360,20 @@ v0.1.2 的 component 對照（已逐個本地 pull；local／origin／即時遠�
 
 新版只保留 TSan、整體總驗收 pending 與外部 apt/image 未鎖版限制，不再硬性要求 legacy 依賴文字；舊 snapshot bytes 不回寫。來源與 Git metadata 查核不等於所有 owner 的新一輪 runtime 驗收。
 
-**目前 workspace 額外 consumers（2026-10-04）**：使用者已合併 bridge #1／server #2，乾淨 r1 worktrees 實際 pull 後的 HEAD／origin／即時遠端一致。下列兩包透過獨立 submodule commit 納入 project，原 v0.1.0 tags 與合併主線的 tree 相同；每包 nested framework 都是 ae479066/v0.5.1。
+**目前 workspace 額外 consumers（2026-10-05）**：使用者已合併 bridge #1／server #3，乾淨 r1 checkout 實際 pull 後的 HEAD／origin／即時遠端一致。下列兩包透過獨立 submodule commit 納入 project，原 release tags 與合併主線的 tree 相同；每包 nested framework 都是 ae479066/v0.5.1。
 
 | Component | 版本 | 固定合併 r1 SHA | 原 release tag commit(歷史保留) |
 |---|---|---|---|
 | rv2_csm_topic_bridge | v0.1.0 | 78ba1a94825eb9790f23a3be5dbfb31df5162ec7 | c3f2b4b6dc669d98552b801b5bc68858aec4da61 |
-| rv2_server_control | v0.1.0 | ae457eacd3f0e56e6cec53fec2c7b61773d52f6b | d8921b2123ff9c3216e35718047329d1ef1308c9 |
+| rv2_server_control | v0.1.1 | 38cfa0f233eb1343e77b54ae97790d01171118fc | c3a2794e5c49c1ab35288d012db3777f273d0d32 |
 
 本輪更新 workspace 與 joystick launch，不新增版本 snapshot；project package.xml 維持 0.1.2，schema1 與三份歷史 JSON 不改。未來若要將 consumers 納入正式 snapshot，需新增 schema/version 及相容測試。Project metadata integration 另查核兩包 gitlink／checkout／tag tree／version／remote／nested framework，並確認可顯式 discovery；不把它們偷偷加入 schema1 的五個 components。
 
-Server 另需要 sibling `joy_interpreter`（test 分支944306b61746dcdaa932a404994b8f829a2a9611）與 `unitree_api`（官方 unitree_ros2 commit5204e6e098ee53f4bd929bd77eb1d387cd0fa842之cyclonedds_ws/src/unitree/unitree_api，可用 symlink）。兩者不在 project submodules 內，recursive clone 後須手動補在 `ros2_ws/src/`。Project 的 `test_depends.repos` 直接列出 interfaces、transport、bridge、server 及這兩個外部來源；framework 不遞迴讀 child 的 test_depends，也不自動下載缺少的來源。無須整個 Unitree workspace；rosdep 安裝與 build／test 全在官方 Docker 執行。各 child 既有 T16 證據與本次 project 組合測試分開記錄，實機 joystick/hotplug 驗收仍待使用者執行。
+Project另固定joy_interpreter submodule `fb09f704c1c3789b3ce8c2521bd4b6e339e932ea`（package0.1.0，無release tag／nested framework）；它是外部source dependency，不加入歷史snapshot。Unitree三包已內附於server，test_depends.repos明列interfaces、transport、bridge、server、joy_interpreter及server內附API；framework不遞迴讀child依賴、不自動下載缺失來源。新增metadata guard分別驗consumer release與joy精確來源，顯式discovery為八個ROS packages（含project）。
+
+`pre_install.sh`是source checkout入口，從任意cwd以絕對source paths選api/go/hg三包；rosdep安裝目前ROS環境的build/runtime依賴後，colcon以BUILD_TESTING=OFF建立merged underlay。使用者已選專案內獨立安裝：預設project/pre_install/<ROS_DISTRO>/{build,install,log}，可用--output-dir改位置，--dry-run無產物／安裝副作用。完成後提供source install/setup.bash命令，保留各包BSD LICENSE；不自動修改shell設定或gitlinks。parent AMENT_IGNORE不放入每包，因此顯式source roots可被colcon辨識。腳本只在source tree使用，不安裝到share以免失去submodule來源；project runtime build前source此underlay即可解析nested API依賴。
+
+腳本單元測試檢查來源／命令／失敗傳遞，integration真正執行三包build/install與第二次重跑，驗證installed package index、Python型別與C++下游。所有agent rosdep/build/test均在官方Docker，使用owner產物區保存logs，不安裝host依賴。Project一般四步直接掛載內附API，不以pre-install取代測試；舊component證據與本次project組合驗證分開記錄，硬體joystick/hotplug驗收仍由使用者執行。
 
 `ros2 launch rv2_project test_joystick.launch.py` 預設啟動 joy_node（20 Hz autorepeat）、bridge production launch、server production launch、一個獨立 master 與純 `/api/sport/request` echo。Child includes 使用獨立 scope，server 明確 `start_master:=false`；echo 不發布假的 Unitree response。`start_joy`、`start_bridge`、`start_server`、`start_master`、`observe_requests` 可分開關閉；`device_name` 優先於 `device_id`，支援 Joy topic、三個 manager 名稱及 bridge/server YAML。README 提供三組 terminal 分拆命令，分別測 joy 停止、bridge 重啟及 server 遲啟動／重啟。
 
