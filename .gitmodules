@@ -24,3 +24,6 @@
 	path = ros2_ws/src/rv2_server_control
 	url = git@github.com:cocobird231/rv2_server_control.git
 	branch = r1
+[submodule "ros2_ws/src/joy_interpreter"]
+	path = ros2_ws/src/joy_interpreter
+	url = git@github.com:cocobird231/joy_interpreter.git
