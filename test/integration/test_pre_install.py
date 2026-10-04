@@ -25,7 +25,7 @@ def run_logged(command, cwd, log, *, env=None):
 
 
 def test_real_pre_install_is_reusable_from_an_unrelated_directory():
-    """Verify installation, a repeat invocation and both Python/C++ consumers."""
+    """Bootstrap fresh rosdep, repeat installation and consume Python/C++ types."""
     source = Path(os.environ["RV2_PROJECT_SOURCE_DIR"]).resolve()
     artifact_parent = Path(os.environ["RV2_UNITREE_TEST_OUTPUT_DIR"]).resolve()
     artifact_parent.mkdir(parents=True, exist_ok=True)
@@ -39,8 +39,25 @@ def test_real_pre_install_is_reusable_from_an_unrelated_directory():
     command = [str(script), "--output-dir", str(output)]
     environment = os.environ.copy()
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    # Official ROS images already have rosdep sources and a root cache. Use
+    # empty, isolated locations to exercise the same first run as a new VM.
+    sources = artifacts / "fresh rosdep sources"
+    ros_home = artifacts / "fresh ros home"
+    environment["ROSDEP_SOURCE_PATH"] = str(sources)
+    environment["ROS_HOME"] = str(ros_home)
 
     run_logged(command, caller, artifacts / "first-preinstall.log", env=environment)
+    sources_file = sources / "20-default.list"
+    cache_index = ros_home / "rosdep/sources.cache/index"
+    sources_before = sources_file.read_bytes()
+    cache_before = (cache_index.read_bytes(), cache_index.stat().st_mtime_ns)
+    first_commands = [
+        line.strip()
+        for line in (artifacts / "first-preinstall.log").read_text().splitlines()
+    ]
+    assert "rosdep init" in first_commands
+    update_command = f"rosdep update --rosdistro {environment['ROS_DISTRO']}"
+    assert update_command in first_commands
     install = output / "install"
     assert (install / "setup.bash").is_file()
     assert (output / "build").is_dir()
@@ -56,6 +73,14 @@ def test_real_pre_install_is_reusable_from_an_unrelated_directory():
     preserved.write_text("keep the existing installation\n", encoding="utf-8")
     run_logged(command, caller, artifacts / "second-preinstall.log", env=environment)
     assert preserved.read_text(encoding="utf-8") == "keep the existing installation\n"
+    assert sources_file.read_bytes() == sources_before
+    assert (cache_index.read_bytes(), cache_index.stat().st_mtime_ns) == cache_before
+    second_commands = [
+        line.strip()
+        for line in (artifacts / "second-preinstall.log").read_text().splitlines()
+    ]
+    assert "rosdep init" not in second_commands
+    assert update_command not in second_commands
 
     # A fresh shell must discover this underlay, not silently use an inherited
     # workspace's Unitree installation or Python module search path.
