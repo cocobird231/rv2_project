@@ -15,15 +15,18 @@ SHARE = Path(os.environ["RV2_PROJECT_SHARE_DIR"])
 WORKSPACE_CONSUMERS = (
     (
         "rv2_csm_topic_bridge",
+        "0.1.0",
         "78ba1a94825eb9790f23a3be5dbfb31df5162ec7",
         "c3f2b4b6dc669d98552b801b5bc68858aec4da61",
     ),
     (
         "rv2_server_control",
-        "ae457eacd3f0e56e6cec53fec2c7b61773d52f6b",
-        "d8921b2123ff9c3216e35718047329d1ef1308c9",
+        "0.1.1",
+        "38cfa0f233eb1343e77b54ae97790d01171118fc",
+        "c3a2794e5c49c1ab35288d012db3777f273d0d32",
     ),
 )
+JOY_INTERPRETER_COMMIT = "fb09f704c1c3789b3ce8c2521bd4b6e339e932ea"
 
 
 def git(repository, *arguments):
@@ -103,9 +106,9 @@ def test_project_framework_matches_workspace_framework(snapshot):
     )
 
 
-@pytest.mark.parametrize("name,commit,tag_commit", WORKSPACE_CONSUMERS)
+@pytest.mark.parametrize("name,version,commit,tag_commit", WORKSPACE_CONSUMERS)
 def test_workspace_consumers_match_merged_releases_and_framework(
-    snapshot, name, commit, tag_commit
+    snapshot, name, version, commit, tag_commit
 ):
     """Validate added consumers without widening an immutable snapshot."""
     relative = f"ros2_ws/src/{name}"
@@ -134,8 +137,8 @@ def test_workspace_consumers_match_merged_releases_and_framework(
         )
     package = ET.parse(repository / "package.xml").getroot()
     assert package.findtext("name") == name
-    assert package.findtext("version") == "0.1.0"
-    tag = "refs/tags/v0.1.0"
+    assert package.findtext("version") == version
+    tag = f"refs/tags/v{version}"
     assert git(repository, "rev-parse", tag + "^{commit}") == tag_commit
     assert git(repository, "rev-parse", tag + "^{tree}") == git(
         repository, "rev-parse", "HEAD^{tree}"
@@ -164,6 +167,37 @@ def test_workspace_consumers_match_merged_releases_and_framework(
         )
         == framework["repository"]
     )
+
+
+def test_joy_interpreter_matches_pinned_source_dependency():
+    """Check the source pin without requiring a release tag or test framework."""
+    relative = "ros2_ws/src/joy_interpreter"
+    repository = SOURCE / relative
+    origin = "git@github.com:cocobird231/joy_interpreter.git"
+    assert git(SOURCE, "ls-tree", "HEAD", "--", relative).split() == [
+        "160000",
+        "commit",
+        JOY_INTERPRETER_COMMIT,
+        relative,
+    ]
+    assert git(repository, "rev-parse", "HEAD") == JOY_INTERPRETER_COMMIT
+    assert git(repository, "status", "--porcelain", "--untracked-files=all") == ""
+    assert git(repository, "remote", "get-url", "origin") == origin
+    for field, expected in (("path", relative), ("url", origin)):
+        assert (
+            git(
+                SOURCE,
+                "config",
+                "--file",
+                ".gitmodules",
+                "--get",
+                f"submodule.{relative}.{field}",
+            )
+            == expected
+        )
+    package = ET.parse(repository / "package.xml").getroot()
+    assert package.findtext("name") == "joy_interpreter"
+    assert package.findtext("version") == "0.1.0"
 
 
 def test_installed_package_is_discoverable_and_metadata_matches(snapshot):
@@ -215,7 +249,11 @@ def test_colcon_owner_and_explicit_workspace_discovery():
     ).splitlines()
     assert owner == ["rv2_project"]
     # External source dependencies may also live here; check managed components.
-    names = (*COMPONENT_NAMES, *(name for name, _, _ in WORKSPACE_CONSUMERS))
+    names = (
+        *COMPONENT_NAMES,
+        *(name for name, _, _, _ in WORKSPACE_CONSUMERS),
+        "joy_interpreter",
+    )
     children = [str(SOURCE / "ros2_ws/src" / name) for name in names]
     workspace = subprocess.check_output(
         ["colcon", "list", "--paths", str(SOURCE), *children, "--names-only"],
@@ -230,5 +268,6 @@ def test_colcon_owner_and_explicit_workspace_discovery():
         "rv2_control_signal_transport",
         "rv2_csm_topic_bridge",
         "rv2_server_control",
+        "joy_interpreter",
     }
-    assert len(workspace) == 7
+    assert len(workspace) == 8
