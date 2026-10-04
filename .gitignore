@@ -2,6 +2,7 @@
 /build/
 /install/
 /log/
+/pre_install/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
