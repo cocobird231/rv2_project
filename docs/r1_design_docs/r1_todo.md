@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.51)
+# R1 實作 TODO List(v0.8.52)
 
-> 依據:`r1_design_draft.md` v1.3.42(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.43(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.52 | **更新 Agent:`coco-codex`**。Project PR #5 已由使用者合併於 50f034b。新增 T16.11：修正新 VM 尚未初始化 rosdep／建立 cache 時 pre_install.sh 失敗；優先沿用目前使用者 cache，缺 cache 時才檢查 sources；已有任一 *.list 直接 update，沒有 list 才 init（非 root 使用 sudo），update --rosdistro 由目前使用者執行，各步失敗即停止。README 移除已初始化前提，安裝與 source 範例改用 &&。本輪在 coco-codex/preinstall-rosdep-bootstrap 提交獨立修正 PR，官方 Docker 測試與 lint 待執行；project 維持 0.1.2，不新增 snapshot/release，不提前勾選。 |
 | v0.8.51 | **更新 Agent:`coco-codex`**。T16.10完成：project固定server合併r1 38cfa0f/v0.1.1與相容joy test分支944306b，新增pre_install.sh三包獨立underlay／來源與失敗guard、直接vendor API測試掛載。乾淨bfff225／frameworkae479066官方四步PASS，unit145／metadata12／preinstall1／launch2、CMake/XML與6/6CTest全過；168aggregate零errors/failures/skips，sanitizers N/A，Python7/Shell1 lint PASS。真實兩次安裝、Python序列化、C++下游執行與保留logs可讀性通過；原joy不相容失敗證據保留。容器已清除，原staged joy bytes與歷史snapshots保留；更新PR #5供使用者合併，project維持0.1.2、不新增snapshot/tag。 |
 | v0.8.50 | **更新 Agent:`coco-codex`**。Project完整build以fb09f70 joy master失敗：server呼叫update(joy,now)，該版本僅支援update(joy)。改固定server已驗證test分支944306b並增branch guard，保留原staged joy bytes；不改已合併server或放寬測試。同步設計稿v1.3.42／README／source layout，原失敗run full-20261004T204811.tQfhAa保留；新script12unit及lint已PASS，完整combo／preinstall integration重驗中，T16.10不提前勾選。 |
 | v0.8.49 | **更新 Agent:`coco-codex`**。使用者已合併server PR #3；實際pull核對r1=38cfa0f，與原v0.1.1 tag c3a2794 tree相同。新增T16.10：project固定新server，直接掛載其內附API，納入使用者已staged的joy_interpreter fb09f70原樣gitlink並保留原index。依使用者選擇新增pre_install.sh，將api/go/hg三包建至專案內獨立underlay，rosdep處理目前ROS環境的build依賴、顯式colcon roots避免nested discovery問題，輸出source指令。新增來源metadata與腳本unit/真實install integration，乾淨Docker四步/lint後更新原PR #5；不新增snapshot/project release、不代替使用者merge。 |
@@ -876,6 +877,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 
 - [x] T16.10 Project同步server v0.1.1：gitlink固定合併r1 38cfa0f，test_depends直接指向server內附API；納入joy_interpreter並依build證據固定相容test分支944306b，原staged fb09f70內容保留。pre_install.sh從任意cwd以顯式三包source paths建置到project/pre_install/<ROS_DISTRO>/{build,install,log}，支援自訂output與dry-run，錯誤非零且不改shell設定。依賴安裝／編譯／測試均在官方Docker驗證；真正驗證三包CMake discovery及Python messages import，再跑project installed joystick launch、metadata與lint，更新PR #5。三份歷史snapshot、project0.1.2與原tags保留。
 - [x] T16.9 Server Unitree fallback：在 colcon discovery 前選定 source，保留一般 find_package(unitree_api REQUIRED) 與 ROS dependency graph；只自動加入 server 所需 api，不自動編譯 go/hg。內附三包補齊 rosidl build dependency，測試 manifest 直接掛載內附 api，不要求 sibling symlink。驗證 workspace source／underlay／fallback、重複名稱及錯誤傳遞，從 own nested framework 執行完整 Docker 四步與獨立 lint，完成後獨立 server v0.1.1 commit/tag/PR。Project submodule 更新留待使用者合併 server 後處理，不固定未合併候選。
+- [ ] T16.11 Project pre-install rosdep bootstrap：優先沿用目前使用者 cache；缺 cache 時，已有任一 sources *.list 就直接 update，沒有 list 才自動 init（非 root 透過 sudo），再以目前使用者執行 rosdep update --rosdistro；初始化、更新、依賴安裝、build 逐步執行，任一步失敗即停止。保留 dry-run 無寫入與 source/output guard，README 全部安裝後 source 範例使用 &&。補新環境、既有環境、權限與失敗傳遞測試，於官方 Docker 跑 own nested 四步、真實三包安裝／重跑／Python 與 C++ consumer、metadata／joystick regression 及 lint，保留來源與 logs 後提交獨立 PR 由使用者合併。不改 component pins、project 0.1.2、歷史 snapshots 或 release tags。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -958,4 +960,12 @@ Server PR #3已由使用者合併；乾淨checkout實際 `git pull --ff-only ori
 
 完整logs及 `final-sources.txt` 在該clone的 `test_env/jazzy/evidence-unitree-preinstall/`，integration的first/second-preinstall.log及Python/C++consumer logs在final run的 `normal/build/rv2_project/unitree-preinstall/`；原format及不相容joy失敗證據保留。獨立lint logs位於開發worktree `.r1-migration/unitree-project/test_env/jazzy/evidence-unitree-preinstall/`。test_clean成功，本次Docker容器全部清除；所有驗證依賴安裝／編譯／測試均未在host執行。
 
-原project工作目錄staged .gitmodules／joy gitlink的完整binary diff SHA256仍為 `5fd4752ed6073ebfda716e3d07a6d60ce46250efbfff98d988dc9956d712021a`；只在隔離開發分支固定相容joy，原checkout保留fb09f70。Project package維持0.1.2，不新增snapshot或release tag；後續只有本文件的結果記錄，不冒稱對新的docs-only SHA重跑ROS。PR #5更新為本次完整實作供使用者合併，硬體joystick/hotplug總驗收仍由使用者執行。此source pre-install不等於framework Debian打包功能變更。
+原project工作目錄staged .gitmodules／joy gitlink的完整binary diff SHA256仍為 `5fd4752ed6073ebfda716e3d07a6d60ce46250efbfff98d988dc9956d712021a`；只在隔離開發分支固定相容joy，原checkout保留fb09f70。Project package維持0.1.2，不新增snapshot或release tag；後續只有本文件的結果記錄，不冒稱對新的docs-only SHA重跑ROS。PR #5 已由使用者合併於 `50f034b`，硬體joystick/hotplug總驗收仍由使用者執行。此source pre-install不等於framework Debian打包功能變更。
+
+### T16.11 Project rosdep bootstrap 計畫（2026-10-05）
+
+使用者在新 VM 執行 pre-install 時，ROS 2／colcon／rosdep 已安裝，但 rosdep sources 或目前使用者的 cache 尚未建立，原腳本直接 rosdep install 因而失敗。本輪分支 `coco-codex/preinstall-rosdep-bootstrap` 承接已合併 PR #5（`50f034b`），只補首次使用所需的初始化與錯誤處理。
+
+腳本優先沿用目前使用者已有的 cache，不要求 sources list 同時存在。缺 cache 時才檢查 sources：已有任一 `*.list` 直接進入 update；沒有 list 才執行 rosdep init（root 直接執行、非 root 透過 sudo）。之後由目前使用者執行 `rosdep update --rosdistro "$ROS_DISTRO"` 建立 cache。之後才依序安裝三包 build/runtime dependencies、colcon build、安裝 LICENSE 與輸出 source 指令。任一步失敗立即停止，不執行後續階段；dry-run 仍不初始化、不更新 cache、不安裝或建立產物。README 僅要求工具已安裝及 ROS 2 已 source，以 `./pre_install.sh && source ...` 防止失敗後繼續 source。
+
+待驗證：單元測試涵蓋缺 sources/cache、既有自訂 list、cache-only 重用、root／non-root 命令選擇及各步失敗短路；官方 Docker 真實安裝維持任意 cwd、含空白 output、三包 Python／C++ consumer 與重跑保留產物斷言。完成 own nested 四步、metadata／installed joystick 回歸及獨立 lint 後，另記實測 SHA、結果與保留 logs。T16.10 的既有 PASS 是前版證據，不視為本輪 bootstrap 已通過。此項仍 pending，後續以新 PR 交使用者合併；不改 gitlinks、project package 0.1.2、歷史 snapshots 或 tags，不新增 release。
