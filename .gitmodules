@@ -27,3 +27,4 @@
 [submodule "ros2_ws/src/joy_interpreter"]
 	path = ros2_ws/src/joy_interpreter
 	url = git@github.com:cocobird231/joy_interpreter.git
+	branch = test
