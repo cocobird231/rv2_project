@@ -30,6 +30,8 @@ def test_real_pre_install_is_reusable_from_an_unrelated_directory():
     artifact_parent = Path(os.environ["RV2_UNITREE_TEST_OUTPUT_DIR"]).resolve()
     artifact_parent.mkdir(parents=True, exist_ok=True)
     artifacts = Path(tempfile.mkdtemp(prefix="real preinstall ", dir=artifact_parent))
+    # Docker runs as root; keep retained logs readable from the host workspace.
+    artifacts.chmod(0o755)
     caller = artifacts / "unrelated caller"
     caller.mkdir()
     output = artifacts / "underlay with spaces"
