@@ -11,7 +11,7 @@ import pytest
 
 SCRIPT = pathlib.Path(__file__).resolve().parents[2] / "pre_install.sh"
 PACKAGES = ("unitree_api", "unitree_go", "unitree_hg")
-TOOL_STUB = '''#!/usr/bin/env python3
+TOOL_STUB = """#!/usr/bin/env python3
 import json
 import os
 import pathlib
@@ -26,7 +26,7 @@ if name == "colcon" and code == 0:
     prefix.mkdir(parents=True, exist_ok=True)
     (prefix / "setup.bash").write_text("# test underlay\\n")
 sys.exit(code)
-'''
+"""
 
 
 @pytest.fixture
@@ -39,7 +39,9 @@ def project(tmp_path, monkeypatch):
     for name in PACKAGES:
         package = vendor / name
         package.mkdir(parents=True)
-        (package / "package.xml").write_text(f"<package><name>{name}</name></package>\n")
+        (package / "package.xml").write_text(
+            f"<package><name>{name}</name></package>\n"
+        )
         (package / "CMakeLists.txt").write_text(f"project({name})\n")
     (vendor / "LICENSE").write_text("BSD 3-Clause License test fixture\n")
     tools = tmp_path / "tools"
@@ -64,14 +66,20 @@ def invoke(project, *arguments):
     """Run the real shell entry point while external tools remain controlled."""
     return subprocess.run(
         ["bash", str(project / "pre_install.sh"), *arguments],
-        text=True, capture_output=True, timeout=10,
+        text=True,
+        capture_output=True,
+        timeout=10,
     )
 
 
 def calls():
     """Read actual subprocess argument boundaries from the tool stubs."""
     trace = pathlib.Path(os.environ["PREINSTALL_TRACE"])
-    return [json.loads(line) for line in trace.read_text().splitlines()] if trace.exists() else []
+    return (
+        [json.loads(line) for line in trace.read_text().splitlines()]
+        if trace.exists()
+        else []
+    )
 
 
 def test_default_installs_all_bundled_packages_and_preserves_license(project):
@@ -83,21 +91,36 @@ def test_default_installs_all_bundled_packages_and_preserves_license(project):
     vendor = project / "ros2_ws/src/rv2_server_control/thirdparty/unitree"
     paths = [str(vendor / name) for name in PACKAGES]
     rosdep = recorded[0][1]
-    assert rosdep[rosdep.index("--from-paths") + 1:rosdep.index("--ignore-src")] == paths
+    assert (
+        rosdep[rosdep.index("--from-paths") + 1 : rosdep.index("--ignore-src")] == paths
+    )
     assert rosdep[rosdep.index("--rosdistro") + 1] == "jazzy"
     assert [rosdep[i + 1] for i, value in enumerate(rosdep) if value == "-t"] == [
-        "build", "buildtool", "build_export", "buildtool_export", "exec",
+        "build",
+        "buildtool",
+        "build_export",
+        "buildtool_export",
+        "exec",
     ]
     colcon = recorded[1][1]
-    assert colcon[colcon.index("--base-paths") + 1:colcon.index("--build-base")] == paths
-    assert colcon[colcon.index("--packages-select") + 1:colcon.index("--cmake-args")] == list(PACKAGES)
+    assert (
+        colcon[colcon.index("--base-paths") + 1 : colcon.index("--build-base")] == paths
+    )
+    assert colcon[
+        colcon.index("--packages-select") + 1 : colcon.index("--cmake-args")
+    ] == list(PACKAGES)
     assert "--merge-install" in colcon
     assert "-DBUILD_TESTING=OFF" in colcon
     output = project / "pre_install/jazzy"
     assert (output / "COLCON_IGNORE").is_file()
     for name in PACKAGES:
-        assert (output / f"install/share/{name}/LICENSE").read_bytes() == (vendor / "LICENSE").read_bytes()
-    assert shlex.split(result.stdout.splitlines()[-1]) == ["source", str(output / "install/setup.bash")]
+        assert (output / f"install/share/{name}/LICENSE").read_bytes() == (
+            vendor / "LICENSE"
+        ).read_bytes()
+    assert shlex.split(result.stdout.splitlines()[-1]) == [
+        "source",
+        str(output / "install/setup.bash"),
+    ]
 
 
 def test_relative_output_is_resolved_from_caller(project):
@@ -128,12 +151,17 @@ def test_failure_propagates_without_claiming_success(project, monkeypatch, tool,
     result = invoke(project)
     assert result.returncode == code
     assert "Source the Unitree underlay" not in result.stdout
-    assert [name for name, _ in calls()] == (["rosdep"] if tool == "ROSDEP" else ["rosdep", "colcon"])
+    assert [name for name, _ in calls()] == (
+        ["rosdep"] if tool == "ROSDEP" else ["rosdep", "colcon"]
+    )
 
 
 def test_missing_bundle_fails_before_installing_dependencies(project):
     """An incomplete submodule checkout must never start dependency installation."""
-    (project / "ros2_ws/src/rv2_server_control/thirdparty/unitree/unitree_hg/package.xml").unlink()
+    (
+        project
+        / "ros2_ws/src/rv2_server_control/thirdparty/unitree/unitree_hg/package.xml"
+    ).unlink()
     result = invoke(project)
     assert result.returncode == 2
     assert "Missing bundled package" in result.stderr
@@ -149,7 +177,9 @@ def test_unsourced_ros_environment_fails_before_tools(project, monkeypatch):
     assert calls() == []
 
 
-@pytest.mark.parametrize("target", [".", "..", "/", "ros2_ws/src", "ros2_ws/src/rv2_server_control"])
+@pytest.mark.parametrize(
+    "target", [".", "..", "/", "ros2_ws/src", "ros2_ws/src/rv2_server_control"]
+)
 def test_output_cannot_hide_source_packages(project, target):
     """Reject paths where COLCON_IGNORE would exclude the project or its sources."""
     result = invoke(project, "--output-dir", str(project / target))

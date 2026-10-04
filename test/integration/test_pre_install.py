@@ -167,7 +167,8 @@ int main()
             "-c",
             'set -eo pipefail; source "$1/setup.bash"; '
             'cmake -S "$2" -B "$2/build" "-DUNITREE_EXPECTED_INSTALL=$1"; '
-            'cmake --build "$2/build" --parallel 2',
+            'cmake --build "$2/build" --parallel 2; '
+            'exec "$2/build/unitree_consumer"',
             "unitree-cmake-consumer",
             str(install),
             str(consumer),
