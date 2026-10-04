@@ -37,8 +37,9 @@ release；`package.xml` 仍為 0.1.2，schema 1 的五個 components 與既有 J
 | rv2_csm_topic_bridge | 0.1.0 | `78ba1a94825eb9790f23a3be5dbfb31df5162ec7` | `c3f2b4b6dc669d98552b801b5bc68858aec4da61` |
 | rv2_server_control | 0.1.1 | `38cfa0f233eb1343e77b54ae97790d01171118fc` | `c3a2794e5c49c1ab35288d012db3777f273d0d32` |
 
-`joy_interpreter` 也納入 submodule，固定使用者提供的
-`fb09f704c1c3789b3ce8c2521bd4b6e339e932ea`（package 0.1.0，沒有對應 release tag）。
+`joy_interpreter` 也納入 submodule，固定 server 已驗證的 `test` 分支
+`944306b61746dcdaa932a404994b8f829a2a9611`（package 0.1.0，沒有對應 release tag）。
+此版本提供 server 使用的 `update(joy, now)`；目前 master 的單參數 API 不相容。
 Unitree sources 位於 server 的 `thirdparty/unitree/`，不再需要外部 API checkout 或 symlink。
 `test_depends.repos` 直接列出 interfaces、transport、bridge、server、joy_interpreter 與
 server 內附的 `unitree_api`；framework 不遞迴讀取 child 的依賴清單。

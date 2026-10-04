@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.49)
+# R1 實作 TODO List(v0.8.50)
 
-> 依據:`r1_design_draft.md` v1.3.40(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.42(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.50 | **更新 Agent:`coco-codex`**。Project完整build以fb09f70 joy master失敗：server呼叫update(joy,now)，該版本僅支援update(joy)。改固定server已驗證test分支944306b並增branch guard，保留原staged joy bytes；不改已合併server或放寬測試。同步設計稿v1.3.42／README／source layout，原失敗run full-20261004T204811.tQfhAa保留；新script12unit及lint已PASS，完整combo／preinstall integration重驗中，T16.10不提前勾選。 |
 | v0.8.49 | **更新 Agent:`coco-codex`**。使用者已合併server PR #3；實際pull核對r1=38cfa0f，與原v0.1.1 tag c3a2794 tree相同。新增T16.10：project固定新server，直接掛載其內附API，納入使用者已staged的joy_interpreter fb09f70原樣gitlink並保留原index。依使用者選擇新增pre_install.sh，將api/go/hg三包建至專案內獨立underlay，rosdep處理目前ROS環境的build依賴、顯式colcon roots避免nested discovery問題，輸出source指令。新增來源metadata與腳本unit/真實install integration，乾淨Docker四步/lint後更新原PR #5；不新增snapshot/project release、不代替使用者merge。 |
 | v0.8.48 | **更新 Agent:`coco-codex`**。T16.9 完成：server 內附 Unitree fallback、來源優先序入口、manifest／授權及 own nested 來源整合。官方 Docker 乾淨 0f17607 全測試42功能案例／10 CTest全過，83aggregate零錯誤失敗、11原生cppcheck SKIP，sanitizers N/A；真實fallback雙包建置、三次joystick回歸與獨立lint通過，容器已清除。修正完整／縮寫discovery參數繞過、Ruff/ament import排序及既有observer未match先送Joy的測試競爭，保留原失敗logs與全部runtime斷言。獨立server v0.1.1版本commit c3a2794／annotated tag已推送，PR由使用者合併；project pins／snapshots及使用者staged joy submodule保留，打包內部path限制明示。 |
 | v0.8.47 | **更新 Agent:`coco-codex`**。使用者已合併 project PR #4；T16.8 完成，後續所有 PR 合併僅由使用者執行。新增 T16.9：server 內附 Unitree source fallback，建置入口依 workspace source→已 source underlay→thirdparty/unitree/unitree_api 選擇；補三包 rosidl_generator_dds_idl build dependency、own nested test_depends 路徑與來源／授權文件。先驗證 discovery 優先序及無外部 unitree_api 的乾淨 Docker 全測試/lint，再獨立 server v0.1.1 commit/tag/PR。Project 既有 pins/snapshots 與使用者 staged joy_interpreter submodule 保留。 |
@@ -872,7 +873,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.7 Project 納入兩包已合併 r1 submodules；核對精確主線 SHA／原 tag tree／內嵌 framework，以 gitlink-only commit 保存。補 current workspace 文件、discovery 與 metadata integration guards；project 自有 nested Docker 四步與獨立 lint 通過後更新 PR #4。保留歷史五元件 snapshot schema 與版本，另說明 server 外部來源依賴的準備要求。
 - [x] T16.8 新增並安裝 `launch/test_joystick.launch.py`，整合 joy_node、bridge、server、單一 master 與純觀察 `/api/sport/request`；支援分開啟停及 joystick 選擇。補 README 實機／斷線操作與 mailbox 短按限制，Docker 內從 installed launch 驗證接線、輸入停止／同值恢復；四步與 lint 通過後，依使用者授權將本階段與 submodule 更新一併合併 PR #4。不啟動 fake response server，不把模擬輸入當硬體驗收。**實作／驗證／推送已完成；PR #4 已由使用者於 2026-10-03 合併。**
 
-- [ ] T16.10 Project同步server v0.1.1：gitlink固定合併r1 38cfa0f，test_depends直接指向server內附API；原樣納入使用者staged joy_interpreter fb09f70。pre_install.sh從任意cwd以顯式三包source paths建置到project/pre_install/<ROS_DISTRO>/{build,install,log}，支援自訂output與dry-run，錯誤非零且不改shell設定。依賴安裝／編譯／測試均在官方Docker驗證；真正驗證三包CMake discovery及Python messages import，再跑project installed joystick launch、metadata與lint，更新PR #5。三份歷史snapshot、project0.1.2與原tags保留。
+- [ ] T16.10 Project同步server v0.1.1：gitlink固定合併r1 38cfa0f，test_depends直接指向server內附API；納入joy_interpreter並依build證據固定相容test分支944306b，原staged fb09f70內容保留。pre_install.sh從任意cwd以顯式三包source paths建置到project/pre_install/<ROS_DISTRO>/{build,install,log}，支援自訂output與dry-run，錯誤非零且不改shell設定。依賴安裝／編譯／測試均在官方Docker驗證；真正驗證三包CMake discovery及Python messages import，再跑project installed joystick launch、metadata與lint，更新PR #5。三份歷史snapshot、project0.1.2與原tags保留。
 - [x] T16.9 Server Unitree fallback：在 colcon discovery 前選定 source，保留一般 find_package(unitree_api REQUIRED) 與 ROS dependency graph；只自動加入 server 所需 api，不自動編譯 go/hg。內附三包補齊 rosidl build dependency，測試 manifest 直接掛載內附 api，不要求 sibling symlink。驗證 workspace source／underlay／fallback、重複名稱及錯誤傳遞，從 own nested framework 執行完整 Docker 四步與獨立 lint，完成後獨立 server v0.1.1 commit/tag/PR。Project submodule 更新留待使用者合併 server 後處理，不固定未合併候選。
 
 ### T16 完成紀錄（2026-10-03）
