@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.41)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.42)
 
-> 狀態:正式版(v1.3.41)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.42)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.42 | **更新 Agent:`coco-codex`**。正式project build發現staged joy master fb09f70僅有update(joy)，與merged server的update(joy,now)不相容；project改pin既有server已驗證test分支944306b，原工作目錄staged bytes保留。同步當前source guard／README及目錄圖（server0.1.1、joy source、pre_install.sh／獨立underlay）；不改server runtime與歷史snapshots，重驗結果見TODO T16.10。 |
 | v1.3.41 | **更新 Agent:`coco-codex`**。Project更新已合併server v0.1.1／38cfa0f（原tag c3a2794 tree相同），納入使用者joy_interpreter fb09f70 gitlink；歷史五元件snapshots不變。以server內附API取代外部symlink，新增source入口pre_install.sh依使用者選擇將三包Unitree建到專案內獨立underlay，rosdep處理目前ROS環境依賴、顯式source paths、dry-run、自訂output與source指令。新增真實安裝／Python型別／C++下游驗證，正式結果見TODO T16.10；project版本仍0.1.2、不新增release，merge由使用者執行。 |
 | v1.3.40 | **更新 Agent:`coco-codex`**。Project 新增並安裝 joystick 組合 launch，宣告 joy／bridge／server／master 與 request echo 的 runtime dependencies；各部分可分開啟停，child include 隔離參數 scope，server 不重複啟動 master。補手動來源 closure、installed launch 的合成 Joy／停止／同值恢復 integration 與 README 操作，正式驗證仍走 own nested Docker。說明 driver neutral／mailbox 短按限制；實機驗收 pending。Package 0.1.2、三份 schema 1 歷史 snapshots 與 tags 不變，不新增 release；執行結果見 TODO T16.8。 |
 | v1.3.39 | **更新 Agent:`coco-codex`**。Bridge #1／server #2 已合併；project workspace 新增兩包 v0.1.0 submodules，固定實際 pull／核對後的 r1 主線 78ba1a9／ae457ea，原 tag tree 相同且不移動。§2.1.1 分開列出目前 workspace consumers 與五元件歷史 snapshots；package.xml0.1.2、schema1、原 JSON 不改，不新增 project release。說明 server 外部 source dependencies、metadata guards 與實機驗收邊界；執行結果見 TODO T16.7。 |
@@ -298,15 +299,18 @@ rv2_project/
 ├── docs/r1_design_docs/        # 本設計稿與 TODO；原歷史納入 project
 ├── launch/test_joystick.launch.py # joy／bridge／server／master 與純 request echo
 ├── test_depends.repos          # project Docker 直接掛入的 source closure
+├── pre_install.sh             # api/go/hg 三包預安裝入口
+├── pre_install/<ROS_DISTRO>/  # 忽略於 Git 的獨立 underlay/build/log
 ├── r1_test_framework/          # project 自己的固定版測試入口
-├── ros2_ws/src/                # 五個 snapshot gitlinks + 兩個 workspace consumers
+├── ros2_ws/src/                # 五個 snapshot gitlinks + 兩個 consumers + joy source
 │   ├── r1_test_framework/      # workspace 開發 checkout，與根目錄同 SHA
 │   ├── r1_interfaces/
 │   ├── r1_test_mocks/
 │   ├── r1_integration_tests/
 │   ├── rv2_control_signal_transport/
 │   ├── rv2_csm_topic_bridge/   # r1 v0.1.0；尚未列入歷史 snapshot
-│   └── rv2_server_control/     # r1 v0.1.0；尚未列入歷史 snapshot
+│   ├── rv2_server_control/     # r1 v0.1.1；尚未列入歷史 snapshot
+│   └── joy_interpreter/        # test 分支固定 944306b，server 相容 API
 └── test/unit/、test/integration/
 ```
 
@@ -369,7 +373,7 @@ v0.1.2 的 component 對照（已逐個本地 pull；local／origin／即時遠�
 
 本輪更新 workspace 與 joystick launch，不新增版本 snapshot；project package.xml 維持 0.1.2，schema1 與三份歷史 JSON 不改。未來若要將 consumers 納入正式 snapshot，需新增 schema/version 及相容測試。Project metadata integration 另查核兩包 gitlink／checkout／tag tree／version／remote／nested framework，並確認可顯式 discovery；不把它們偷偷加入 schema1 的五個 components。
 
-Project另固定joy_interpreter submodule `fb09f704c1c3789b3ce8c2521bd4b6e339e932ea`（package0.1.0，無release tag／nested framework）；它是外部source dependency，不加入歷史snapshot。Unitree三包已內附於server，test_depends.repos明列interfaces、transport、bridge、server、joy_interpreter及server內附API；framework不遞迴讀child依賴、不自動下載缺失來源。新增metadata guard分別驗consumer release與joy精確來源，顯式discovery為八個ROS packages（含project）。
+Project另固定joy_interpreter submodule `944306b61746dcdaa932a404994b8f829a2a9611`（test分支，server要求雙參數update API；master fb09f70不相容）（package0.1.0，無release tag／nested framework）；它是外部source dependency，不加入歷史snapshot。Unitree三包已內附於server，test_depends.repos明列interfaces、transport、bridge、server、joy_interpreter及server內附API；framework不遞迴讀child依賴、不自動下載缺失來源。新增metadata guard分別驗consumer release與joy精確來源，顯式discovery為八個ROS packages（含project）。
 
 `pre_install.sh`是source checkout入口，從任意cwd以絕對source paths選api/go/hg三包；rosdep安裝目前ROS環境的build/runtime依賴後，colcon以BUILD_TESTING=OFF建立merged underlay。使用者已選專案內獨立安裝：預設project/pre_install/<ROS_DISTRO>/{build,install,log}，可用--output-dir改位置，--dry-run無產物／安裝副作用。完成後提供source install/setup.bash命令，保留各包BSD LICENSE；不自動修改shell設定或gitlinks。parent AMENT_IGNORE不放入每包，因此顯式source roots可被colcon辨識。腳本只在source tree使用，不安裝到share以免失去submodule來源；project runtime build前source此underlay即可解析nested API依賴。
 

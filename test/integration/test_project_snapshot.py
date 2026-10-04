@@ -26,7 +26,7 @@ WORKSPACE_CONSUMERS = (
         "c3a2794e5c49c1ab35288d012db3777f273d0d32",
     ),
 )
-JOY_INTERPRETER_COMMIT = "fb09f704c1c3789b3ce8c2521bd4b6e339e932ea"
+JOY_INTERPRETER_COMMIT = "944306b61746dcdaa932a404994b8f829a2a9611"
 
 
 def git(repository, *arguments):
@@ -183,7 +183,7 @@ def test_joy_interpreter_matches_pinned_source_dependency():
     assert git(repository, "rev-parse", "HEAD") == JOY_INTERPRETER_COMMIT
     assert git(repository, "status", "--porcelain", "--untracked-files=all") == ""
     assert git(repository, "remote", "get-url", "origin") == origin
-    for field, expected in (("path", relative), ("url", origin)):
+    for field, expected in (("path", relative), ("url", origin), ("branch", "test")):
         assert (
             git(
                 SOURCE,
