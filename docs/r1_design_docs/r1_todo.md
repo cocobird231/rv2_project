@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.8.46)
+# R1 實作 TODO List(v0.8.47)
 
 > 依據:`r1_design_draft.md` v1.3.40(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.47 | **更新 Agent:`coco-codex`**。使用者已合併 project PR #4；T16.8 完成，後續所有 PR 合併僅由使用者執行。新增 T16.9：server 內附 Unitree source fallback，建置入口依 workspace source→已 source underlay→thirdparty/unitree/unitree_api 選擇；補三包 rosidl_generator_dds_idl build dependency、own nested test_depends 路徑與來源／授權文件。先驗證 discovery 優先序及無外部 unitree_api 的乾淨 Docker 全測試/lint，再獨立 server v0.1.1 commit/tag/PR。Project 既有 pins/snapshots 與使用者 staged joy_interpreter submodule 保留。 |
 | v0.8.46 | **更新 Agent:`coco-codex`**。Joystick launch與全部驗證已推送PR #4，GitHub回報CLEAN／MERGEABLE，無待跑checks；依使用者授權以精確head嘗試rebase merge，遭 `Resource not accessible by personal access token (mergePullRequest)` 拒絕。PR仍OPEN，T16.8只剩合併未完成；不冒稱已合併、不移動master或改token權限。來源／測試不變，此次僅記錄合併權限阻擋，待有權限帳號完成。 |
 | v0.8.45 | **更新 Agent:`coco-codex`**。T16.8 完成：新增 installed joystick launch、runtime/local source dependencies、分拆斷線操作文件與真實節點組合測試。修復多餘 log_output 文字覆寫造成的 bool 轉型失敗；核對 ROS CLI 實作後只讓 observer 接受正常 SIGINT 的正2退出碼。乾淨 source f249b93／framework ae479066 的 own nested Docker 四步 PASS，unit133／metadata integration11／launch2、CMake/XML、5/5 CTest全過；153 aggregate records零錯誤／失敗／略過。Python5 lint、installed CLI參數／全關閉模式 PASS，容器已清除；初始失敗證據保留。README補明確選用project內R1來源的建置指令；依使用者授權與submodule更新一併合併PR #4。版本0.1.2、既有snapshots/tags與原dirty bytes保留，實機驗收仍pending。 |
 | v0.8.44 | **更新 Agent:`coco-codex`**。使用者要求 project 新增實機 joystick 測試 launch，納入並合併 PR #4。新增 T16.8：組合 joy_node、既有 bridge/server production launches、獨立單一 master 與純訂閱 request observer；各部分可獨立停用，以便輸入中斷與遲啟動／重啟驗收。各 include 隔離參數 scope；聲明 launch runtime/source dependencies，新增 installed launch 的模擬 Joy 流量／停止／同值恢復 integration，正式 nested 四步及 lint 通過後再合併。沿用 project0.1.2與既有 snapshots，不要求新 snapshot/release tag；實機驗收仍由使用者執行。 |
@@ -69,6 +70,8 @@
 | v0.1.0 | 初版:大項 T0–T12、依賴序、逐小項查核條件、逐大項語意查核與 docker 實測指令；隨附 `r1_test_framework` 腳本組(test_build / test_deps / test_run / test_packages / test_clean / todo_check)與 package 根目錄接線(symlink、`test_depends.repos`、`.gitignore` 排除 `test_env/`) |
 
 ## 1. 使用方式與共通規範
+
+**PR 合併裁決(v0.8.47)**：使用者負責合併 PR；agent 完成 commit/tag/push/PR 與驗證後回報，不執行 merge。
 
 **最新驗收與入口裁決(v0.8.39)**：以下優先於舊版「TSan 必須完成才能總驗收」與「打包是否納入完整流程待裁決」文字；舊版本歷史與診斷 logs 保留。
 
@@ -865,7 +868,9 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.5 功能/測試/文件先提交；驗證後只改 package.xml version 為 0.1.0，獨立 commit 與 annotated v0.1.0 tag，push 新 r1 base、開發分支/tag，PR base=r1，由使用者合併。文件 repo 自身僅 docs PR，不因文件變更升 project snapshot/package 版本。
 - [ ] T16.6 使用者實機 joy_node → bridge → control server 手動驗收，包括拔除/停止 joy、恢復輸入、bridge/server 斷線；README 提供完整指令與可觀察結果。自動模擬通過不代表實機已驗收。
 - [x] T16.7 Project 納入兩包已合併 r1 submodules；核對精確主線 SHA／原 tag tree／內嵌 framework，以 gitlink-only commit 保存。補 current workspace 文件、discovery 與 metadata integration guards；project 自有 nested Docker 四步與獨立 lint 通過後更新 PR #4。保留歷史五元件 snapshot schema 與版本，另說明 server 外部來源依賴的準備要求。
-- [ ] T16.8 新增並安裝 `launch/test_joystick.launch.py`，整合 joy_node、bridge、server、單一 master 與純觀察 `/api/sport/request`；支援分開啟停及 joystick 選擇。補 README 實機／斷線操作與 mailbox 短按限制，Docker 內從 installed launch 驗證接線、輸入停止／同值恢復；四步與 lint 通過後，依使用者授權將本階段與 submodule 更新一併合併 PR #4。不啟動 fake response server，不把模擬輸入當硬體驗收。**實作／驗證／推送已完成；僅合併因PAT權限遭GitHub拒絕，待有權限帳號完成。**
+- [x] T16.8 新增並安裝 `launch/test_joystick.launch.py`，整合 joy_node、bridge、server、單一 master 與純觀察 `/api/sport/request`；支援分開啟停及 joystick 選擇。補 README 實機／斷線操作與 mailbox 短按限制，Docker 內從 installed launch 驗證接線、輸入停止／同值恢復；四步與 lint 通過後，依使用者授權將本階段與 submodule 更新一併合併 PR #4。不啟動 fake response server，不把模擬輸入當硬體驗收。**實作／驗證／推送已完成；PR #4 已由使用者於 2026-10-03 合併。**
+
+- [ ] T16.9 Server Unitree fallback：在 colcon discovery 前選定 source，保留一般 find_package(unitree_api REQUIRED) 與 ROS dependency graph；只自動加入 server 所需 api，不自動編譯 go/hg。內附三包補齊 rosidl build dependency，測試 manifest 直接掛載內附 api，不要求 sibling symlink。驗證 workspace source／underlay／fallback、重複名稱及錯誤傳遞，從 own nested framework 執行完整 Docker 四步與獨立 lint，完成後獨立 server v0.1.1 commit/tag/PR。Project submodule 更新留待使用者合併 server 後處理，不固定未合併候選。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -916,4 +921,4 @@ Bridge/server merged release tree 相同，沿用上述 T16 runtime 證據，未
 
 **合併狀態**：PR #4 已更新為 joystick launch 與兩包 pins，遠端head `185ad99bd398538ca8f31dff7374571aa08e6441` 查核為CLEAN／MERGEABLE，無待跑checks。依授權執行 `gh pr merge --rebase --match-head-commit` 時，GitHub明確回覆 `Resource not accessible by personal access token (mergePullRequest)`，再次讀取為OPEN、mergedAt／mergeCommit皆null。故不宣稱已合併，不切master或調整credential權限；本段後續文件commit不改已測runtime，PR由有權限帳號完成合併。
 
-**待使用者**：PR #4合併權限處理，以及實機 joystick/hotplug 驗收（T16.6）。現在可用project README的單一launch或分拆指令；自動模擬與歷史crash/restart證據不等於實體joystick/driver/robot已驗收。
+**待使用者**：實機 joystick/hotplug 驗收（T16.6）；PR #4 已由使用者合併。現在可用project README的單一launch或分拆指令；自動模擬與歷史crash/restart證據不等於實體joystick/driver/robot已驗收。
