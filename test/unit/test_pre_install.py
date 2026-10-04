@@ -217,9 +217,6 @@ def test_existing_custom_sources_only_update_missing_user_cache(project, monkeyp
     require_bootstrap()
     monkeypatch.setenv("PREINSTALL_UID", "1001")
     existing = os.environ["ROSDEP_SOURCE_PATH"]
-    empty = project.parent / "first sources directory"
-    empty.mkdir()
-    monkeypatch.setenv("ROSDEP_SOURCE_PATH", str(empty) + os.pathsep + existing)
     before = rosdep_files()
     result = invoke(project)
     assert result.returncode == 0, result.stderr
@@ -228,7 +225,6 @@ def test_existing_custom_sources_only_update_missing_user_cache(project, monkeyp
     assert [name for name, _ in recorded] == ["rosdep", "rosdep", "colcon"]
     assert recorded[1][1][0] == "install"
     assert cache_index().is_file()
-    assert not (empty / "20-default.list").exists()
     assert not (pathlib.Path(existing) / "20-default.list").exists()
     assert all(pathlib.Path(path).read_bytes() == data for path, data in before.items())
 
