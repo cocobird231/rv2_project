@@ -120,6 +120,10 @@ if [[ "$rosdep_state" != ready ]]; then
   run_command rosdep update --rosdistro "$ROS_DISTRO"
 fi
 
+apt_install_command=(
+  sudo apt install nlohmann-json3-dev -y
+)
+
 rosdep_command=(
   rosdep install --from-paths "${package_paths[@]}" --ignore-src -y
   --rosdistro "$ROS_DISTRO"
@@ -132,6 +136,7 @@ build_command=(
   --cmake-args -DBUILD_TESTING=OFF
 )
 
+run_command "${apt_install_command[@]}"
 run_command "${rosdep_command[@]}"
 run_command mkdir -p -- "$output_dir"
 run_command touch -- "$output_dir/COLCON_IGNORE"
