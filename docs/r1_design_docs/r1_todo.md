@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.54)
+# R1 實作 TODO List(v0.8.55)
 
-> 依據:`r1_design_draft.md` v1.3.45(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.46(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.55 | **更新 Agent:`coco-codex`**。T16.12 完成：interfaces17序列化／合約案例與server68功能案例、own nested官方Docker四步及獨立lint通過；server111aggregate零errors/failures、cppcheck11原生SKIP，sanitizers N/A。修正測試Time API、topic排隊同步與格式，保留失敗logs；雙vendor真實fallback build成功。獨立版本commits／tags／PR：interfaces v0.1.3/34e5d1e/#3、server v0.2.0/27df2dd/#5。單一owner為相容性變更，同priority採channel→type排序；測試容器已清除。Project僅計畫/結果文件與lint、不重跑未變更的project runtime，不更新pins/snapshots或替使用者merge；實機驗收pending。 |
 | v0.8.54 | **更新 Agent:`coco-codex`**。新增 T16.12：server 從已合併 r1 9d6143b 分支加入 wireless interruption latch 與狀態／切換／復歸服務；interfaces 從 master a0530d7 新增四型別。依 develop 每封 wireless 訊息中斷，單次 StopMove、手動 reset 後等新資料；Joy/Twist 共用唯一輸出 owner，手動切換須已註冊且 ACTIVE。實際發布 metadata 與仲裁共用鎖，api/go 獨立 fallback。先完成 Docker own nested 全測試與 lint，再分別附 interfaces/server 獨立版本 commit/tag/PR；project 僅文件、不更新未合併 pins/snapshots，merge 由使用者執行。 |
 | v0.8.53 | **更新 Agent:`coco-codex`**。T16.11 完成：缺 rosdep cache 時按既有 sources 決定 init/update，逐步執行並保留錯誤碼，README 改為成功才 source。乾淨 45fdb96／framework ae479066 官方四步 PASS：7 包 build、unit153／metadata12／preinstall1／launch2、6/6 CTest，176 aggregate 零 errors/failures/skips，sanitizers N/A。9a9dbcd 僅修正 custom-source unit fixture，Docker 20/20 重驗與最終 Python7/Shell1 lint PASS；nonroot 真實首次安裝、既有 sources 新 cache、自訂含空白路徑 3/3 PASS，權限正確。容器已清除、原 staged bytes 保留；本次只補結果文件，不冒稱重跑新 docs SHA，不新增 snapshot/tag，PR 由使用者合併。 |
 | v0.8.52 | **更新 Agent:`coco-codex`**。Project PR #5 已由使用者合併於 50f034b。新增 T16.11：修正新 VM 尚未初始化 rosdep／建立 cache 時 pre_install.sh 失敗；優先沿用目前使用者 cache，缺 cache 時才檢查 sources；已有任一 *.list 直接 update，沒有 list 才 init（非 root 使用 sudo），update --rosdistro 由目前使用者執行，各步失敗即停止。README 移除已初始化前提，安裝與 source 範例改用 &&。本輪在 coco-codex/preinstall-rosdep-bootstrap 提交獨立修正 PR，官方 Docker 測試與 lint 待執行；project 維持 0.1.2，不新增 snapshot/release，不提前勾選。 |
@@ -129,7 +130,7 @@
 ./r1_test_framework/test_clean.sh
 ```
 
-無參數 test_run（或只指定 distro/TSan 開關）在步驟 1/2 的同一容器執行完整流程：一般完整 CTest（含全部 unit/integration 與既有註冊檢查）→適用 ASan→適用 UBSan→可選 TSan；owner 無定義的 sanitizer 明示 N/A。transport 適用三者、mocks 僅 UBSan、integration 僅 I10 ASan/TSan；interfaces 完成 build、無案例/無 sanitizer，不新增空測試。TSan 預設 off；完整流程中的 SKIP 不妨礙已啟用項目成功，但任何已啟用階段失敗仍使整體非零，不能宣稱 T12.2 通過。
+無參數 test_run（或只指定 distro/TSan 開關）在步驟 1/2 的同一容器執行完整流程：一般完整 CTest（含全部 unit/integration 與既有註冊檢查）→適用 ASan→適用 UBSan→可選 TSan；owner 無定義的 sanitizer 明示 N/A。transport 適用三者、mocks 僅 UBSan、integration 僅 I10 ASan/TSan；interfaces 自 T16.12 起包含真實 wire 型別序列化／合約 unit tests，sanitizers 仍 N/A，不新增空測試。TSan 預設 off；完整流程中的 SKIP 不妨礙已啟用項目成功，但任何已啟用階段失敗仍使整體非零，不能宣稱 T12.2 通過。
 
 完整流程新增持久 run-root 掛載，每次使用新 run/profile 的 build/install/log，不覆蓋前次證據或一般單項產物。來源維持唯讀、沿用既有 runtime/build/results gate、全程串行，不重建/清除容器或重裝依賴；清理由步驟 4 負責。run 摘要記錄各階段 PASS/FAIL/SKIP/N/A/NOT_RUN、exit code 與實際 log，失敗亦保留。
 
@@ -881,8 +882,8 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.9 Server Unitree fallback：在 colcon discovery 前選定 source，保留一般 find_package(unitree_api REQUIRED) 與 ROS dependency graph；只自動加入 server 所需 api，不自動編譯 go/hg。內附三包補齊 rosidl build dependency，測試 manifest 直接掛載內附 api，不要求 sibling symlink。驗證 workspace source／underlay／fallback、重複名稱及錯誤傳遞，從 own nested framework 執行完整 Docker 四步與獨立 lint，完成後獨立 server v0.1.1 commit/tag/PR。Project submodule 更新留待使用者合併 server 後處理，不固定未合併候選。
 - [x] T16.11 Project pre-install rosdep bootstrap：優先沿用目前使用者 cache；缺 cache 時，已有任一 sources *.list 就直接 update，沒有 list 才自動 init（非 root 透過 sudo），再以目前使用者執行 rosdep update --rosdistro；初始化、更新、依賴安裝、build 逐步執行，任一步失敗即停止。保留 dry-run 無寫入與 source/output guard，README 全部安裝後 source 範例使用 &&。補新環境、既有環境、權限與失敗傳遞測試，於官方 Docker 跑 own nested 四步、真實三包安裝／重跑／Python 與 C++ consumer、metadata／joystick regression 及 lint，保留來源與 logs 後提交獨立 PR 由使用者合併。不改 component pins、project 0.1.2、歷史 snapshots 或 release tags。
 
-- [ ] T16.12 Control server interruption／操作 services：新增 `ControlServerStatus.msg`、`ControlServerStatusReq.srv`、`SwitchControllerReq.srv`、`ResetInterruptReq.srv`，response 沿用 typed `RESPONSE_*`、`int8 response`、`reason`。監控可配置預設 `/wirelesscontroller` 的 unitree_go/WirelessController，每封新訊息（含零／重複值）鎖存 interruption，第一次送一次 StopMove；鎖存期間阻止普通／request-active／急停／watchdog 輸出，switch 回 INTERRUPTED。Reset 冪等、不發布、不重播快取，清除復歸前候選並等新 callback。Joy/Twist 共用一個輸出 owner；手動切換以 controller_name 查已註冊且目前 ACTIVE、有新鮮資料的支援型別，不受 priority 高低限制，失敗無副作用，成功停止前任一次但不重播目標。一般 request-active／fallback 仍依 priority，改為跨型別仲裁。狀態分 active 與最後實際本地 publish（API、parameter、binary、來源、時間），列完整已註冊清單及 interrupted；不是機器人 ACK。
-- [ ] T16.12 驗證／發布：增加 interfaces 真實序列化、core 單一 owner／嚴格 switch／latch／reset／併發，以及 production services／wireless／實際 Unitree output 整合；保留既有回歸。unitree_api/go 各自 workspace source→underlay→vendor，測試混合來源及重複拒絕。所有依賴／build／tests 在官方 Docker；兩包 own nested 四步及獨立 lint 後才附 package.xml-only 版本 commits、annotated tags、push/PR（interfaces master、server r1）。Server 使用 interfaces 精確候選 SHA 驗證並在 PR 明示相依；不把候選標成已 merge、不修改 project 正式 pins/snapshots。實機 wireless/joystick 驗收保留給使用者。
+- [x] T16.12 Control server interruption／操作 services：新增 `ControlServerStatus.msg`、`ControlServerStatusReq.srv`、`SwitchControllerReq.srv`、`ResetInterruptReq.srv`，response 沿用 typed `RESPONSE_*`、`int8 response`、`reason`。監控可配置預設 `/wirelesscontroller` 的 unitree_go/WirelessController，每封新訊息（含零／重複值）鎖存 interruption，第一次送一次 StopMove；鎖存期間阻止普通／request-active／急停／watchdog 輸出，switch 回 INTERRUPTED。Reset 冪等、不發布、不重播快取，清除復歸前候選並等新 callback。Joy/Twist 共用一個輸出 owner；手動切換以 controller_name 查已註冊且目前 ACTIVE、有新鮮資料的支援型別，不受 priority 高低限制，失敗無副作用，成功停止前任一次但不重播目標。一般 request-active／fallback 仍依 priority，改為跨型別仲裁。狀態分 active 與最後實際本地 publish（API、parameter、binary、來源、時間），列完整已註冊清單及 interrupted；不是機器人 ACK。
+- [x] T16.12 驗證／發布：增加 interfaces 真實序列化、core 單一 owner／嚴格 switch／latch／reset／併發，以及 production services／wireless／實際 Unitree output 整合；保留既有回歸。unitree_api/go 各自 workspace source→underlay→vendor，測試混合來源及重複拒絕。所有依賴／build／tests 在官方 Docker；兩包 own nested 四步及獨立 lint 後才附 package.xml-only 版本 commits、annotated tags、push/PR（interfaces master、server r1）。Server 使用 interfaces 精確候選 SHA 驗證並在 PR 明示相依；不把候選標成已 merge、不修改 project 正式 pins/snapshots。實機 wireless/joystick 驗收保留給使用者。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -982,3 +983,26 @@ Server PR #3已由使用者合併；乾淨checkout實際 `git pull --ff-only ori
 完整四步 logs、`unit-final.log` 在上述 clean clone 的 `test_env/jazzy/evidence-rosdep-bootstrap/`；JUnit 與實際 first/second-preinstall、Python/C++ logs 在該 run 的 `normal/build/rv2_project/`。開發 worktree `.r1-migration/unitree-project/test_env/jazzy/evidence-rosdep-bootstrap/` 保留最終 `test_lint-final.log`、focused unit 證據與 `nonroot/` 的三次實測 logs、exit codes、ownership-proof.json、cleanup.log。工具準備時另一次唯讀 lint 探查因容器沒有 pip 而未執行，紀錄保留；正式 lint 已通過。
 
 原 project staged binary diff SHA256 仍為 `5fd4752ed6073ebfda716e3d07a6d60ce46250efbfff98d988dc9956d712021a`。本次結果文件不冒稱新 SHA runtime 重驗；不改 gitlinks、project 0.1.2、歷史 snapshots 或 tags，不新增 release。分支推送後提出獨立 PR，合併由使用者執行；實機 joystick/hotplug 驗收仍 pending。
+
+### T16.12 Control server services／wireless 完成紀錄（2026-10-20）
+
+從 server 已合併 r1 `9d6143b` 與 interfaces master `a0530d7` 開發，三個 repo 均使用 `coco-codex/` 新分支及 repo-local `user.name=coco-codex`。先提交計畫 `5e2bbe0`，再分開提交功能／測試／文件；版本只於驗證完成後以 package.xml-only commit 附上。本輪不修改 transport、framework、bridge 或 joy runtime，不更新 project gitlinks／歷史 snapshots／package 0.1.2。
+
+| Repo | 功能驗證來源 | 獨立版本 commit／annotated tag | PR（使用者合併） |
+|---|---|---|---|
+| r1_interfaces | `970c9be` | `34e5d1ec3aa142f481d6cc09875dc1c4f1101780`／v0.1.3 | [#3](https://github.com/cocobird231/r1_interfaces/pull/3)，base master |
+| rv2_server_control | `83b82b7d0eb2eac5309afb053a77850ab78a5d47` | `27df2dd65adb9aae1abf4319adf77c39a82c9fc2`／v0.2.0 | [#5](https://github.com/cocobird231/rv2_server_control/pull/5)，base r1 |
+
+Server 從 per-type 改為 Joy/Twist 全域唯一 owner，屬相容性變更，因此進版0.2.0。一般 request-active／fallback 維持 priority 政策，跨型別同 priority 先比 channel、再比 type；手動 switch 另要求已註冊、支援型別、ACTIVE 與本地新鮮資料。Wireless 每封訊息（含全零／重複）鎖存，第一次 StopMove；interrupted 時所有輸出路徑受阻，switch 回 INTERRUPTED。Reset 冪等、清舊候選、不發布不重播；新 callback 才可恢復，下一封 wireless 可重鎖。狀態保留實際本地 publish 的 API／payload／來源／時間，與選定 owner 分開，不是 robot ACK。操作與限制已寫入 server README／架構文件。
+
+兩包各自 own nested framework 固定 `ae4790668efc83f99584c300e6963d522e04e12c`／v0.5.1，全部依賴安裝／建置／測試在官方 `ros:jazzy-ros-base-noble`，ROS jobs 串行。Server 使用 interfaces 精確候選 `34e5d1e`（CMake/manifest要求≥0.1.3）、transport `5a91d31`、bridge `78ba1a9`、joy `944306b` 與內附 api/go；相依 PR 請先合併 interfaces，不將候選標成已合併來源。
+
+- Interfaces：`src/r1_interfaces/test_env/jazzy/runs/full-20261019T165152.9uXdgZ`。四步 exit0，17功能案例／18aggregate零errors/failures/skips，Python1獨立lint PASS，sanitizers N/A。
+- Server：隔離 clone `.r1-migration/control-services/rv2_server_control/` 的 own nested 四步 exit0。`test_env/jazzy/runs/full-20261019T170016.b4Vdmt` 記錄 source/framework dirty皆0；7包build成功、11/11 CTest通過、111aggregate零errors/failures，cppcheck原生11 SKIP；ASan/UBSan/TSan N/A。
+- Server68功能案例：converter5、helper30、真實discovery10、core19、joystick launch2、production services launch2。涵蓋訊號timeout/reconnect、跨型別排他、strict switch拒絕、低priority換手、wireless鎖存／零值／重複值、所有輸出分支抑制、reset同值恢復、真實request metadata及in-flight output競爭。
+- Server獨立lint C++11／Python7／Shell1 PASS（原source owner的 `test_env/jazzy/evidence-control-services/lint-final.log`）；Docker確認16個本地文件連結有效。另在乾淨ROS underlay用helper真正選入雙vendor並完成6包build，installed api/go Python types與ros2 interface show PASS；證據在隔離clone的 `test_env/jazzy/evidence-control-services/fallback.log`，該build來源2a3fbdf的runtime與最終83b82b7相同。
+- 原失敗run `full-20261019T165439.U948Q1`（新增測試誤用C++ Time.to_msg）及 `full-20261019T165616.0qAgLO`（topic排隊造成切換後合法新輸入、D401／E203）均保留。改為service reply界線證明不重播，另加獨立Twist topic生命週期case，保留原斷言；不透過刪測試／放寬規範取得PASS。
+- Project本輪只改計畫/結果文件，own nested獨立lint Python7／Shell1 PASS，不重跑未變更的project runtime。Interfaces/server的版本提交僅改版本欄位；版本metadata提交後未冒稱重跑runtime。所有本次測試／format容器已清除，logs保留。
+
+**待使用者**：合併上述PR及本project文件PR；實機 wireless／joystick／robot測試。這些不算自動驗證通過。使用者合併後才能另案更新project正式submodules；現有pins/snapshots不提前指向候選。
+
