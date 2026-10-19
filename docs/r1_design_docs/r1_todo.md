@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.53)
+# R1 實作 TODO List(v0.8.54)
 
-> 依據:`r1_design_draft.md` v1.3.44(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.45(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.54 | **更新 Agent:`coco-codex`**。新增 T16.12：server 從已合併 r1 9d6143b 分支加入 wireless interruption latch 與狀態／切換／復歸服務；interfaces 從 master a0530d7 新增四型別。依 develop 每封 wireless 訊息中斷，單次 StopMove、手動 reset 後等新資料；Joy/Twist 共用唯一輸出 owner，手動切換須已註冊且 ACTIVE。實際發布 metadata 與仲裁共用鎖，api/go 獨立 fallback。先完成 Docker own nested 全測試與 lint，再分別附 interfaces/server 獨立版本 commit/tag/PR；project 僅文件、不更新未合併 pins/snapshots，merge 由使用者執行。 |
 | v0.8.53 | **更新 Agent:`coco-codex`**。T16.11 完成：缺 rosdep cache 時按既有 sources 決定 init/update，逐步執行並保留錯誤碼，README 改為成功才 source。乾淨 45fdb96／framework ae479066 官方四步 PASS：7 包 build、unit153／metadata12／preinstall1／launch2、6/6 CTest，176 aggregate 零 errors/failures/skips，sanitizers N/A。9a9dbcd 僅修正 custom-source unit fixture，Docker 20/20 重驗與最終 Python7/Shell1 lint PASS；nonroot 真實首次安裝、既有 sources 新 cache、自訂含空白路徑 3/3 PASS，權限正確。容器已清除、原 staged bytes 保留；本次只補結果文件，不冒稱重跑新 docs SHA，不新增 snapshot/tag，PR 由使用者合併。 |
 | v0.8.52 | **更新 Agent:`coco-codex`**。Project PR #5 已由使用者合併於 50f034b。新增 T16.11：修正新 VM 尚未初始化 rosdep／建立 cache 時 pre_install.sh 失敗；優先沿用目前使用者 cache，缺 cache 時才檢查 sources；已有任一 *.list 直接 update，沒有 list 才 init（非 root 使用 sudo），update --rosdistro 由目前使用者執行，各步失敗即停止。README 移除已初始化前提，安裝與 source 範例改用 &&。本輪在 coco-codex/preinstall-rosdep-bootstrap 提交獨立修正 PR，官方 Docker 測試與 lint 待執行；project 維持 0.1.2，不新增 snapshot/release，不提前勾選。 |
 | v0.8.51 | **更新 Agent:`coco-codex`**。T16.10完成：project固定server合併r1 38cfa0f/v0.1.1與相容joy test分支944306b，新增pre_install.sh三包獨立underlay／來源與失敗guard、直接vendor API測試掛載。乾淨bfff225／frameworkae479066官方四步PASS，unit145／metadata12／preinstall1／launch2、CMake/XML與6/6CTest全過；168aggregate零errors/failures/skips，sanitizers N/A，Python7/Shell1 lint PASS。真實兩次安裝、Python序列化、C++下游執行與保留logs可讀性通過；原joy不相容失敗證據保留。容器已清除，原staged joy bytes與歷史snapshots保留；更新PR #5供使用者合併，project維持0.1.2、不新增snapshot/tag。 |
@@ -879,6 +880,9 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.10 Project同步server v0.1.1：gitlink固定合併r1 38cfa0f，test_depends直接指向server內附API；納入joy_interpreter並依build證據固定相容test分支944306b，原staged fb09f70內容保留。pre_install.sh從任意cwd以顯式三包source paths建置到project/pre_install/<ROS_DISTRO>/{build,install,log}，支援自訂output與dry-run，錯誤非零且不改shell設定。依賴安裝／編譯／測試均在官方Docker驗證；真正驗證三包CMake discovery及Python messages import，再跑project installed joystick launch、metadata與lint，更新PR #5。三份歷史snapshot、project0.1.2與原tags保留。
 - [x] T16.9 Server Unitree fallback：在 colcon discovery 前選定 source，保留一般 find_package(unitree_api REQUIRED) 與 ROS dependency graph；只自動加入 server 所需 api，不自動編譯 go/hg。內附三包補齊 rosidl build dependency，測試 manifest 直接掛載內附 api，不要求 sibling symlink。驗證 workspace source／underlay／fallback、重複名稱及錯誤傳遞，從 own nested framework 執行完整 Docker 四步與獨立 lint，完成後獨立 server v0.1.1 commit/tag/PR。Project submodule 更新留待使用者合併 server 後處理，不固定未合併候選。
 - [x] T16.11 Project pre-install rosdep bootstrap：優先沿用目前使用者 cache；缺 cache 時，已有任一 sources *.list 就直接 update，沒有 list 才自動 init（非 root 透過 sudo），再以目前使用者執行 rosdep update --rosdistro；初始化、更新、依賴安裝、build 逐步執行，任一步失敗即停止。保留 dry-run 無寫入與 source/output guard，README 全部安裝後 source 範例使用 &&。補新環境、既有環境、權限與失敗傳遞測試，於官方 Docker 跑 own nested 四步、真實三包安裝／重跑／Python 與 C++ consumer、metadata／joystick regression 及 lint，保留來源與 logs 後提交獨立 PR 由使用者合併。不改 component pins、project 0.1.2、歷史 snapshots 或 release tags。
+
+- [ ] T16.12 Control server interruption／操作 services：新增 `ControlServerStatus.msg`、`ControlServerStatusReq.srv`、`SwitchControllerReq.srv`、`ResetInterruptReq.srv`，response 沿用 typed `RESPONSE_*`、`int8 response`、`reason`。監控可配置預設 `/wirelesscontroller` 的 unitree_go/WirelessController，每封新訊息（含零／重複值）鎖存 interruption，第一次送一次 StopMove；鎖存期間阻止普通／request-active／急停／watchdog 輸出，switch 回 INTERRUPTED。Reset 冪等、不發布、不重播快取，清除復歸前候選並等新 callback。Joy/Twist 共用一個輸出 owner；手動切換以 controller_name 查已註冊且目前 ACTIVE、有新鮮資料的支援型別，不受 priority 高低限制，失敗無副作用，成功停止前任一次但不重播目標。一般 request-active／fallback 仍依 priority，改為跨型別仲裁。狀態分 active 與最後實際本地 publish（API、parameter、binary、來源、時間），列完整已註冊清單及 interrupted；不是機器人 ACK。
+- [ ] T16.12 驗證／發布：增加 interfaces 真實序列化、core 單一 owner／嚴格 switch／latch／reset／併發，以及 production services／wireless／實際 Unitree output 整合；保留既有回歸。unitree_api/go 各自 workspace source→underlay→vendor，測試混合來源及重複拒絕。所有依賴／build／tests 在官方 Docker；兩包 own nested 四步及獨立 lint 後才附 package.xml-only 版本 commits、annotated tags、push/PR（interfaces master、server r1）。Server 使用 interfaces 精確候選 SHA 驗證並在 PR 明示相依；不把候選標成已 merge、不修改 project 正式 pins/snapshots。實機 wireless/joystick 驗收保留給使用者。
 
 ### T16 完成紀錄（2026-10-03）
 
