@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.45)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.46)
 
-> 狀態:正式版(v1.3.45)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.46)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.46 | **更新 Agent:`coco-codex`**。T16.12完成：interfaces v0.1.3/PR #3與server v0.2.0/PR #5已完成獨立版本commit/tag/push，未代使用者merge。Docker正式四步、interfaces17／server68功能案例及獨立lint通過；cppcheck11 SKIP、sanitizers N/A如實保留。全域單一owner為相容性變更，同priority沿channel→type決定；雙vendor真正build及產出載入成功，精確來源/失敗修正/logs見TODO。Project僅文件、pins/snapshots與0.1.2保持，實機驗收pending。 |
 | v1.3.45 | **更新 Agent:`coco-codex`**。新增 server 操作介面與 wireless interruption 合約（§2.1.3／TODO T16.12）：三 services、實際發布狀態、每封 wireless latch／單次停止／手動復歸、跨 Joy/Twist 唯一 owner 與嚴格 ACTIVE 手動切換；Unitree api/go 各自選來源。Docker 測試／發布尚待執行；project 保留已合併 pins、0.1.2 與 snapshots，不代使用者 merge。 |
 | v1.3.44 | **更新 Agent:`coco-codex`**。Project rosdep bootstrap 驗證完成：新 ROS_HOME/source path 真實首跑與重跑、Python/C++ consumers、nonroot 三種來源/cache 情境及 ownership 均通過；Docker 四步與最終 lint PASS。完整 source SHA、unit fixture 修正與 focused 重驗證據見 TODO T16.11；本次只同步完成狀態，不改 package、pins、snapshots 或 runtime，不代使用者 merge。 |
 | v1.3.43 | **更新 Agent:`coco-codex`**。Project PR #5 已由使用者合併於 50f034b；針對新 VM 新增 pre_install.sh rosdep bootstrap 合約：優先沿用目前使用者 cache；缺 cache 時，已有任一 sources *.list 直接 update，沒有 list 才 init，再由目前使用者 update --rosdistro，各步失敗即停止。非 root 只對 init／系統依賴安裝使用 sudo，cache 更新保留目前使用者身分；README 以 && 串接安裝與 source。此輪為獨立修正 PR，驗證追蹤 TODO T16.11，尚未完成；component pins、project 0.1.2、歷史 snapshots 與 tags 不變，不新增 release。 |
@@ -390,18 +391,6 @@ Project PR #5 已合併於 `50f034b`；本輪只修新環境的 rosdep bootstrap
 
 Bridge 預設資料 timeout 2000 ms、disconnect 10000 ms，皆由最後活動計時。停止輸入應見單次 StopMove，超過 disconnect 後恢復同值新輸入仍須重新輸出；server 自己停止期間不會發 StopMove。部分 joy driver 在拔除裝置後仍送 neutral samples，須搭配 driver log 判讀。Mailbox 只保留最新 pending sample，阻塞註冊／service 期間的 R2 或 buttons 短按可能被覆蓋，不保證每個按鍵邊緣送達。合成 Joy 測試不代表實體 mapping／hotplug 已驗收，正式結果追蹤 TODO T16.8。
 
-### 2.1.3 Control server 操作介面與 interruption（T16.12）
-
-Server 從已合併 `r1` 9d6143b 開發，新增 `unitree_go/msg/WirelessController` subscription，參數 `wireless_topic` 預設 `/wirelesscontroller`。沿用 develop 行為：每收到一封訊息就鎖存中斷，包含零值與重複值；首次中斷發布一次 StopMove，後續控制輸入、request-active、既有急停、watchdog 均不可繼續發布。只有 reset service 可解除；如果 wireless 持續發送，下一封會再次鎖存。Reset 不自行發布，不讀回 Sink 快取，清除復歸前候選；必須收到 reset 後處理的新普通資料才能恢復。Twist 沒有來源時間戳，保證以 callback 處理順序為界，不宣稱能辨識 DDS queue 中所有舊封包。
-
-Joy/Twist 共用唯一 `{type, channel}` owner。普通高優先權封包不直接搶占；request-active 仍須比目前 owner 高，owner 不可用時由可用候選選最高 priority（同值按 type/channel 排序）。手動 switch 為明確覆寫，不比較 priority，但須在已 REGISTERED 清單中、支援該 type、目前 endpoint 為 ACTIVE、已有未逾期且未 blocked 的本地資料；鎖存中拒絕 switch。成功換手停止舊輸出一次，清 converter，只改 owner、不重播目標。所有路徑在同一 Core recursive mutex 序列化，避免 reset／switch／interrupt 與輸出競爭。
-
-新增服務名稱以前綴 `server_name` 命名：`<server_name>/control_server_status`、`<server_name>/switch_controller`、`<server_name>/reset_interrupt`。`ControlServerStatusReq` 空 request，response 帶 `ControlServerStatus`；`SwitchControllerReq` 只需 `controller_name`；`ResetInterruptReq` 空 request、重複 reset 成功。Response 沿既有 typed `RESPONSE_*`、`int8 response`、失敗 `reason` 模板，成功 reason 留空。Switch 分 SUCCESS、NOT_FOUND、NOT_ACTIVE、UNSUPPORTED_TYPE、INTERRUPTED、ERROR，不要求呼叫者優先權 YAML。
-
-`ControlServerStatus` 包含查詢 `stamp`、`server_name`、`interrupted`、`active_controller_name`、Manager 的完整已註冊 `registered_controllers`，以及 `has_output`、最後實際發布的 `output_stamp`／`output_controller_name`／`output_api_id`／`output_parameter`／`output_binary`。`has_output` 指曾經發布，不代表仍移動；無發布時為 false，wireless safety stop 的來源名稱為空。Converter 去重／拒絕的輸入不得更新輸出紀錄，reset 不抹除歷史輸出；狀態不是 Unitree 執行 ACK。Msg 使用既有 Info、Time 與基本型別，不讓 interfaces 依賴 Unitree。
-
-Server build/runtime 新增 unitree_go；build helper 對 api/go 各自採 workspace source→已 source underlay→顯式 vendor package root，支援混合來源、拒絕重複，不掃描 vendor parent/hg。三服務、wireless、實際 sport request 與跨型別排他須由 production integration 驗證，另補序列化、core 仲裁／生命週期／併發回歸。Interfaces/server 各用 own nested framework 官方 Docker 四步與 lint，通過後才獨立進版／tag／PR；精確候選相依明示，project 正式 pins/snapshots 等使用者合併後另案更新。
-
 ### 2.1.2 R1-only transport 收斂(v1.3.29)
 
 本輪使用者要求從 transport 新 `r1` 工作分支移除 legacy library、keyboard component、舊 headers/src、21 個 legacy tests、keyboard launch/config 與 rv2_interfaces／rclcpp_components 依賴。凍結 `master` 與所有舊 commits/tags 保留；`Doxyfile` 不隨 package 進版修改。R1 實作仍使用 `rv2_interfaces::r1` C++ namespace，它不等於 ROS package 依賴，不能在本輪任意改名。
@@ -434,6 +423,20 @@ v1.3.37 發布結果：project package.xml-only version commit `1ada31ea3487fd06
 **目前狀態(v1.3.38)**：PR #2 已由使用者合併，本地 literal pull 後 HEAD／origin/master／即時遠端均為 `612f051c3c0eb7ae6243f7e374699aff5e7424e5`，tree `b5acc53dfbe5a7d299b63a5548f5580565a86ab1` 與原 v0.1.2 tag 一致。T15 完成紀錄接續同步至新文件分支；前段「待合併／僅本地結果」是歷史，不再是目前缺口。三份既有 snapshot JSON、舊 tags 與 component pins 不改寫。
 
 v0.1.2 整體驗收由使用者以精確 snapshot 的各 package 自有 nested `test_build → test_deps → test_run → test_clean` 與獨立 lint 手動執行，ROS jobs 全域串行，回報 source/framework SHA、階段 status/exit 及逐案例 logs。結果回報前仍是 `acceptance_pending`；T12.2 因環境限制本次暫時 SKIP／延期，不算 PASS，也不阻擋其餘項目驗收。原 JSON 的歷史限制記錄維持原樣，本次豁免記在文件，不竄改 manifest 的驗收狀態。Project 自動逐包測試腳本是可選後續工具，本輪不新增。
+
+### 2.1.3 Control server 操作介面與 interruption（T16.12）
+
+Server 從已合併 `r1` 9d6143b 開發，新增 `unitree_go/msg/WirelessController` subscription，參數 `wireless_topic` 預設 `/wirelesscontroller`。沿用 develop 行為：每收到一封訊息就鎖存中斷，包含零值與重複值；首次中斷發布一次 StopMove，後續控制輸入、request-active、既有急停、watchdog 均不可繼續發布。只有 reset service 可解除；如果 wireless 持續發送，下一封會再次鎖存。Reset 不自行發布，不讀回 Sink 快取，清除復歸前候選；必須收到 reset 後處理的新普通資料才能恢復。Twist 沒有來源時間戳，保證以 callback 處理順序為界，不宣稱能辨識 DDS queue 中所有舊封包。
+
+Joy/Twist 共用唯一 `{type, channel}` owner。普通高優先權封包不直接搶占；request-active 仍須比目前 owner 高，owner 不可用時由可用候選選最高 priority（同值先按 channel、再按 type 排序）。手動 switch 為明確覆寫，不比較 priority，但須在已 REGISTERED 清單中、支援該 type、目前 endpoint 為 ACTIVE、已有未逾期且未 blocked 的本地資料；鎖存中拒絕 switch。成功換手停止舊輸出一次，清 converter，只改 owner、不重播目標。所有路徑在同一 Core recursive mutex 序列化，避免 reset／switch／interrupt 與輸出競爭。
+
+新增服務名稱以前綴 `server_name` 命名：`<server_name>/control_server_status`、`<server_name>/switch_controller`、`<server_name>/reset_interrupt`。`ControlServerStatusReq` 空 request，response 帶 `ControlServerStatus`；`SwitchControllerReq` 只需 `controller_name`；`ResetInterruptReq` 空 request、重複 reset 成功。Response 沿既有 typed `RESPONSE_*`、`int8 response`、失敗 `reason` 模板，成功 reason 留空。Switch 分 SUCCESS、NOT_FOUND、NOT_ACTIVE、UNSUPPORTED_TYPE、INTERRUPTED、ERROR，不要求呼叫者優先權 YAML。
+
+`ControlServerStatus` 包含查詢 `stamp`、`server_name`、`interrupted`、`active_controller_name`、Manager 的完整已註冊 `registered_controllers`，以及 `has_output`、最後實際發布的 `output_stamp`／`output_controller_name`／`output_api_id`／`output_parameter`／`output_binary`。`has_output` 指曾經發布，不代表仍移動；無發布時為 false，wireless safety stop 的來源名稱為空。Converter 去重／拒絕的輸入不得更新輸出紀錄，reset 不抹除歷史輸出；狀態不是 Unitree 執行 ACK。Msg 使用既有 Info、Time 與基本型別，不讓 interfaces 依賴 Unitree。
+
+Server build/runtime 新增 unitree_go；build helper 對 api/go 各自採 workspace source→已 source underlay→顯式 vendor package root，支援混合來源、拒絕重複，不掃描 vendor parent/hg。三服務、wireless、實際 sport request 與跨型別排他須由 production integration 驗證，另補序列化、core 仲裁／生命週期／併發回歸。Interfaces/server 各用 own nested framework 官方 Docker 四步與 lint，通過後才獨立進版／tag／PR；精確候選相依明示，project 正式 pins/snapshots 等使用者合併後另案更新。
+
+T16.12 已完成自動驗證與推送：interfaces v0.1.3（34e5d1e／PR #3）、server v0.2.0（27df2dd／PR #5），PR 尚待使用者合併。Server CMake/manifest要求 interfaces≥0.1.3；精確候選、68功能案例、原失敗修正、Docker與lint證據見 TODO T16.12。v0.2.0反映per-type改為全域單一owner；既有priority100普通級別及R2/X語意保留。Project本輪無runtime/pin/snapshot變更，僅文件及lint，實機wireless/joystick驗收仍待使用者。
 
 ### 2.2 元件關係圖
 
