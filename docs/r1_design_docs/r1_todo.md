@@ -1,4 +1,4 @@
-# R1 實作 TODO List(v0.8.55)
+# R1 實作 TODO List(v0.8.56)
 
 > 依據:`r1_design_draft.md` v1.3.46(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.56 | **更新 Agent:`coco-codex`**。補記本輪project文件PR #7已提出，與interfaces #3、server #5均由使用者合併；整理文件EOF空行。功能、測試證據、版本tags與所有pins/snapshots不變，不冒稱重跑runtime。 |
 | v0.8.55 | **更新 Agent:`coco-codex`**。T16.12 完成：interfaces17序列化／合約案例與server68功能案例、own nested官方Docker四步及獨立lint通過；server111aggregate零errors/failures、cppcheck11原生SKIP，sanitizers N/A。修正測試Time API、topic排隊同步與格式，保留失敗logs；雙vendor真實fallback build成功。獨立版本commits／tags／PR：interfaces v0.1.3/34e5d1e/#3、server v0.2.0/27df2dd/#5。單一owner為相容性變更，同priority採channel→type排序；測試容器已清除。Project僅計畫/結果文件與lint、不重跑未變更的project runtime，不更新pins/snapshots或替使用者merge；實機驗收pending。 |
 | v0.8.54 | **更新 Agent:`coco-codex`**。新增 T16.12：server 從已合併 r1 9d6143b 分支加入 wireless interruption latch 與狀態／切換／復歸服務；interfaces 從 master a0530d7 新增四型別。依 develop 每封 wireless 訊息中斷，單次 StopMove、手動 reset 後等新資料；Joy/Twist 共用唯一輸出 owner，手動切換須已註冊且 ACTIVE。實際發布 metadata 與仲裁共用鎖，api/go 獨立 fallback。先完成 Docker own nested 全測試與 lint，再分別附 interfaces/server 獨立版本 commit/tag/PR；project 僅文件、不更新未合併 pins/snapshots，merge 由使用者執行。 |
 | v0.8.53 | **更新 Agent:`coco-codex`**。T16.11 完成：缺 rosdep cache 時按既有 sources 決定 init/update，逐步執行並保留錯誤碼，README 改為成功才 source。乾淨 45fdb96／framework ae479066 官方四步 PASS：7 包 build、unit153／metadata12／preinstall1／launch2、6/6 CTest，176 aggregate 零 errors/failures/skips，sanitizers N/A。9a9dbcd 僅修正 custom-source unit fixture，Docker 20/20 重驗與最終 Python7/Shell1 lint PASS；nonroot 真實首次安裝、既有 sources 新 cache、自訂含空白路徑 3/3 PASS，權限正確。容器已清除、原 staged bytes 保留；本次只補結果文件，不冒稱重跑新 docs SHA，不新增 snapshot/tag，PR 由使用者合併。 |
@@ -1004,5 +1005,4 @@ Server 從 per-type 改為 Joy/Twist 全域唯一 owner，屬相容性變更，�
 - 原失敗run `full-20261019T165439.U948Q1`（新增測試誤用C++ Time.to_msg）及 `full-20261019T165616.0qAgLO`（topic排隊造成切換後合法新輸入、D401／E203）均保留。改為service reply界線證明不重播，另加獨立Twist topic生命週期case，保留原斷言；不透過刪測試／放寬規範取得PASS。
 - Project本輪只改計畫/結果文件，own nested獨立lint Python7／Shell1 PASS，不重跑未變更的project runtime。Interfaces/server的版本提交僅改版本欄位；版本metadata提交後未冒稱重跑runtime。所有本次測試／format容器已清除，logs保留。
 
-**待使用者**：合併上述PR及本project文件PR；實機 wireless／joystick／robot測試。這些不算自動驗證通過。使用者合併後才能另案更新project正式submodules；現有pins/snapshots不提前指向候選。
-
+**待使用者**：合併上述PR及 [project文件PR #7](https://github.com/cocobird231/rv2_project/pull/7)；實機 wireless／joystick／robot測試。這些不算自動驗證通過。使用者合併後才能另案更新project正式submodules；現有pins/snapshots不提前指向候選。
