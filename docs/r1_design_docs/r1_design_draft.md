@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.51)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.52)
 
-> 狀態:正式版(v1.3.51)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.52)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.52 | **更新 Agent:`coco-codex`**。補§2.1.4 GUI服務邊界與T16.13完成結果：namespace、新鮮度、單筆操作、未知結果不重送、GUI-only／combo退出及可捲動Qt畫面。乾淨60ccf22官方Docker四步／lint通過124功能案例／15CTest，180aggregate零errors/failures，cppcheck11 SKIP、sanitizers N/A；server v0.3.0／ab39253／PR #6已推送。Project僅文件與lint，更新原PR #7，不改pins/snapshots或替使用者merge。 |
 | v1.3.51 | **更新 Agent:`coco-codex`**。新增server GUI消費現有status/switch/reset services合約：Qt桌面顯示新鮮度、owner、最後request與registered清單，異步呼叫、有界timeout與失聯／interrupted操作限制，回覆未知時不自動重送。GUI-only預設，可launch選擇server/master，Core／wire／thirdparty不改；測試及版本發布追蹤TODO T16.13，project保留已合併pins，merge由使用者執行。 |
 | v1.3.50 | **更新 Agent:`coco-codex`**。Project已以gitlink-only 0e89f56導入實際pull／核對後的interfaces dc3e199/v0.1.3與server edc9ad1/v0.2.1，原tag tree相同。補unitree_go與目前workspace guard，同時保留歷史snapshot物件驗證；既有apt安裝步驟的過時unit fixtures已修正，production script不變。乾淨b7ab930官方Docker完整四步／lint PASS，169功能案例、177aggregate零errors/failures/skips，sanitizers N/A，來源/失敗修正/證據見TODO T16.12。更新原PR #7，package0.1.2與歷史snapshot不改、不新增tag，merge由使用者執行。 |
 | v1.3.49 | **更新 Agent:`coco-codex`**。使用者要求project導入已合併interfaces dc3e199/v0.1.3與server edc9ad1/v0.2.1；實際pull及原tag tree核對後更新兩個gitlinks，補unitree_go依賴與目前workspace來源驗證。歷史snapshot與package0.1.2維持，接續原PR #7，完整Docker／lint結果追蹤TODO T16.12，merge由使用者執行。 |
@@ -447,6 +448,16 @@ Server build/runtime 新增 unitree_go；build helper 對 api/go 各自採 works
 一般Joy/Twist運動是event-triggered：收到新普通資料後，僅速度值變更或Joy按鍵PRESS才發布；相同輸入保活但不重送。換手/急停/reset清converter後仍須新的普通資料才可能同值恢復。Watchdog雖定時檢查，可在失聯/換手邊緣送一次StopMove，但不定時重播Move；Manager heartbeat/status是另一組定時管理流量。R2/sentinel仍每封急停訊息觸發Stop，wireless只於進入interrupted時Stop；不把這些事件誤述成全部只能發一次。既有83b82b7正式PASS作重構前證據；本次e748b4e完整流程與lint已通過，新增production跨status ticks／同值keepalive／改值單次Move／沉默後單次Stop及恢復，精確證據見TODO T16.12。v0.2.1為獨立版本提交，原tag保留。
 
 T16.12 已完成自動驗證與推送：interfaces v0.1.3（34e5d1e／PR #3）、server v0.2.0（27df2dd／PR #5），PR 尚待使用者合併。Server CMake/manifest要求 interfaces≥0.1.3；精確候選、68功能案例、原失敗修正、Docker與lint證據見 TODO T16.12。v0.2.0反映per-type改為全域單一owner；既有priority100普通級別及R2/X語意保留。Project本輪無runtime/pin/snapshot變更，僅文件及lint，實機wireless/joystick驗收仍待使用者。
+
+### 2.1.4 Control server GUI（T16.13）
+
+`rv2_server_control` 從已合併 r1 `edc9ad1` 新增獨立 PyQt5／rclpy `control_server_gui` executable 與同名 launch，不改 Core、C++ publisher、interfaces 或 thirdparty。畫面分別顯示連線／新鮮度、wireless interruption、目前 owner、registered controllers，以及最後本地發布的 API／parameter／binary／來源／時間；沒有發布時明示無輸出，失聯保留的快照標成 stale，無法推論 robot ACK 或來源 ACTIVE。
+
+Qt 主執行緒用 nonblocking executor 與 tick 處理三個既有 services。預設500ms輪詢status、2000ms請求期限，monotonic時間與Node ROS Clock分離。相對server_name在node namespace展開，絕對prefix維持完整名稱。最多一筆status與一筆操作，操作前取消舊status等待，操作期間停用按鈕，完成後重新取得快照；晚回覆不覆蓋新狀態。無新鮮status不操作，interrupted只允許手動reset。Timeout表示結果未知，不宣稱遠端未執行，不自動重送switch/reset或解鎖；ACTIVE與其他switch條件由server判定。
+
+GUI不直接發布robot命令；定時查status不影響event-triggered輸出。預設launch只開GUI，`start_server:=true`可帶起server/master，`start_master:=false`使用既有master。GUI-only退出不停止既有server；combo退出會關閉整個launch session，包含被include時同session其他節點。GUI所傳server_name覆蓋server YAML同名參數；watchdog等其餘設定沿用YAML。小視窗內容可捲動，避免壓縮欄位導致狀態／按鈕重疊。
+
+乾淨 `60ccf22` 官方Docker own nested四步與獨立lint已通過：124功能案例、15/15CTest、180aggregate零errors/failures（cppcheck11 SKIP、sanitizers N/A）。包含Qt client/window、production雙bridge/server、無replay與失聯恢復、installed launch namespace／GUI child退出、CLI及四種offscreen畫面檢查。獨立 `ab39253`／v0.3.0／[server PR #6](https://github.com/cocobird231/rv2_server_control/pull/6)已推送；失敗修正、精確來源與logs見TODO T16.13。Project僅文件與lint，維持已合併pins及snapshot；桌面／實機與PR合併由使用者執行。
 
 ### 2.2 元件關係圖
 
