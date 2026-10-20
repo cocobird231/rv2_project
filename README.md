@@ -28,22 +28,23 @@ git submodule foreach --recursive 'git fetch --tags origin'
 不寫入 ROS runtime dependencies。各 component 自己的 nested framework 維持該 release
 原本的 pin；不為了 project snapshot 改寫已發布內容。
 
-目前 workspace 另納入以下兩個已合併的 R1 consumers，固定合併後的 SHA；它們尚未
-列入歷史 v0.1.2 snapshot。Workspace submodules 與 Unitree pre-install 已隨
-PR #5 合併（`50f034b`）；本輪只補齊新環境的 rosdep 初始化，不新增 snapshot 或 project
-release。`package.xml` 仍為 0.1.2，schema 1 的五個 components 與既有 JSON 均保持原內容。
+目前 workspace 固定以下已合併版本。Interfaces 已更新至 v0.1.3，兩個 R1 consumers
+也已納入 workspace；此組合與歷史 v0.1.2 snapshot 分開記錄。測試分別核對歷史
+snapshot 的 commit/tag/tree 與目前 workspace 的 gitlink/checkout/version。
+本輪不新增 snapshot 或 project release；`package.xml` 仍為 0.1.2，既有 JSON 保持原內容。
 
-| Consumer | 版本 | 固定 r1 commit | 原 release tag commit（tree 相同） |
+| Package | 版本 | 固定合併主線 commit | 原 release tag commit（tree 相同） |
 |---|---|---|---|
+| r1_interfaces（master） | 0.1.3 | `dc3e199549a1a78315485bbc82d72b8aef856c80` | `34e5d1ec3aa142f481d6cc09875dc1c4f1101780` |
 | rv2_csm_topic_bridge | 0.1.0 | `78ba1a94825eb9790f23a3be5dbfb31df5162ec7` | `c3f2b4b6dc669d98552b801b5bc68858aec4da61` |
-| rv2_server_control | 0.1.1 | `38cfa0f233eb1343e77b54ae97790d01171118fc` | `c3a2794e5c49c1ab35288d012db3777f273d0d32` |
+| rv2_server_control（r1） | 0.2.1 | `edc9ad11834183193ff4974f369077df0a9e66df` | `a75845b559d604577fb5ea4bf76c4cd76d8c6dd4` |
 
 `joy_interpreter` 也納入 submodule，固定 server 已驗證的 `test` 分支
 `944306b61746dcdaa932a404994b8f829a2a9611`（package 0.1.0，沒有對應 release tag）。
 此版本提供 server 使用的 `update(joy, now)`；目前 master 的單參數 API 不相容。
 Unitree sources 位於 server 的 `thirdparty/unitree/`，不再需要外部 API checkout 或 symlink。
 `test_depends.repos` 直接列出 interfaces、transport、bridge、server、joy_interpreter 與
-server 內附的 `unitree_api`；framework 不遞迴讀取 child 的依賴清單。
+server 內附的 `unitree_api`、`unitree_go`；framework 不遞迴讀取 child 的依賴清單。
 
 ## 預先安裝 Unitree
 
@@ -84,7 +85,7 @@ rosdep 初始化 sources 或安裝系統依賴時可能要求 sudo；cache 更�
 執行 `rosdep update --rosdistro "$ROS_DISTRO"`；已有 sources 時直接執行後者。
 本專案的 agent 驗證全在官方 ROS Docker 中執行，host 不安裝依賴。
 `pre_install.sh` 是 source checkout 的建置入口，不安裝至 `share/rv2_project`；一般
-framework 四步測試會直接掛載內附 API，不需事先在 host 執行此腳本。
+framework 四步測試會直接掛載內附 API／Go sources，不需事先在 host 執行此腳本。
 
 `package.xml` 是 project 版本的唯一來源，選擇 `snapshots/v<version>.json`。
 完整版本對照見 [設計稿 §2.1.1](docs/r1_design_docs/r1_design_draft.md)。

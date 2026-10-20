@@ -21,11 +21,20 @@ WORKSPACE_CONSUMERS = (
     ),
     (
         "rv2_server_control",
-        "0.1.1",
-        "38cfa0f233eb1343e77b54ae97790d01171118fc",
-        "c3a2794e5c49c1ab35288d012db3777f273d0d32",
+        "0.2.1",
+        "edc9ad11834183193ff4974f369077df0a9e66df",
+        "a75845b559d604577fb5ea4bf76c4cd76d8c6dd4",
     ),
 )
+# Current workspace releases can advance without rewriting historical snapshots.
+WORKSPACE_RELEASE_OVERRIDES = {
+    "r1_interfaces": {
+        "version": "0.1.3",
+        "commit": "dc3e199549a1a78315485bbc82d72b8aef856c80",
+        "tag_commit": "34e5d1ec3aa142f481d6cc09875dc1c4f1101780",
+        "tree": "4806b53b9b7ccd60ceacd855b776dfd5b0a35e7e",
+    },
+}
 JOY_INTERPRETER_COMMIT = "944306b61746dcdaa932a404994b8f829a2a9611"
 
 
@@ -54,8 +63,36 @@ def snapshot():
 
 @pytest.mark.parametrize("name", COMPONENT_NAMES)
 def test_component_release_matches_gitlink_checkout_and_version(snapshot, name):
+    """Check historical release objects and the exact current workspace pin."""
     component = snapshot["components"][name]
     repository = SOURCE / component["path"]
+    historical_commit = component["commit"]
+    assert (
+        git(repository, "rev-parse", historical_commit + "^{commit}")
+        == historical_commit
+    )
+    assert (
+        git(repository, "rev-parse", historical_commit + "^{tree}") == component["tree"]
+    )
+    historical_tag = f"refs/tags/v{component['version']}"
+    assert (
+        git(repository, "rev-parse", historical_tag + "^{commit}")
+        == component["tag_commit"]
+    )
+    assert git(repository, "rev-parse", historical_tag + "^{tree}") == component["tree"]
+    if name == "r1_test_framework":
+        assert (
+            git(repository, "show", historical_commit + ":VERSION")
+            == component["version"]
+        )
+    else:
+        historical_package = ET.fromstring(
+            git(repository, "show", historical_commit + ":package.xml")
+        )
+        assert historical_package.findtext("name") == name
+        assert historical_package.findtext("version") == component["version"]
+
+    component = {**component, **WORKSPACE_RELEASE_OVERRIDES.get(name, {})}
     expected = component["commit"]
     entry = git(SOURCE, "ls-tree", "HEAD", "--", component["path"]).split()
     assert entry == ["160000", "commit", expected, component["path"]]
