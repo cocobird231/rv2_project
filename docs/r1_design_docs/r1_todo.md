@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.63)
+# R1 實作 TODO List(v0.8.64)
 
-> 依據:`r1_design_draft.md` v1.3.53(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.54(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.64 | **更新 Agent:`coco-codex`**。T16.13合併後project導入完成：gitlink-only beb813e固定server459f9c5／v0.3.0，原tag tree相同；README／metadata guard同步。乾淨d832fad官方Docker四步PASS，8包build、169功能案例／6個CTest、177aggregate零errors/failures/skips，sanitizers N/A；Python7／Shell1 lint及installed GUI launch／imports通過，容器清除。結果文件更新原PR #7，project0.1.2、歷史snapshots與其他pins不變，不代使用者merge。 |
 | v0.8.63 | **更新 Agent:`coco-codex`**。使用者確認server PR #6已合併並要求更新project submodule。已實際pull nested r1至459f9c5／v0.3.0，HEAD／origin／遠端一致，tree等於原tag ab39253。T16.13追加合併後導入：獨立gitlink commit、同步README與現行workspace metadata guard，保留歷史snapshots及project0.1.2；官方Docker own nested四步／lint待驗證後更新既有PR #7，不代使用者merge。 |
 | v0.8.62 | **更新 Agent:`coco-codex`**。T16.13完成：Qt/rclpy GUI與installed launch支援status、switch/reset、namespace、新鮮度／timeout與兩種退出模式；修正ROS Clock欄位衝突、小視窗版面及launch測試keepalive。乾淨60ccf22官方Docker四步PASS，124功能案例／15CTest、180aggregate零errors/failures，cppcheck11 SKIP、sanitizers N/A；server及project獨立lint PASS。附package.xml-only ab39253／v0.3.0／server PR #6，保留失敗logs、offscreen畫面與CLI證據，容器清除。計畫／結果文件更新既有project PR #7，不更新server pin或snapshot，實機與merge由使用者執行。 |
 | v0.8.61 | **更新 Agent:`coco-codex`**。新增T16.13：server從已合併r1 edc9ad1新分支加入Qt/rclpy GUI node與launch，顯示狀態／最後實際輸出／已註冊控制器，透過現有services手動switch/reset。非阻塞狀態輪詢、有界timeout、失聯停用操作、明確回覆及未知結果提示，不直接發robot命令或自動復歸，不改thirdparty/interfaces/Core。補headless Qt、真實services與installed launch驗證，own nested官方Docker四步／lint後獨立版本commit/tag/PR。Project計畫分支承接未合併PR #7，不提前更新server pin；merge仍由使用者執行。 |
@@ -899,7 +900,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 
 - [x] T16.13 Control server GUI：新增可ros2 run及launch啟動的Qt桌面node，顯示server連線／interrupted、目前owner、最後實際output全部欄位及註冊清單；以controller_name呼叫SwitchControllerReq，以空request呼叫ResetInterruptReq。沿用server權限／ACTIVE驗證；GUI只允許新鮮連線狀態下手動操作，interrupted禁止切換，同時只允許一筆操作，失敗與timeout顯示原因且不自動重試。定時讀取status不影響event-triggered機器人輸出。可GUI-only連既有server或launch選擇帶起server/master；預設GUI-only避免重複server。正式Docker own nested四步／lint、Qt無顯示器操作測試、真實服務整合與installed launch生命週期及畫面檢查後，才獨立server版本commit/tag/PR；project僅文件，不更新未合併候選pin。
 
-- [ ] T16.13 合併後project導入：固定server已合併r1 `459f9c5172416d4e32ac8411519453fc7d84da46`／v0.3.0，核對原tag `ab39253` tree；以gitlink-only commit更新，README／目前workspace metadata guard同步精確版本及SHA。沿用server manifest安裝GUI依賴，project不另增直接依賴；官方Docker own nested四步及獨立lint後更新原PR #7，歷史snapshot與project0.1.2維持，merge由使用者執行。
+- [x] T16.13 合併後project導入：固定server已合併r1 `459f9c5172416d4e32ac8411519453fc7d84da46`／v0.3.0，核對原tag `ab39253` tree；以gitlink-only commit更新，README／目前workspace metadata guard同步精確版本及SHA。沿用server manifest安裝GUI依賴，project不另增直接依賴；官方Docker own nested四步及獨立lint後更新原PR #7，歷史snapshot與project0.1.2維持，merge由使用者執行。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -1070,3 +1071,11 @@ Run `test_env/jazzy/runs/full-20261020T070408.lfEe8r`：7包build、15/15CTest�
 Server獨立lint C/C++11／Python16／Shell1 PASS；installed CLI show-args、缺display／無效interval明確exit2通過。四種Qt offscreen畫面（初始／connected／interrupted小視窗／失聯）已檢查，以可捲動版面與獨立連線診斷列修正重疊；synthetic畫面不是實機證據。Logs／畫面在server `test_env/jazzy/evidence-gui/`，完整XML在上述clone run；容器已清除。版本提交僅驗manifest，不冒稱重跑runtime。
 
 Project本輪只有兩份文件，TODO v0.8.62／design v1.3.52；新計畫分支承接並快轉更新既有 [PR #7](https://github.com/cocobird231/rv2_project/pull/7)。獨立lint Python7／Shell1 PASS（`test_env/jazzy/evidence-control-gui/lint.log`），未重跑未變更的project runtime。相對前輪a1df7e7，project pins、package0.1.2與snapshots不變；server合併後再依使用者要求更新pin。桌面／joystick／wireless／robot驗收與所有PR合併由使用者執行。
+
+### T16.13 合併後project導入紀錄（2026-10-20）
+
+使用者已合併 [server PR #6](https://github.com/cocobird231/rv2_server_control/pull/6)。Nested checkout實際`git pull --ff-only origin r1`，核對HEAD／origin／遠端皆為 `459f9c5172416d4e32ac8411519453fc7d84da46`／v0.3.0；tree `7809c575ca49dbb95ed451f38ffa4def8ef0cda3` 等於原tag `ab3925301da4c90431cfa204bc6deaef057216fe`。`beb813e`僅將server gitlink從edc9ad1改至459f9c5，`d832fad`同步README與目前workspace metadata tuple；歷史snapshot、其他pins、package0.1.2、test_depends及launch不變。
+
+官方`ros:jazzy-ros-base-noble`／own nested framework `ae479066`，build→deps→無參數run→clean全部exit0。乾淨來源 `d832fad2e3a9887477e0c8ad9e809bfc0cc435b5`，run `test_env/jazzy/runs/full-20261020T084411.L1XofO`，source/framework dirty=0。8包build、6/6CTest；unit154／metadata12／preinstall1／joystick launch2，共169功能案例，177aggregate零errors/failures/skips，sanitizers N/A。獨立lint Python7／Shell1 PASS；GUI依賴由server manifest解析，已安裝`control_server_gui` executable、launch `--show-args`與Python client/window imports皆通過。
+
+Logs與counts保留在`test_env/jazzy/evidence-merged-gui-pin/`，完整XML／metadata／summary在上述run；容器已清除。本輪為project組合驗證，未重新跑server全部GUI互動案例，其內容與先前已驗證release tree一致。結果文件於測試後補記，不冒稱runtime重跑於文件commit。更新既有[project PR #7](https://github.com/cocobird231/rv2_project/pull/7)，不新增project release/tag/snapshot，實機驗收與merge由使用者執行。
