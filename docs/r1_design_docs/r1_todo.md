@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.56)
+# R1 實作 TODO List(v0.8.57)
 
-> 依據:`r1_design_draft.md` v1.3.46(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.47(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.57 | **更新 Agent:`coco-codex`**。使用者同意撤回本次thirdparty修改並要求確認event-triggered輸出。T16.12追加：將Request回傳與狀態紀錄移至本包command/Node，thirdparty相對r1基線差異歸零（含README），保留既有vendor版本。以既有83b82b7完整PASS作重構前證據，補production跨timer ticks不重送／同值keepalive／新值單次Move／失聯單次Stop測試，再跑own nested Docker四步及lint。延續尚未合併PR #5/#7，保留v0.2.0原tag，通過後另附版本commit/tag；不代使用者merge。 |
 | v0.8.56 | **更新 Agent:`coco-codex`**。補記本輪project文件PR #7已提出，與interfaces #3、server #5均由使用者合併；整理文件EOF空行。功能、測試證據、版本tags與所有pins/snapshots不變，不冒稱重跑runtime。 |
 | v0.8.55 | **更新 Agent:`coco-codex`**。T16.12 完成：interfaces17序列化／合約案例與server68功能案例、own nested官方Docker四步及獨立lint通過；server111aggregate零errors/failures、cppcheck11原生SKIP，sanitizers N/A。修正測試Time API、topic排隊同步與格式，保留失敗logs；雙vendor真實fallback build成功。獨立版本commits／tags／PR：interfaces v0.1.3/34e5d1e/#3、server v0.2.0/27df2dd/#5。單一owner為相容性變更，同priority採channel→type排序；測試容器已清除。Project僅計畫/結果文件與lint、不重跑未變更的project runtime，不更新pins/snapshots或替使用者merge；實機驗收pending。 |
 | v0.8.54 | **更新 Agent:`coco-codex`**。新增 T16.12：server 從已合併 r1 9d6143b 分支加入 wireless interruption latch 與狀態／切換／復歸服務；interfaces 從 master a0530d7 新增四型別。依 develop 每封 wireless 訊息中斷，單次 StopMove、手動 reset 後等新資料；Joy/Twist 共用唯一輸出 owner，手動切換須已註冊且 ACTIVE。實際發布 metadata 與仲裁共用鎖，api/go 獨立 fallback。先完成 Docker own nested 全測試與 lint，再分別附 interfaces/server 獨立版本 commit/tag/PR；project 僅文件、不更新未合併 pins/snapshots，merge 由使用者執行。 |
@@ -885,6 +886,8 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 
 - [x] T16.12 Control server interruption／操作 services：新增 `ControlServerStatus.msg`、`ControlServerStatusReq.srv`、`SwitchControllerReq.srv`、`ResetInterruptReq.srv`，response 沿用 typed `RESPONSE_*`、`int8 response`、`reason`。監控可配置預設 `/wirelesscontroller` 的 unitree_go/WirelessController，每封新訊息（含零／重複值）鎖存 interruption，第一次送一次 StopMove；鎖存期間阻止普通／request-active／急停／watchdog 輸出，switch 回 INTERRUPTED。Reset 冪等、不發布、不重播快取，清除復歸前候選並等新 callback。Joy/Twist 共用一個輸出 owner；手動切換以 controller_name 查已註冊且目前 ACTIVE、有新鮮資料的支援型別，不受 priority 高低限制，失敗無副作用，成功停止前任一次但不重播目標。一般 request-active／fallback 仍依 priority，改為跨型別仲裁。狀態分 active 與最後實際本地 publish（API、parameter、binary、來源、時間），列完整已註冊清單及 interrupted；不是機器人 ACK。
 - [x] T16.12 驗證／發布：增加 interfaces 真實序列化、core 單一 owner／嚴格 switch／latch／reset／併發，以及 production services／wireless／實際 Unitree output 整合；保留既有回歸。unitree_api/go 各自 workspace source→underlay→vendor，測試混合來源及重複拒絕。所有依賴／build／tests 在官方 Docker；兩包 own nested 四步及獨立 lint 後才附 package.xml-only 版本 commits、annotated tags、push/PR（interfaces master、server r1）。Server 使用 interfaces 精確候選 SHA 驗證並在 PR 明示相依；不把候選標成已 merge、不修改 project 正式 pins/snapshots。實機 wireless/joystick 驗收保留給使用者。
+
+- [ ] T16.12 thirdparty／event-triggered跟進：本PR所有thirdparty檔案還原至r1基線9d6143b，於本包SportClientCmd回傳成功發布的Request，Node於同一Core lock記錄output metadata；不改wire protocol、仲裁、鎖存或去重。明確驗證watchdog/status ticks不週期重發Move、持續相同新輸入只保活、值變更單次輸出、timeout只發一次StopMove，以及reset/switch不重播。R2/sentinel每封急停仍可Stop，wireless僅鎖存邊緣Stop；R1狀態/heartbeat仍定時。官方Docker完整四步與獨立lint後更新原PR及新版本tag，原已推tag不移動。
 
 ### T16 完成紀錄（2026-10-03）
 
