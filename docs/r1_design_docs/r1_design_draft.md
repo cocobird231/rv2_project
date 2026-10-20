@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.55)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.56)
 
-> 狀態:正式版(v1.3.55)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.56)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.56 | **更新 Agent:`coco-codex`**。GUI預安裝依賴修正完成：pre_install明確apt安裝python3-pyqt5，官方Docker從缺模組到補裝後Qt離屏視窗成功，三包Unitree正常。乾淨add40d1 own nested四步與lint PASS：169功能案例／6CTest、177aggregate零errors/failures/skips，sanitizers N/A；證據見TODO T16.14，容器清除。僅project腳本／測試／文件修正，版本、pins與snapshots維持，新PR由使用者合併。 |
 | v1.3.55 | **更新 Agent:`coco-codex`**。新增GUI預安裝依賴合約：pre_install.sh的既有apt安裝加入python3-pyqt5；Unitree-only rosdep不會讀server manifest，故獨立安裝此GUI runtime。保留現有cache bootstrap、三包underlay與失敗中止行為，驗證追蹤TODO T16.14；project版本、pins與snapshots維持，不新增release，PR由使用者合併。 |
 | v1.3.54 | **更新 Agent:`coco-codex`**。Project以beb813e導入server已合併459f9c5／v0.3.0，metadata／README同步。乾淨d832fad官方Docker四步及lint通過：8包build、169功能案例／6CTest、177aggregate零errors/failures/skips、sanitizers N/A，installed GUI launch及imports成功。來源與logs見TODO T16.13，容器清除；更新既有PR #7，project0.1.2、歷史snapshots及其他pins不變，不代使用者merge。 |
 | v1.3.53 | **更新 Agent:`coco-codex`**。Server GUI PR #6已由使用者合併；nested r1實際pull至459f9c5／v0.3.0，與原tag ab39253 tree相同。本輪project更新該gitlink與現行workspace精確guard／README，官方Docker四步及lint待執行；沿用server manifest的GUI依賴，不新增project release/snapshot或代使用者merge，證據追蹤TODO T16.13。 |
