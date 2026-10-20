@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.52)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.53)
 
-> 狀態:正式版(v1.3.52)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.53)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.53 | **更新 Agent:`coco-codex`**。Server GUI PR #6已由使用者合併；nested r1實際pull至459f9c5／v0.3.0，與原tag ab39253 tree相同。本輪project更新該gitlink與現行workspace精確guard／README，官方Docker四步及lint待執行；沿用server manifest的GUI依賴，不新增project release/snapshot或代使用者merge，證據追蹤TODO T16.13。 |
 | v1.3.52 | **更新 Agent:`coco-codex`**。補§2.1.4 GUI服務邊界與T16.13完成結果：namespace、新鮮度、單筆操作、未知結果不重送、GUI-only／combo退出及可捲動Qt畫面。乾淨60ccf22官方Docker四步／lint通過124功能案例／15CTest，180aggregate零errors/failures，cppcheck11 SKIP、sanitizers N/A；server v0.3.0／ab39253／PR #6已推送。Project僅文件與lint，更新原PR #7，不改pins/snapshots或替使用者merge。 |
 | v1.3.51 | **更新 Agent:`coco-codex`**。新增server GUI消費現有status/switch/reset services合約：Qt桌面顯示新鮮度、owner、最後request與registered清單，異步呼叫、有界timeout與失聯／interrupted操作限制，回覆未知時不自動重送。GUI-only預設，可launch選擇server/master，Core／wire／thirdparty不改；測試及版本發布追蹤TODO T16.13，project保留已合併pins，merge由使用者執行。 |
 | v1.3.50 | **更新 Agent:`coco-codex`**。Project已以gitlink-only 0e89f56導入實際pull／核對後的interfaces dc3e199/v0.1.3與server edc9ad1/v0.2.1，原tag tree相同。補unitree_go與目前workspace guard，同時保留歷史snapshot物件驗證；既有apt安裝步驟的過時unit fixtures已修正，production script不變。乾淨b7ab930官方Docker完整四步／lint PASS，169功能案例、177aggregate零errors/failures/skips，sanitizers N/A，來源/失敗修正/證據見TODO T16.12。更新原PR #7，package0.1.2與歷史snapshot不改、不新增tag，merge由使用者執行。 |
@@ -380,7 +381,7 @@ v0.1.2 的 component 對照（已逐個本地 pull；local／origin／即時遠�
 |---|---|---|---|
 | r1_interfaces（master） | v0.1.3 | dc3e199549a1a78315485bbc82d72b8aef856c80 | 34e5d1ec3aa142f481d6cc09875dc1c4f1101780 |
 | rv2_csm_topic_bridge | v0.1.0 | 78ba1a94825eb9790f23a3be5dbfb31df5162ec7 | c3f2b4b6dc669d98552b801b5bc68858aec4da61 |
-| rv2_server_control（r1） | v0.2.1 | edc9ad11834183193ff4974f369077df0a9e66df | a75845b559d604577fb5ea4bf76c4cd76d8c6dd4 |
+| rv2_server_control（r1） | v0.3.0 | 459f9c5172416d4e32ac8411519453fc7d84da46 | ab3925301da4c90431cfa204bc6deaef057216fe |
 
 本輪更新workspace pins與測試依賴，joystick launch不變，不新增版本snapshot；project package.xml維持0.1.2，schema1與三份歷史JSON不改。歷史snapshot元件仍以原commit object／tag／tree／manifest驗證，目前workspace則以精確override核對interfaces v0.1.3的gitlink／checkout／version；不將新SHA寫回歷史JSON。兩個consumers另查gitlink／checkout／tag tree／version／remote／nested framework及顯式discovery；未來若將其納入正式snapshot，須新增schema/version及相容測試。
 
@@ -458,6 +459,8 @@ Qt 主執行緒用 nonblocking executor 與 tick 處理三個既有 services。�
 GUI不直接發布robot命令；定時查status不影響event-triggered輸出。預設launch只開GUI，`start_server:=true`可帶起server/master，`start_master:=false`使用既有master。GUI-only退出不停止既有server；combo退出會關閉整個launch session，包含被include時同session其他節點。GUI所傳server_name覆蓋server YAML同名參數；watchdog等其餘設定沿用YAML。小視窗內容可捲動，避免壓縮欄位導致狀態／按鈕重疊。
 
 乾淨 `60ccf22` 官方Docker own nested四步與獨立lint已通過：124功能案例、15/15CTest、180aggregate零errors/failures（cppcheck11 SKIP、sanitizers N/A）。包含Qt client/window、production雙bridge/server、無replay與失聯恢復、installed launch namespace／GUI child退出、CLI及四種offscreen畫面檢查。獨立 `ab39253`／v0.3.0／[server PR #6](https://github.com/cocobird231/rv2_server_control/pull/6)已推送；失敗修正、精確來源與logs見TODO T16.13。Project僅文件與lint，維持已合併pins及snapshot；桌面／實機與PR合併由使用者執行。
+
+使用者已合併server PR #6；本輪project導入v0.3.0的合併主線`459f9c5`。Nested checkout已實際pull，HEAD／origin／遠端一致，tree `7809c575ca49dbb95ed451f38ffa4def8ef0cda3`等於原tag `ab39253`。Project只更新gitlink、目前workspace版本guard及文件，GUI依賴由server manifest提供；歷史snapshots與project0.1.2保持。正式Docker組合驗證與lint結果見TODO T16.13，PR #7仍由使用者合併。
 
 ### 2.2 元件關係圖
 
