@@ -68,7 +68,7 @@ def project(tmp_path, monkeypatch):
     (vendor / "LICENSE").write_text("BSD 3-Clause License test fixture\n")
     tools = tmp_path / "tools"
     tools.mkdir()
-    for name in ("colcon", "rosdep", "id", "sudo"):
+    for name in ("colcon", "rosdep", "id", "sudo", "apt"):
         command = tools / name
         command.write_text(TOOL_STUB)
         command.chmod(0o755)
@@ -88,6 +88,7 @@ def project(tmp_path, monkeypatch):
     cache.write_text("existing cache\n")
     monkeypatch.setenv("PREINSTALL_TRACE", str(tmp_path / "trace.jsonl"))
     monkeypatch.setenv("PREINSTALL_UID", "0")
+    monkeypatch.delenv("PREINSTALL_APT_EXIT", raising=False)
     monkeypatch.delenv("PREINSTALL_ROSDEP_EXIT", raising=False)
     monkeypatch.delenv("PREINSTALL_COLCON_EXIT", raising=False)
     monkeypatch.delenv("PREINSTALL_THROUGH_SUDO", raising=False)
@@ -114,6 +115,16 @@ def calls():
         if trace.exists()
         else []
     )
+
+
+def consume_apt_install(recorded, position=0):
+    """Check the exact sudo/apt pair at its expected position before consuming it."""
+    arguments = ["install", "nlohmann-json3-dev", "-y"]
+    assert recorded[position : position + 2] == [
+        ["sudo", ["apt", *arguments]],
+        ["apt", arguments],
+    ]
+    del recorded[position : position + 2]
 
 
 def cache_index():
@@ -148,6 +159,7 @@ def test_default_installs_all_bundled_packages_and_preserves_license(project):
     result = invoke(project)
     assert result.returncode == 0, result.stderr
     recorded = calls()
+    consume_apt_install(recorded)
     assert [name for name, _ in recorded] == ["rosdep", "colcon"]
     vendor = project / "ros2_ws/src/rv2_server_control/thirdparty/unitree"
     paths = [str(vendor / name) for name in PACKAGES]
@@ -202,6 +214,7 @@ def test_missing_sources_init_then_update_as_current_user(project, monkeypatch, 
                 "init",
             ],
         ]
+    consume_apt_install(recorded, position=2)
     assert [name for name, _ in recorded] == ["rosdep", "rosdep", "rosdep", "colcon"]
     assert recorded[0] == ["rosdep", ["init"]]
     assert recorded[1] == ["rosdep", ["update", "--rosdistro", "jazzy"]]
@@ -221,6 +234,7 @@ def test_existing_custom_sources_only_update_missing_user_cache(project, monkeyp
     result = invoke(project)
     assert result.returncode == 0, result.stderr
     recorded = calls()
+    consume_apt_install(recorded, position=1)
     assert recorded[0] == ["rosdep", ["update", "--rosdistro", "jazzy"]]
     assert [name for name, _ in recorded] == ["rosdep", "rosdep", "colcon"]
     assert recorded[1][1][0] == "install"
@@ -235,8 +249,10 @@ def test_existing_cache_does_not_reinitialize_missing_source_lists(project):
         path.unlink()
     result = invoke(project)
     assert result.returncode == 0, result.stderr
-    assert [name for name, _ in calls()] == ["rosdep", "colcon"]
-    assert calls()[0][1][0] == "install"
+    recorded = calls()
+    consume_apt_install(recorded)
+    assert [name for name, _ in recorded] == ["rosdep", "colcon"]
+    assert recorded[0][1][0] == "install"
 
 
 def test_relative_output_is_resolved_from_caller(project):
@@ -244,7 +260,10 @@ def test_relative_output_is_resolved_from_caller(project):
     output = pathlib.Path.cwd() / "custom underlay"
     result = invoke(project, "--output-dir", "custom underlay")
     assert result.returncode == 0, result.stderr
-    colcon = calls()[1][1]
+    recorded = calls()
+    consume_apt_install(recorded)
+    assert [name for name, _ in recorded] == ["rosdep", "colcon"]
+    colcon = recorded[1][1]
     assert colcon[colcon.index("--install-base") + 1] == str(output / "install")
     assert (output / "COLCON_IGNORE").is_file()
     assert not (project / "pre_install").exists()
@@ -261,8 +280,14 @@ def test_dry_run_does_not_run_tools_or_write_output(project, monkeypatch, state)
     assert result.returncode == 0, result.stderr
     assert calls() == []
     assert not (project / "pre_install").exists()
+    assert "sudo apt install nlohmann-json3-dev -y" in result.stdout
     assert "rosdep install" in result.stdout
     assert "colcon --log-base" in result.stdout
+    assert (
+        result.stdout.index("sudo apt install nlohmann-json3-dev -y")
+        < result.stdout.index("rosdep install")
+        < result.stdout.index("colcon --log-base")
+    )
     assert rosdep_files() == before
     assert ("rosdep init" in result.stdout) == (state == "missing_sources")
     assert ("rosdep update --rosdistro jazzy" in result.stdout) == (state != "ready")
@@ -273,6 +298,7 @@ def test_dry_run_does_not_run_tools_or_write_output(project, monkeypatch, state)
     [
         ("ROSDEP_INIT", 11, ["init"]),
         ("ROSDEP_UPDATE", 13, ["init", "update"]),
+        ("APT", 19, ["init", "update"]),
         ("ROSDEP_INSTALL", 17, ["init", "update", "install"]),
         ("COLCON", 23, ["init", "update", "install"]),
     ],
@@ -287,10 +313,13 @@ def test_failure_propagates_without_claiming_success(
     assert result.returncode == code
     assert "Source the Unitree underlay" not in result.stdout
     recorded = calls()
+    if tool in ("APT", "ROSDEP_INSTALL", "COLCON"):
+        consume_apt_install(recorded, position=2)
     assert [arguments[0] for name, arguments in recorded if name == "rosdep"] == verbs
     assert [name for name, _ in recorded] == ["rosdep"] * len(verbs) + (
         ["colcon"] if tool == "COLCON" else []
     )
+    assert ("rosdep install" in result.stdout) == (tool in ("ROSDEP_INSTALL", "COLCON"))
     assert ("colcon --log-base" in result.stdout) == (tool == "COLCON")
     assert "install -D" not in result.stdout
 
