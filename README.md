@@ -46,7 +46,7 @@ Unitree sources 位於 server 的 `thirdparty/unitree/`，不再需要外部 API
 `test_depends.repos` 直接列出 interfaces、transport、bridge、server、joy_interpreter 與
 server 內附的 `unitree_api`、`unitree_go`；framework 不遞迴讀取 child 的依賴清單。
 
-## 預先安裝 Unitree
+## 預先安裝 Unitree 與 GUI 依賴
 
 先安裝 colcon 與 rosdep，並 source ROS 2；rosdep 的首次初始化由腳本處理。
 由 project 根目錄執行：
@@ -63,12 +63,18 @@ source /opt/ros/jazzy/setup.bash
 任一 `*.list` 就直接更新；沒有 sources list 才執行 `rosdep init`（非 root 透過
 sudo）。之後以目前使用者執行 `rosdep update --rosdistro "$ROS_DISTRO"` 建立 cache；
 已有 cache 時不重新初始化或更新，即使 sources list 不存在也可沿用。
-接著以 rosdep 安裝目前 ROS 環境所需的 build/runtime dependencies，再用 colcon
+接著以 apt 安裝 `nlohmann-json3-dev` 與 GUI 所需的 `python3-pyqt5`，
+以 rosdep 安裝三包 Unitree 所需的 build/runtime dependencies，再用 colcon
 建立獨立的 merged underlay；上游 tests 不在此安裝流程執行。
 初始化、cache 更新、依賴安裝或編譯任一步失敗，腳本立即停止；範例以 `&&` 確保
 只在安裝成功後 source，避免使用先前殘留或不完整的產物。
 Unitree 產物預設位於 `pre_install/<ROS_DISTRO>/{build,install,log}`，BSD LICENSE
 隨每包安裝，完成後列出 `source` 指令。重新執行會沿用該處建置產物。
+
+若先前啟動 control server GUI 遇到 `ModuleNotFoundError: No module named 'PyQt5'`，
+更新 project 後重跑上述 `./pre_install.sh` 即可補裝。PyQt5 安裝至系統 Python，
+Unitree 則維持專案內獨立 underlay。Server manifest 已宣告 `python3-pyqt5`，
+但本腳本的 rosdep 只讀 Unitree sources，因此需在 apt 階段明確安裝 GUI 依賴。
 
 `--dry-run` 只顯示命令，不建立產物或執行安裝。腳本也可從其他 cwd 呼叫；自訂
 `--output-dir DIR` 的相對路徑以呼叫端 cwd 為準，例如：
