@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.54)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.55)
 
-> 狀態:正式版(v1.3.54)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.55)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.55 | **更新 Agent:`coco-codex`**。新增GUI預安裝依賴合約：pre_install.sh的既有apt安裝加入python3-pyqt5；Unitree-only rosdep不會讀server manifest，故獨立安裝此GUI runtime。保留現有cache bootstrap、三包underlay與失敗中止行為，驗證追蹤TODO T16.14；project版本、pins與snapshots維持，不新增release，PR由使用者合併。 |
 | v1.3.54 | **更新 Agent:`coco-codex`**。Project以beb813e導入server已合併459f9c5／v0.3.0，metadata／README同步。乾淨d832fad官方Docker四步及lint通過：8包build、169功能案例／6CTest、177aggregate零errors/failures/skips、sanitizers N/A，installed GUI launch及imports成功。來源與logs見TODO T16.13，容器清除；更新既有PR #7，project0.1.2、歷史snapshots及其他pins不變，不代使用者merge。 |
 | v1.3.53 | **更新 Agent:`coco-codex`**。Server GUI PR #6已由使用者合併；nested r1實際pull至459f9c5／v0.3.0，與原tag ab39253 tree相同。本輪project更新該gitlink與現行workspace精確guard／README，官方Docker四步及lint待執行；沿用server manifest的GUI依賴，不新增project release/snapshot或代使用者merge，證據追蹤TODO T16.13。 |
 | v1.3.52 | **更新 Agent:`coco-codex`**。補§2.1.4 GUI服務邊界與T16.13完成結果：namespace、新鮮度、單筆操作、未知結果不重送、GUI-only／combo退出及可捲動Qt畫面。乾淨60ccf22官方Docker四步／lint通過124功能案例／15CTest，180aggregate零errors/failures，cppcheck11 SKIP、sanitizers N/A；server v0.3.0／ab39253／PR #6已推送。Project僅文件與lint，更新原PR #7，不改pins/snapshots或替使用者merge。 |
@@ -390,7 +391,7 @@ Project另固定joy_interpreter submodule `944306b61746dcdaa932a404994b8f829a2a9
 
 `pre_install.sh` 是 source checkout 入口，從任意 cwd 以絕對 source paths 選 api/go/hg 三包。前提為 colcon／rosdep 已安裝且 ROS 2 已 source，不要求 rosdep 已初始化。優先沿用目前使用者已有的 cache，即使沒有 sources list 亦可；缺 cache 時才檢查 sources，已有任一 `*.list` 直接 update，沒有 list 才執行 rosdep init（root 直接執行、非 root 透過 sudo）。之後以目前使用者執行 `rosdep update --rosdistro "$ROS_DISTRO"` 建立 cache。初始化、cache 更新、依賴安裝與 build 依序執行，任一步失敗立即停止，後續階段不執行；cache 更新不加 sudo。
 
-rosdep 安裝目前 ROS 環境的 build/runtime 依賴後，colcon 以 BUILD_TESTING=OFF 建立 merged underlay。使用者已選專案內獨立安裝：預設 project/pre_install/<ROS_DISTRO>/{build,install,log}，可用 --output-dir 改位置，--dry-run 不初始化、更新 cache、安裝或建立產物。完成後提供 source install/setup.bash 命令，保留各包 BSD LICENSE；不自動修改 shell 設定或 gitlinks。安裝與載入範例以 `./pre_install.sh && source "pre_install/${ROS_DISTRO}/install/setup.bash"` 串接，避免失敗後載入殘留產物。Parent AMENT_IGNORE 不放入每包，因此顯式 source roots 可被 colcon 辨識。腳本只在 source tree 使用，不安裝到 share 以免失去 submodule 來源；project runtime build 前 source 此 underlay 即可解析 nested API 依賴。
+先以既有 sudo apt install 階段安裝 nlohmann-json3-dev 與 GUI 所需 python3-pyqt5；後者對應 server manifest 的 runtime dependency，因本腳本 rosdep 只選 Unitree sources 而需明確安裝。rosdep 安裝三包 Unitree 目前 ROS 環境的 build/runtime 依賴後，colcon 以 BUILD_TESTING=OFF 建立 merged underlay。使用者已選專案內獨立安裝：預設 project/pre_install/<ROS_DISTRO>/{build,install,log}，可用 --output-dir 改位置，--dry-run 不初始化、更新 cache、安裝或建立產物。完成後提供 source install/setup.bash 命令，保留各包 BSD LICENSE；不自動修改 shell 設定或 gitlinks。安裝與載入範例以 `./pre_install.sh && source "pre_install/${ROS_DISTRO}/install/setup.bash"` 串接，避免失敗後載入殘留產物。Parent AMENT_IGNORE 不放入每包，因此顯式 source roots 可被 colcon 辨識。腳本只在 source tree 使用，不安裝到 share 以免失去 submodule 來源；project runtime build 前 source 此 underlay 即可解析 nested API 依賴。
 
 腳本單元測試檢查來源／命令／失敗傳遞，integration真正執行三包build/install與第二次重跑，驗證installed package index、Python型別與C++下游。所有agent rosdep/build/test均在官方Docker，使用owner產物區保存logs，不安裝host依賴。Project一般四步直接掛載內附API／Go，不以pre-install取代測試；舊component證據與本次project組合驗證分開記錄，硬體joystick/hotplug驗收仍由使用者執行。
 

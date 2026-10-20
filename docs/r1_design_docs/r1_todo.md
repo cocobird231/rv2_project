@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.64)
+# R1 實作 TODO List(v0.8.65)
 
-> 依據:`r1_design_draft.md` v1.3.54(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.55(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.65 | **更新 Agent:`coco-codex`**。Project PR #7已合併029c30b；新增T16.14修正GUI缺PyQt5：pre_install既有apt階段加入python3-pyqt5，保留Unitree rosdep來源與underlay。同步命令／dry-run／失敗傳遞測試、真實Qt import及使用說明；官方Docker缺套件前後驗證、own nested四步與lint待完成。新分支提出獨立修正PR，project0.1.2、snapshots、gitlinks及thirdparty不變，不新增release，不代使用者merge。 |
 | v0.8.64 | **更新 Agent:`coco-codex`**。T16.13合併後project導入完成：gitlink-only beb813e固定server459f9c5／v0.3.0，原tag tree相同；README／metadata guard同步。乾淨d832fad官方Docker四步PASS，8包build、169功能案例／6個CTest、177aggregate零errors/failures/skips，sanitizers N/A；Python7／Shell1 lint及installed GUI launch／imports通過，容器清除。結果文件更新原PR #7，project0.1.2、歷史snapshots與其他pins不變，不代使用者merge。 |
 | v0.8.63 | **更新 Agent:`coco-codex`**。使用者確認server PR #6已合併並要求更新project submodule。已實際pull nested r1至459f9c5／v0.3.0，HEAD／origin／遠端一致，tree等於原tag ab39253。T16.13追加合併後導入：獨立gitlink commit、同步README與現行workspace metadata guard，保留歷史snapshots及project0.1.2；官方Docker own nested四步／lint待驗證後更新既有PR #7，不代使用者merge。 |
 | v0.8.62 | **更新 Agent:`coco-codex`**。T16.13完成：Qt/rclpy GUI與installed launch支援status、switch/reset、namespace、新鮮度／timeout與兩種退出模式；修正ROS Clock欄位衝突、小視窗版面及launch測試keepalive。乾淨60ccf22官方Docker四步PASS，124功能案例／15CTest、180aggregate零errors/failures，cppcheck11 SKIP、sanitizers N/A；server及project獨立lint PASS。附package.xml-only ab39253／v0.3.0／server PR #6，保留失敗logs、offscreen畫面與CLI證據，容器清除。計畫／結果文件更新既有project PR #7，不更新server pin或snapshot，實機與merge由使用者執行。 |
@@ -901,6 +902,8 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.13 Control server GUI：新增可ros2 run及launch啟動的Qt桌面node，顯示server連線／interrupted、目前owner、最後實際output全部欄位及註冊清單；以controller_name呼叫SwitchControllerReq，以空request呼叫ResetInterruptReq。沿用server權限／ACTIVE驗證；GUI只允許新鮮連線狀態下手動操作，interrupted禁止切換，同時只允許一筆操作，失敗與timeout顯示原因且不自動重試。定時讀取status不影響event-triggered機器人輸出。可GUI-only連既有server或launch選擇帶起server/master；預設GUI-only避免重複server。正式Docker own nested四步／lint、Qt無顯示器操作測試、真實服務整合與installed launch生命週期及畫面檢查後，才獨立server版本commit/tag/PR；project僅文件，不更新未合併候選pin。
 
 - [x] T16.13 合併後project導入：固定server已合併r1 `459f9c5172416d4e32ac8411519453fc7d84da46`／v0.3.0，核對原tag `ab39253` tree；以gitlink-only commit更新，README／目前workspace metadata guard同步精確版本及SHA。沿用server manifest安裝GUI依賴，project不另增直接依賴；官方Docker own nested四步及獨立lint後更新原PR #7，歷史snapshot與project0.1.2維持，merge由使用者執行。
+
+- [ ] T16.14 GUI預安裝依賴：pre_install.sh既有apt階段同時安裝nlohmann-json3-dev與python3-pyqt5。同步unit精確命令、dry-run與失敗中止斷言；integration確認實際QtCore／QtWidgets可載入。官方Docker額外驗證缺PyQt5到安裝成功，own nested四步／獨立lint通過後提出新PR，保留既有pins、thirdparty、snapshot與project版本。
 
 ### T16 完成紀錄（2026-10-03）
 
