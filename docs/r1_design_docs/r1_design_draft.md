@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.50)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.51)
 
-> 狀態:正式版(v1.3.50)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.51)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.51 | **更新 Agent:`coco-codex`**。新增server GUI消費現有status/switch/reset services合約：Qt桌面顯示新鮮度、owner、最後request與registered清單，異步呼叫、有界timeout與失聯／interrupted操作限制，回覆未知時不自動重送。GUI-only預設，可launch選擇server/master，Core／wire／thirdparty不改；測試及版本發布追蹤TODO T16.13，project保留已合併pins，merge由使用者執行。 |
 | v1.3.50 | **更新 Agent:`coco-codex`**。Project已以gitlink-only 0e89f56導入實際pull／核對後的interfaces dc3e199/v0.1.3與server edc9ad1/v0.2.1，原tag tree相同。補unitree_go與目前workspace guard，同時保留歷史snapshot物件驗證；既有apt安裝步驟的過時unit fixtures已修正，production script不變。乾淨b7ab930官方Docker完整四步／lint PASS，169功能案例、177aggregate零errors/failures/skips，sanitizers N/A，來源/失敗修正/證據見TODO T16.12。更新原PR #7，package0.1.2與歷史snapshot不改、不新增tag，merge由使用者執行。 |
 | v1.3.49 | **更新 Agent:`coco-codex`**。使用者要求project導入已合併interfaces dc3e199/v0.1.3與server edc9ad1/v0.2.1；實際pull及原tag tree核對後更新兩個gitlinks，補unitree_go依賴與目前workspace來源驗證。歷史snapshot與package0.1.2維持，接續原PR #7，完整Docker／lint結果追蹤TODO T16.12，merge由使用者執行。 |
 | v1.3.48 | **更新 Agent:`coco-codex`**。Server thirdparty相對r1基線零差異，輸出紀錄已移回本包。e748b4e官方Docker完整流程通過69功能案例、112aggregate零errors/failures（cppcheck11 SKIP、sanitizers N/A），兩包lint PASS；附獨立a75845b／v0.2.1並更新原PR，保留v0.2.0。一般Move不由timer重送，回歸涵蓋同值保活、改值單次輸出、失聯單次Stop及恢復；interfaces已由使用者合併dc3e199，tree與測試34e5d1e相同。精確來源與證據見TODO T16.12，project pins/snapshots不變。 |

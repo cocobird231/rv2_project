@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.60)
+# R1 實作 TODO List(v0.8.61)
 
-> 依據:`r1_design_draft.md` v1.3.50(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.51(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.61 | **更新 Agent:`coco-codex`**。新增T16.13：server從已合併r1 edc9ad1新分支加入Qt/rclpy GUI node與launch，顯示狀態／最後實際輸出／已註冊控制器，透過現有services手動switch/reset。非阻塞狀態輪詢、有界timeout、失聯停用操作、明確回覆及未知結果提示，不直接發robot命令或自動復歸，不改thirdparty/interfaces/Core。補headless Qt、真實services與installed launch驗證，own nested官方Docker四步／lint後獨立版本commit/tag/PR。Project計畫分支承接未合併PR #7，不提前更新server pin；merge仍由使用者執行。 |
 | v0.8.60 | **更新 Agent:`coco-codex`**。T16.12合併後project導入完成：gitlink-only 0e89f56固定interfaces dc3e199/v0.1.3、server edc9ad1/v0.2.1，實際pull且原tag tree相同；補unitree_go來源與新舊版本精確guards。首次完整run發現既有97f48ff新增sudo apt安裝未同步unit fixtures，僅修測試stub／順序並補apt失敗中止，production script不改。乾淨b7ab930官方Docker四步PASS，unit154／metadata12／preinstall1／launch2、6/6CTest與177aggregate零errors/failures/skips，sanitizers N/A，Python7/Shell1 lint PASS；logs保留、容器清除。更新原PR #7，歷史snapshots/package0.1.2及component內部不變，merge由使用者執行。 |
 | v0.8.59 | **更新 Agent:`coco-codex`**。使用者確認interfaces/server已merged並要求更新project submodules。遠端確認interfaces master dc3e199/v0.1.3與server r1 edc9ad1/v0.2.1，接續T16.12在原project PR #7導入：各nested checkout實際pull並比對原tag tree，以gitlink-only commit固定合併主線，補unitree_go測試來源與workspace metadata guards。歷史snapshots與project0.1.2保持，官方Docker own nested四步／lint待執行，不代使用者merge。 |
 | v0.8.58 | **更新 Agent:`coco-codex`**。T16.12 thirdparty／event-triggered跟進完成：thirdparty tree與r1基線9d6143b完全相同，Request紀錄移至server自有command/Node。乾淨來源e748b4e官方Docker四步PASS，69功能案例、112aggregate零errors/failures、cppcheck11原生SKIP，sanitizers N/A；server與project獨立lint PASS。附package.xml-only a75845b／v0.2.1，保留原v0.2.0tag，更新原server PR #5與project PR #7；interfaces PR #3已由使用者合併dc3e199，與測試來源34e5d1e tree相同。實機與merge留給使用者，不更新project pins/snapshots。 |
@@ -893,6 +894,8 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.12 thirdparty／event-triggered跟進：本PR所有thirdparty檔案還原至r1基線9d6143b，於本包SportClientCmd回傳成功發布的Request，Node於同一Core lock記錄output metadata；不改wire protocol、仲裁、鎖存或去重。明確驗證watchdog/status ticks不週期重發Move、持續相同新輸入只保活、值變更單次輸出、timeout只發一次StopMove，以及reset/switch不重播。R2/sentinel每封急停仍可Stop，wireless僅鎖存邊緣Stop；R1狀態/heartbeat仍定時。官方Docker完整四步與獨立lint後更新原PR及新版本tag，原已推tag不移動。
 
 - [x] T16.12 合併後project導入：實際pull／核對interfaces master dc3e199與server r1 edc9ad1及原release tree，更新兩個gitlinks；補新版server的unitree_go測試依賴，讓目前workspace來源guard與歷史snapshot驗證分別核對其固定版本。同步README與設計來源說明，官方Docker own nested完整四步及獨立lint後更新原PR #7。此為workspace pins更新，不新增project snapshot/release，不改component內容或代使用者merge。
+
+- [ ] T16.13 Control server GUI：新增可ros2 run及launch啟動的Qt桌面node，顯示server連線／interrupted、目前owner、最後實際output全部欄位及註冊清單；以controller_name呼叫SwitchControllerReq，以空request呼叫ResetInterruptReq。沿用server權限／ACTIVE驗證；GUI只允許新鮮連線狀態下手動操作，interrupted禁止切換，同時只允許一筆操作，失敗與timeout顯示原因且不自動重試。定時讀取status不影響event-triggered機器人輸出。可GUI-only連既有server或launch選擇帶起server/master；預設GUI-only避免重複server。正式Docker own nested四步／lint、Qt無顯示器操作測試、真實服務整合與installed launch生命週期及畫面檢查後，才獨立server版本commit/tag/PR；project僅文件，不更新未合併候選pin。
 
 ### T16 完成紀錄（2026-10-03）
 
