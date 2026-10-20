@@ -21,9 +21,9 @@ WORKSPACE_CONSUMERS = (
     ),
     (
         "rv2_server_control",
-        "0.2.1",
-        "edc9ad11834183193ff4974f369077df0a9e66df",
-        "a75845b559d604577fb5ea4bf76c4cd76d8c6dd4",
+        "0.3.0",
+        "459f9c5172416d4e32ac8411519453fc7d84da46",
+        "ab3925301da4c90431cfa204bc6deaef057216fe",
     ),
 )
 # Current workspace releases can advance without rewriting historical snapshots.

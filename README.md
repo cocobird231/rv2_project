@@ -37,7 +37,7 @@ snapshot 的 commit/tag/tree 與目前 workspace 的 gitlink/checkout/version。
 |---|---|---|---|
 | r1_interfaces（master） | 0.1.3 | `dc3e199549a1a78315485bbc82d72b8aef856c80` | `34e5d1ec3aa142f481d6cc09875dc1c4f1101780` |
 | rv2_csm_topic_bridge | 0.1.0 | `78ba1a94825eb9790f23a3be5dbfb31df5162ec7` | `c3f2b4b6dc669d98552b801b5bc68858aec4da61` |
-| rv2_server_control（r1） | 0.2.1 | `edc9ad11834183193ff4974f369077df0a9e66df` | `a75845b559d604577fb5ea4bf76c4cd76d8c6dd4` |
+| rv2_server_control（r1） | 0.3.0 | `459f9c5172416d4e32ac8411519453fc7d84da46` | `ab3925301da4c90431cfa204bc6deaef057216fe` |
 
 `joy_interpreter` 也納入 submodule，固定 server 已驗證的 `test` 分支
 `944306b61746dcdaa932a404994b8f829a2a9611`（package 0.1.0，沒有對應 release tag）。
