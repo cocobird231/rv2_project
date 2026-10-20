@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.57)
+# R1 實作 TODO List(v0.8.58)
 
-> 依據:`r1_design_draft.md` v1.3.47(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.48(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.58 | **更新 Agent:`coco-codex`**。T16.12 thirdparty／event-triggered跟進完成：thirdparty tree與r1基線9d6143b完全相同，Request紀錄移至server自有command/Node。乾淨來源e748b4e官方Docker四步PASS，69功能案例、112aggregate零errors/failures、cppcheck11原生SKIP，sanitizers N/A；server與project獨立lint PASS。附package.xml-only a75845b／v0.2.1，保留原v0.2.0tag，更新原server PR #5與project PR #7；interfaces PR #3已由使用者合併dc3e199，與測試來源34e5d1e tree相同。實機與merge留給使用者，不更新project pins/snapshots。 |
 | v0.8.57 | **更新 Agent:`coco-codex`**。使用者同意撤回本次thirdparty修改並要求確認event-triggered輸出。T16.12追加：將Request回傳與狀態紀錄移至本包command/Node，thirdparty相對r1基線差異歸零（含README），保留既有vendor版本。以既有83b82b7完整PASS作重構前證據，補production跨timer ticks不重送／同值keepalive／新值單次Move／失聯單次Stop測試，再跑own nested Docker四步及lint。延續尚未合併PR #5/#7，保留v0.2.0原tag，通過後另附版本commit/tag；不代使用者merge。 |
 | v0.8.56 | **更新 Agent:`coco-codex`**。補記本輪project文件PR #7已提出，與interfaces #3、server #5均由使用者合併；整理文件EOF空行。功能、測試證據、版本tags與所有pins/snapshots不變，不冒稱重跑runtime。 |
 | v0.8.55 | **更新 Agent:`coco-codex`**。T16.12 完成：interfaces17序列化／合約案例與server68功能案例、own nested官方Docker四步及獨立lint通過；server111aggregate零errors/failures、cppcheck11原生SKIP，sanitizers N/A。修正測試Time API、topic排隊同步與格式，保留失敗logs；雙vendor真實fallback build成功。獨立版本commits／tags／PR：interfaces v0.1.3/34e5d1e/#3、server v0.2.0/27df2dd/#5。單一owner為相容性變更，同priority採channel→type排序；測試容器已清除。Project僅計畫/結果文件與lint、不重跑未變更的project runtime，不更新pins/snapshots或替使用者merge；實機驗收pending。 |
@@ -887,7 +888,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.12 Control server interruption／操作 services：新增 `ControlServerStatus.msg`、`ControlServerStatusReq.srv`、`SwitchControllerReq.srv`、`ResetInterruptReq.srv`，response 沿用 typed `RESPONSE_*`、`int8 response`、`reason`。監控可配置預設 `/wirelesscontroller` 的 unitree_go/WirelessController，每封新訊息（含零／重複值）鎖存 interruption，第一次送一次 StopMove；鎖存期間阻止普通／request-active／急停／watchdog 輸出，switch 回 INTERRUPTED。Reset 冪等、不發布、不重播快取，清除復歸前候選並等新 callback。Joy/Twist 共用一個輸出 owner；手動切換以 controller_name 查已註冊且目前 ACTIVE、有新鮮資料的支援型別，不受 priority 高低限制，失敗無副作用，成功停止前任一次但不重播目標。一般 request-active／fallback 仍依 priority，改為跨型別仲裁。狀態分 active 與最後實際本地 publish（API、parameter、binary、來源、時間），列完整已註冊清單及 interrupted；不是機器人 ACK。
 - [x] T16.12 驗證／發布：增加 interfaces 真實序列化、core 單一 owner／嚴格 switch／latch／reset／併發，以及 production services／wireless／實際 Unitree output 整合；保留既有回歸。unitree_api/go 各自 workspace source→underlay→vendor，測試混合來源及重複拒絕。所有依賴／build／tests 在官方 Docker；兩包 own nested 四步及獨立 lint 後才附 package.xml-only 版本 commits、annotated tags、push/PR（interfaces master、server r1）。Server 使用 interfaces 精確候選 SHA 驗證並在 PR 明示相依；不把候選標成已 merge、不修改 project 正式 pins/snapshots。實機 wireless/joystick 驗收保留給使用者。
 
-- [ ] T16.12 thirdparty／event-triggered跟進：本PR所有thirdparty檔案還原至r1基線9d6143b，於本包SportClientCmd回傳成功發布的Request，Node於同一Core lock記錄output metadata；不改wire protocol、仲裁、鎖存或去重。明確驗證watchdog/status ticks不週期重發Move、持續相同新輸入只保活、值變更單次輸出、timeout只發一次StopMove，以及reset/switch不重播。R2/sentinel每封急停仍可Stop，wireless僅鎖存邊緣Stop；R1狀態/heartbeat仍定時。官方Docker完整四步與獨立lint後更新原PR及新版本tag，原已推tag不移動。
+- [x] T16.12 thirdparty／event-triggered跟進：本PR所有thirdparty檔案還原至r1基線9d6143b，於本包SportClientCmd回傳成功發布的Request，Node於同一Core lock記錄output metadata；不改wire protocol、仲裁、鎖存或去重。明確驗證watchdog/status ticks不週期重發Move、持續相同新輸入只保活、值變更單次輸出、timeout只發一次StopMove，以及reset/switch不重播。R2/sentinel每封急停仍可Stop，wireless僅鎖存邊緣Stop；R1狀態/heartbeat仍定時。官方Docker完整四步與獨立lint後更新原PR及新版本tag，原已推tag不移動。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -1008,4 +1009,18 @@ Server 從 per-type 改為 Joy/Twist 全域唯一 owner，屬相容性變更，�
 - 原失敗run `full-20261019T165439.U948Q1`（新增測試誤用C++ Time.to_msg）及 `full-20261019T165616.0qAgLO`（topic排隊造成切換後合法新輸入、D401／E203）均保留。改為service reply界線證明不重播，另加獨立Twist topic生命週期case，保留原斷言；不透過刪測試／放寬規範取得PASS。
 - Project本輪只改計畫/結果文件，own nested獨立lint Python7／Shell1 PASS，不重跑未變更的project runtime。Interfaces/server的版本提交僅改版本欄位；版本metadata提交後未冒稱重跑runtime。所有本次測試／format容器已清除，logs保留。
 
-**待使用者**：合併上述PR及 [project文件PR #7](https://github.com/cocobird231/rv2_project/pull/7)；實機 wireless／joystick／robot測試。這些不算自動驗證通過。使用者合併後才能另案更新project正式submodules；現有pins/snapshots不提前指向候選。
+以上為首次v0.2.0驗證與發布紀錄；後續interfaces合併與server修訂如下。實機 wireless／joystick／robot測試由使用者執行，不算自動驗證通過；現有project pins/snapshots不提前指向候選。
+
+### T16.12 thirdparty 還原與事件驅動驗證（2026-10-20）
+
+使用者同意不更動thirdparty，並要求確認輸出維持event-triggered。計畫commit `6297ea8`先記錄範圍，再以`e6c2aa7`移回輸出紀錄責任、`2cb9f0a`補回歸測試、`e748b4e`更新文件。`git diff 9d6143b HEAD -- thirdparty`為空，兩版thirdparty tree皆為`06d2257b9b199ef3d760e148ae71074225a6fa38`；包含README在內，本PR對vendor沒有最終差異，原先已合併的manifest修補保留。
+
+七個command各呼叫既有SportClient方法一次，成功返回後回傳同一份`unitree_api::msg::Request`；Node `sendCommand()`在原Core lock內保存實際request。無SDK observer、無額外publish或訂閱共用topic推測來源。C++ `SportClientCmd`回傳型別改為Request，自訂command須配合回傳；ROS wire介面、仲裁與鎖存語意不變。
+
+- 官方Docker own nested四步均exit0，乾淨測試來源`e748b4ee610c301ce0d71920576481642450adfa`，framework仍為`ae479066`；run為隔離clone的`test_env/jazzy/runs/full-20261020T021817.Zlqwcm`，source/framework dirty皆0。7包build、11/11 CTest通過，112aggregate零errors/failures，cppcheck11原生SKIP；ASan/UBSan/TSan N/A。
+- 69功能案例：converter6、helper30、真實discovery10、core19、joystick launch2、production services launch2。新增converter時間前進／長按／click計時不重發；production實際Unitree topic與status metadata交叉比對，持續相同Joy/Twist資料跨至少3次實際Manager status ticks仍不輸出，新值各一次Move，沉默後一次StopMove、後續保持安靜，再以同值新資料恢復。Reset/switch原有不重播斷言保留。此測試不宣稱精確驗證timeout下界或直接計數watchdog ticks。
+- Server獨立lint C++11／Python7／Shell1及project獨立lint Python7／Shell1均PASS。四步logs在隔離owner的`test_env/jazzy/evidence-vendor-restoration/`；兩包lint logs在各自原owner同名目錄。測試與格式化容器已清除，證據保留。Project只改文件，不重跑未變更的runtime。
+- Interfaces PR #3已由使用者合併，主線`dc3e199549a1a78315485bbc82d72b8aef856c80`與本次測試checkout `34e5d1e`的tree完全相同；不再是未合併相依。Transport `5a91d31`、bridge `78ba1a9`、joy `944306b`與framework固定來源不變，interfaces內容未改故沿用原17案例證據。
+- 驗證與lint後另附package.xml-only版本commit `a75845b559d604577fb5ea4bf76c4cd76d8c6dd4`／annotated `v0.2.1`，更新原[server PR #5](https://github.com/cocobird231/rv2_server_control/pull/5)及[project文件PR #7](https://github.com/cocobird231/rv2_project/pull/7)。既有`v0.2.0`不移動；metadata進版後不冒稱重跑runtime。
+
+一般Move與按鍵動作仍為event-triggered，沒有定時重送Move；watchdog只在失聯／換手需要時送安全Stop，R1 heartbeat/status照常週期執行。R2/sentinel每封急停及wireless鎖存邊緣的安全行為另行保留。**PR合併與實機驗收由使用者執行**；本輪不更新project gitlinks、歷史snapshots或package版本。
