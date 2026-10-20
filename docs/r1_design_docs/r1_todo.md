@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.59)
+# R1 實作 TODO List(v0.8.60)
 
-> 依據:`r1_design_draft.md` v1.3.49(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.50(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.60 | **更新 Agent:`coco-codex`**。T16.12合併後project導入完成：gitlink-only 0e89f56固定interfaces dc3e199/v0.1.3、server edc9ad1/v0.2.1，實際pull且原tag tree相同；補unitree_go來源與新舊版本精確guards。首次完整run發現既有97f48ff新增sudo apt安裝未同步unit fixtures，僅修測試stub／順序並補apt失敗中止，production script不改。乾淨b7ab930官方Docker四步PASS，unit154／metadata12／preinstall1／launch2、6/6CTest與177aggregate零errors/failures/skips，sanitizers N/A，Python7/Shell1 lint PASS；logs保留、容器清除。更新原PR #7，歷史snapshots/package0.1.2及component內部不變，merge由使用者執行。 |
 | v0.8.59 | **更新 Agent:`coco-codex`**。使用者確認interfaces/server已merged並要求更新project submodules。遠端確認interfaces master dc3e199/v0.1.3與server r1 edc9ad1/v0.2.1，接續T16.12在原project PR #7導入：各nested checkout實際pull並比對原tag tree，以gitlink-only commit固定合併主線，補unitree_go測試來源與workspace metadata guards。歷史snapshots與project0.1.2保持，官方Docker own nested四步／lint待執行，不代使用者merge。 |
 | v0.8.58 | **更新 Agent:`coco-codex`**。T16.12 thirdparty／event-triggered跟進完成：thirdparty tree與r1基線9d6143b完全相同，Request紀錄移至server自有command/Node。乾淨來源e748b4e官方Docker四步PASS，69功能案例、112aggregate零errors/failures、cppcheck11原生SKIP，sanitizers N/A；server與project獨立lint PASS。附package.xml-only a75845b／v0.2.1，保留原v0.2.0tag，更新原server PR #5與project PR #7；interfaces PR #3已由使用者合併dc3e199，與測試來源34e5d1e tree相同。實機與merge留給使用者，不更新project pins/snapshots。 |
 | v0.8.57 | **更新 Agent:`coco-codex`**。使用者同意撤回本次thirdparty修改並要求確認event-triggered輸出。T16.12追加：將Request回傳與狀態紀錄移至本包command/Node，thirdparty相對r1基線差異歸零（含README），保留既有vendor版本。以既有83b82b7完整PASS作重構前證據，補production跨timer ticks不重送／同值keepalive／新值單次Move／失聯單次Stop測試，再跑own nested Docker四步及lint。延續尚未合併PR #5/#7，保留v0.2.0原tag，通過後另附版本commit/tag；不代使用者merge。 |
@@ -891,7 +892,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 
 - [x] T16.12 thirdparty／event-triggered跟進：本PR所有thirdparty檔案還原至r1基線9d6143b，於本包SportClientCmd回傳成功發布的Request，Node於同一Core lock記錄output metadata；不改wire protocol、仲裁、鎖存或去重。明確驗證watchdog/status ticks不週期重發Move、持續相同新輸入只保活、值變更單次輸出、timeout只發一次StopMove，以及reset/switch不重播。R2/sentinel每封急停仍可Stop，wireless僅鎖存邊緣Stop；R1狀態/heartbeat仍定時。官方Docker完整四步與獨立lint後更新原PR及新版本tag，原已推tag不移動。
 
-- [ ] T16.12 合併後project導入：實際pull／核對interfaces master dc3e199與server r1 edc9ad1及原release tree，更新兩個gitlinks；補新版server的unitree_go測試依賴，讓目前workspace來源guard與歷史snapshot驗證分別核對其固定版本。同步README與設計來源說明，官方Docker own nested完整四步及獨立lint後更新原PR #7。此為workspace pins更新，不新增project snapshot/release，不改component內容或代使用者merge。
+- [x] T16.12 合併後project導入：實際pull／核對interfaces master dc3e199與server r1 edc9ad1及原release tree，更新兩個gitlinks；補新版server的unitree_go測試依賴，讓目前workspace來源guard與歷史snapshot驗證分別核對其固定版本。同步README與設計來源說明，官方Docker own nested完整四步及獨立lint後更新原PR #7。此為workspace pins更新，不新增project snapshot/release，不改component內容或代使用者merge。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -1027,3 +1028,20 @@ Server 從 per-type 改為 Joy/Twist 全域唯一 owner，屬相容性變更，�
 - 驗證與lint後另附package.xml-only版本commit `a75845b559d604577fb5ea4bf76c4cd76d8c6dd4`／annotated `v0.2.1`，更新原[server PR #5](https://github.com/cocobird231/rv2_server_control/pull/5)及[project文件PR #7](https://github.com/cocobird231/rv2_project/pull/7)。既有`v0.2.0`不移動；metadata進版後不冒稱重跑runtime。
 
 一般Move與按鍵動作仍為event-triggered，沒有定時重送Move；watchdog只在失聯／換手需要時送安全Stop，R1 heartbeat/status照常週期執行。R2/sentinel每封急停及wireless鎖存邊緣的安全行為另行保留。**PR合併與實機驗收由使用者執行**；本輪不更新project gitlinks、歷史snapshots或package版本。
+
+### T16.12 使用者合併後 project pins 更新（2026-10-20）
+
+使用者確認interfaces/server已merged並要求更新project submodules；GitHub確認interfaces PR #3、server PR #5均MERGED，project PR #7仍OPEN。延續同一T16.12分支及原PR，先提交計畫`1a31b21`，再於乾淨nested checkout實際`git pull --ff-only origin master/r1`、取得原release tags並核對HEAD／origin／即時遠端與tag tree。
+
+| Submodule | 原 project gitlink | 新合併主線 gitlink | 原 release tag commit（tree相同） |
+|---|---|---|---|
+| r1_interfaces v0.1.3 | a0530d76cb69a737778ec1b658682837a50a738a | dc3e199549a1a78315485bbc82d72b8aef856c80 | 34e5d1ec3aa142f481d6cc09875dc1c4f1101780 |
+| rv2_server_control v0.2.1 | 38cfa0f233eb1343e77b54ae97790d01171118fc | edc9ad11834183193ff4974f369077df0a9e66df | a75845b559d604577fb5ea4bf76c4cd76d8c6dd4 |
+
+`0e89f56`僅更新兩個gitlinks，其他gitlinks／component內容／nested framework ae479066皆保留。`5d1d50c`補project自己的unitree_go來源、README與metadata guards：歷史snapshot以原commit/tag/tree/manifest驗證；目前workspace則固定上述新SHA/version/tree/tag，不跳過interfaces。Project package0.1.2、三份歷史JSON及schema均不改，本輪不新增snapshot或release tag。
+
+正式首跑`full-20261020T024447.nS9sUS`已通過新來源metadata12、joystick launch2及真實preinstall1；失敗於既有unit fixtures沒有記錄master `97f48ff`加入的`sudo apt install nlohmann-json3-dev -y`（8個unit failures，aggregate另含wrapper）。`b7ab930`只修測試：stub apt、精確驗證sudo/apt參數與位置、保留init sudo guard、補apt失敗不執行後續步驟；不改使用者的pre_install.sh。Docker focused21/21通過後，再跑完整流程。
+
+最終own nested官方`ros:jazzy-ros-base-noble`四步全部exit0，乾淨來源`b7ab930270ab0f609cb735a6b5f409356cdc8d9f`／framework `ae479066`，run `test_env/jazzy/runs/full-20261020T024949.HqCIsK`的source/framework dirty皆0。8包build、6/6CTest通過；unit154、metadata12、preinstall1、launch2合計169功能案例，另含CMake/XML及wrappers的177aggregate零errors/failures/skips，sanitizers N/A。最終獨立lint Python7／Shell1 PASS。此為project組合驗證，不冒稱重新執行各component完整測試；component tree與已驗證release一致。
+
+證據在project `test_env/jazzy/evidence-merged-control-pins/`（build/deps/run-final/lint-final/clean/counts及focused logs）；首跑失敗logs與XML保留。測試與format容器已移除。完成結果文件在測試後更新，不冒稱runtime重跑於文件commit；[project PR #7](https://github.com/cocobird231/rv2_project/pull/7)由使用者合併，實機joystick／wireless／robot驗收仍由使用者執行。

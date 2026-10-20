@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.49)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.50)
 
-> 狀態:正式版(v1.3.49)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.50)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.50 | **更新 Agent:`coco-codex`**。Project已以gitlink-only 0e89f56導入實際pull／核對後的interfaces dc3e199/v0.1.3與server edc9ad1/v0.2.1，原tag tree相同。補unitree_go與目前workspace guard，同時保留歷史snapshot物件驗證；既有apt安裝步驟的過時unit fixtures已修正，production script不變。乾淨b7ab930官方Docker完整四步／lint PASS，169功能案例、177aggregate零errors/failures/skips，sanitizers N/A，來源/失敗修正/證據見TODO T16.12。更新原PR #7，package0.1.2與歷史snapshot不改、不新增tag，merge由使用者執行。 |
 | v1.3.49 | **更新 Agent:`coco-codex`**。使用者要求project導入已合併interfaces dc3e199/v0.1.3與server edc9ad1/v0.2.1；實際pull及原tag tree核對後更新兩個gitlinks，補unitree_go依賴與目前workspace來源驗證。歷史snapshot與package0.1.2維持，接續原PR #7，完整Docker／lint結果追蹤TODO T16.12，merge由使用者執行。 |
 | v1.3.48 | **更新 Agent:`coco-codex`**。Server thirdparty相對r1基線零差異，輸出紀錄已移回本包。e748b4e官方Docker完整流程通過69功能案例、112aggregate零errors/failures（cppcheck11 SKIP、sanitizers N/A），兩包lint PASS；附獨立a75845b／v0.2.1並更新原PR，保留v0.2.0。一般Move不由timer重送，回歸涵蓋同值保活、改值單次輸出、失聯單次Stop及恢復；interfaces已由使用者合併dc3e199，tree與測試34e5d1e相同。精確來源與證據見TODO T16.12，project pins/snapshots不變。 |
 | v1.3.47 | **更新 Agent:`coco-codex`**。依使用者同意，server輸出紀錄移回本包、撤回本PR所有thirdparty差異；正常運動輸出維持event-triggered值變更/按鍵PRESS，不由timer重送快取。Watchdog定時檢查只在失聯邊緣停止，status/heartbeat與robot輸出分開說明。補production事件/靜默驗證，結果追蹤TODO T16.12；原v0.2.0tag保留、原PR跟進，尚未完成本輪驗證。 |
@@ -371,22 +372,23 @@ v0.1.2 的 component 對照（已逐個本地 pull；local／origin／即時遠�
 
 新版只保留 TSan、整體總驗收 pending 與外部 apt/image 未鎖版限制，不再硬性要求 legacy 依賴文字；舊 snapshot bytes 不回寫。來源與 Git metadata 查核不等於所有 owner 的新一輪 runtime 驗收。
 
-**目前 workspace 額外 consumers（2026-10-05）**：使用者已合併 bridge #1／server #3，乾淨 r1 checkout 實際 pull 後的 HEAD／origin／即時遠端一致。下列兩包透過獨立 submodule commit 納入 project，原 release tags 與合併主線的 tree 相同；每包 nested framework 都是 ae479066/v0.5.1。
+**目前 workspace 更新版本與額外 consumers（2026-10-20）**：使用者已合併interfaces #3、server #5及先前bridge #1。Interfaces/server的乾淨nested checkout實際pull後，HEAD／origin／即時遠端一致，並以gitlink-only commit固定；下列release tags與合併主線tree相同，每包nested framework均為ae479066/v0.5.1。
 
-| Component | 版本 | 固定合併 r1 SHA | 原 release tag commit(歷史保留) |
+| Component | 版本 | 固定合併主線 SHA | 原 release tag commit(歷史保留) |
 |---|---|---|---|
+| r1_interfaces（master） | v0.1.3 | dc3e199549a1a78315485bbc82d72b8aef856c80 | 34e5d1ec3aa142f481d6cc09875dc1c4f1101780 |
 | rv2_csm_topic_bridge | v0.1.0 | 78ba1a94825eb9790f23a3be5dbfb31df5162ec7 | c3f2b4b6dc669d98552b801b5bc68858aec4da61 |
-| rv2_server_control | v0.1.1 | 38cfa0f233eb1343e77b54ae97790d01171118fc | c3a2794e5c49c1ab35288d012db3777f273d0d32 |
+| rv2_server_control（r1） | v0.2.1 | edc9ad11834183193ff4974f369077df0a9e66df | a75845b559d604577fb5ea4bf76c4cd76d8c6dd4 |
 
-本輪更新 workspace 與 joystick launch，不新增版本 snapshot；project package.xml 維持 0.1.2，schema1 與三份歷史 JSON 不改。未來若要將 consumers 納入正式 snapshot，需新增 schema/version 及相容測試。Project metadata integration 另查核兩包 gitlink／checkout／tag tree／version／remote／nested framework，並確認可顯式 discovery；不把它們偷偷加入 schema1 的五個 components。
+本輪更新workspace pins與測試依賴，joystick launch不變，不新增版本snapshot；project package.xml維持0.1.2，schema1與三份歷史JSON不改。歷史snapshot元件仍以原commit object／tag／tree／manifest驗證，目前workspace則以精確override核對interfaces v0.1.3的gitlink／checkout／version；不將新SHA寫回歷史JSON。兩個consumers另查gitlink／checkout／tag tree／version／remote／nested framework及顯式discovery；未來若將其納入正式snapshot，須新增schema/version及相容測試。
 
-Project另固定joy_interpreter submodule `944306b61746dcdaa932a404994b8f829a2a9611`（test分支，server要求雙參數update API；master fb09f70不相容）（package0.1.0，無release tag／nested framework）；它是外部source dependency，不加入歷史snapshot。Unitree三包已內附於server，test_depends.repos明列interfaces、transport、bridge、server、joy_interpreter及server內附API；framework不遞迴讀child依賴、不自動下載缺失來源。新增metadata guard分別驗consumer release與joy精確來源，顯式discovery為八個ROS packages（含project）。
+Project另固定joy_interpreter submodule `944306b61746dcdaa932a404994b8f829a2a9611`（test分支，server要求雙參數update API；master fb09f70不相容）（package0.1.0，無release tag／nested framework）；它是外部source dependency，不加入歷史snapshot。Unitree三包已內附於server，test_depends.repos明列interfaces、transport、bridge、server、joy_interpreter及server內附API／Go；framework不遞迴讀child依賴、不自動下載缺失來源。新增metadata guard分別驗consumer release與joy精確來源，顯式discovery為八個ROS packages（含project）。
 
 `pre_install.sh` 是 source checkout 入口，從任意 cwd 以絕對 source paths 選 api/go/hg 三包。前提為 colcon／rosdep 已安裝且 ROS 2 已 source，不要求 rosdep 已初始化。優先沿用目前使用者已有的 cache，即使沒有 sources list 亦可；缺 cache 時才檢查 sources，已有任一 `*.list` 直接 update，沒有 list 才執行 rosdep init（root 直接執行、非 root 透過 sudo）。之後以目前使用者執行 `rosdep update --rosdistro "$ROS_DISTRO"` 建立 cache。初始化、cache 更新、依賴安裝與 build 依序執行，任一步失敗立即停止，後續階段不執行；cache 更新不加 sudo。
 
 rosdep 安裝目前 ROS 環境的 build/runtime 依賴後，colcon 以 BUILD_TESTING=OFF 建立 merged underlay。使用者已選專案內獨立安裝：預設 project/pre_install/<ROS_DISTRO>/{build,install,log}，可用 --output-dir 改位置，--dry-run 不初始化、更新 cache、安裝或建立產物。完成後提供 source install/setup.bash 命令，保留各包 BSD LICENSE；不自動修改 shell 設定或 gitlinks。安裝與載入範例以 `./pre_install.sh && source "pre_install/${ROS_DISTRO}/install/setup.bash"` 串接，避免失敗後載入殘留產物。Parent AMENT_IGNORE 不放入每包，因此顯式 source roots 可被 colcon 辨識。腳本只在 source tree 使用，不安裝到 share 以免失去 submodule 來源；project runtime build 前 source 此 underlay 即可解析 nested API 依賴。
 
-腳本單元測試檢查來源／命令／失敗傳遞，integration真正執行三包build/install與第二次重跑，驗證installed package index、Python型別與C++下游。所有agent rosdep/build/test均在官方Docker，使用owner產物區保存logs，不安裝host依賴。Project一般四步直接掛載內附API，不以pre-install取代測試；舊component證據與本次project組合驗證分開記錄，硬體joystick/hotplug驗收仍由使用者執行。
+腳本單元測試檢查來源／命令／失敗傳遞，integration真正執行三包build/install與第二次重跑，驗證installed package index、Python型別與C++下游。所有agent rosdep/build/test均在官方Docker，使用owner產物區保存logs，不安裝host依賴。Project一般四步直接掛載內附API／Go，不以pre-install取代測試；舊component證據與本次project組合驗證分開記錄，硬體joystick/hotplug驗收仍由使用者執行。
 
 Project PR #5 已合併於 `50f034b`；本輪只修新環境的 rosdep bootstrap，不新增 snapshot 或 release。Sources/cache 缺漏、自訂 list 與 cache-only 重用、root／non-root 命令選擇及失敗短路測試已完成。Integration 使用全新 ROS_HOME/source path 驗證真正 init/update 與重跑，另以 nonroot 實測系統/custom sources、cache 及產物權限；正式 Docker 四步與最終 lint PASS。精確來源、unit fixture 修正與 focused 重驗結果見 TODO T16.11，PR 合併由使用者執行。
 
