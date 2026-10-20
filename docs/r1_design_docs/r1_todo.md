@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.65)
+# R1 實作 TODO List(v0.8.66)
 
-> 依據:`r1_design_draft.md` v1.3.55(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.56(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.66 | **更新 Agent:`coco-codex`**。T16.14完成：既有apt階段補python3-pyqt5，unit命令／dry-run／失敗傳遞與integration Qt imports同步。官方乾淨Docker先重現ModuleNotFound，再由pre_install實際補裝並完成Qt離屏視窗與三包Unitree建置。乾淨add40d1 own nested四步PASS，169功能案例／6CTest、177aggregate零errors/failures/skips，sanitizers N/A；Python7／Shell1 lint PASS，容器清除。新增獨立修正PR，保留project0.1.2、pins及snapshots，不新增release、不代使用者merge。 |
 | v0.8.65 | **更新 Agent:`coco-codex`**。Project PR #7已合併029c30b；新增T16.14修正GUI缺PyQt5：pre_install既有apt階段加入python3-pyqt5，保留Unitree rosdep來源與underlay。同步命令／dry-run／失敗傳遞測試、真實Qt import及使用說明；官方Docker缺套件前後驗證、own nested四步與lint待完成。新分支提出獨立修正PR，project0.1.2、snapshots、gitlinks及thirdparty不變，不新增release，不代使用者merge。 |
 | v0.8.64 | **更新 Agent:`coco-codex`**。T16.13合併後project導入完成：gitlink-only beb813e固定server459f9c5／v0.3.0，原tag tree相同；README／metadata guard同步。乾淨d832fad官方Docker四步PASS，8包build、169功能案例／6個CTest、177aggregate零errors/failures/skips，sanitizers N/A；Python7／Shell1 lint及installed GUI launch／imports通過，容器清除。結果文件更新原PR #7，project0.1.2、歷史snapshots與其他pins不變，不代使用者merge。 |
 | v0.8.63 | **更新 Agent:`coco-codex`**。使用者確認server PR #6已合併並要求更新project submodule。已實際pull nested r1至459f9c5／v0.3.0，HEAD／origin／遠端一致，tree等於原tag ab39253。T16.13追加合併後導入：獨立gitlink commit、同步README與現行workspace metadata guard，保留歷史snapshots及project0.1.2；官方Docker own nested四步／lint待驗證後更新既有PR #7，不代使用者merge。 |
@@ -903,7 +904,7 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 
 - [x] T16.13 合併後project導入：固定server已合併r1 `459f9c5172416d4e32ac8411519453fc7d84da46`／v0.3.0，核對原tag `ab39253` tree；以gitlink-only commit更新，README／目前workspace metadata guard同步精確版本及SHA。沿用server manifest安裝GUI依賴，project不另增直接依賴；官方Docker own nested四步及獨立lint後更新原PR #7，歷史snapshot與project0.1.2維持，merge由使用者執行。
 
-- [ ] T16.14 GUI預安裝依賴：pre_install.sh既有apt階段同時安裝nlohmann-json3-dev與python3-pyqt5。同步unit精確命令、dry-run與失敗中止斷言；integration確認實際QtCore／QtWidgets可載入。官方Docker額外驗證缺PyQt5到安裝成功，own nested四步／獨立lint通過後提出新PR，保留既有pins、thirdparty、snapshot與project版本。
+- [x] T16.14 GUI預安裝依賴：pre_install.sh既有apt階段同時安裝nlohmann-json3-dev與python3-pyqt5。同步unit精確命令、dry-run與失敗中止斷言；integration確認實際QtCore／QtWidgets可載入。官方Docker額外驗證缺PyQt5到安裝成功，own nested四步／獨立lint通過後提出新PR，保留既有pins、thirdparty、snapshot與project版本。
 
 ### T16 完成紀錄（2026-10-03）
 
@@ -1082,3 +1083,13 @@ Project本輪只有兩份文件，TODO v0.8.62／design v1.3.52；新計畫分�
 官方`ros:jazzy-ros-base-noble`／own nested framework `ae479066`，build→deps→無參數run→clean全部exit0。乾淨來源 `d832fad2e3a9887477e0c8ad9e809bfc0cc435b5`，run `test_env/jazzy/runs/full-20261020T084411.L1XofO`，source/framework dirty=0。8包build、6/6CTest；unit154／metadata12／preinstall1／joystick launch2，共169功能案例，177aggregate零errors/failures/skips，sanitizers N/A。獨立lint Python7／Shell1 PASS；GUI依賴由server manifest解析，已安裝`control_server_gui` executable、launch `--show-args`與Python client/window imports皆通過。
 
 Logs與counts保留在`test_env/jazzy/evidence-merged-gui-pin/`，完整XML／metadata／summary在上述run；容器已清除。本輪為project組合驗證，未重新跑server全部GUI互動案例，其內容與先前已驗證release tree一致。結果文件於測試後補記，不冒稱runtime重跑於文件commit。更新既有[project PR #7](https://github.com/cocobird231/rv2_project/pull/7)，不新增project release/tag/snapshot，實機驗收與merge由使用者執行。
+
+### T16.14 GUI 預安裝依賴修正紀錄（2026-10-20）
+
+Project PR #7已由使用者合併為`029c30b`；從實際pull後的master建立`coco-codex/preinstall-gui-dependency`。Server manifest已宣告`python3-pyqt5`，但pre_install的rosdep只選api/go/hg sources，因此不會讀取server GUI依賴。`6dd0848`在既有apt命令加入`python3-pyqt5`；`98e4cff`同步精確命令、dry-run與真實Qt imports，`add40d1`補使用說明。既有APT失敗傳遞、rosdep初始化／cache、underlay與LICENSE行為皆保留。
+
+- 官方`ros:jazzy-ros-base-noble`經own nested test_build建立乾淨容器，先確認`from PyQt5 import QtCore, QtWidgets`發生ModuleNotFoundError。只更新apt索引後，直接執行修正後pre_install（在framework test_deps之前），三包Unitree成功建置並補裝PyQt5；同一容器Qt5.15.13／PyQt5.15.10可建立、顯示與關閉offscreen QWidget。這是缺依賴到實際安裝成功的證據，非僅依靠已預裝Qt的integration。
+- 接續own nested test_deps、無參數test_run及test_clean均exit0。Run `test_env/jazzy/runs/full-20261020T091411.LCxQyF`：來源`add40d15783aa87c9187f6fe4d9bdce589ac6215`與framework`ae4790668efc83f99584c300e6963d522e04e12c`皆dirty=0；8包build、6/6CTest、unit154／metadata12／preinstall1／joystick launch2共169功能案例。177aggregate零errors/failures/skips，ASan／UBSan／TSan N/A。
+- 獨立lint Python7／Shell1 PASS，readonly review無發現。證據保存在`test_env/jazzy/evidence-preinstall-gui/`，包含缺依賴錯誤、實際安裝、Qt smoke、四步／lint及XML案例統計；測試容器已清除。結果文件於驗證後提交，不冒稱重跑文件commit；host未安裝依賴，未測實體桌面或機器人。
+
+本輪六個project檔案修正；server/component內容、thirdparty、所有gitlinks、project0.1.2與歷史snapshots保持不變，不新增release tag。獨立PR由使用者合併。
