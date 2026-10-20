@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Build all bundled Unitree interfaces into a separate, project-local underlay.
+# Install GUI dependencies and build bundled Unitree interfaces into an underlay.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
 Usage: pre_install.sh [--output-dir DIR] [--dry-run]
 
-Build bundled unitree_api, unitree_go and unitree_hg after installing their ROS
-dependencies with rosdep. Source your ROS 2 environment before running this file.
+Install nlohmann-json3-dev and python3-pyqt5 for the control server and its GUI,
+then build bundled unitree_api, unitree_go and unitree_hg after installing their
+ROS dependencies with rosdep. Source your ROS 2 environment before running this file.
 Missing rosdep sources/cache are initialized automatically. Initialization and
 system packages may request sudo; do not run this entire script as sudo.
 
@@ -121,7 +122,7 @@ if [[ "$rosdep_state" != ready ]]; then
 fi
 
 apt_install_command=(
-  sudo apt install nlohmann-json3-dev -y
+  sudo apt install nlohmann-json3-dev python3-pyqt5 -y
 )
 
 rosdep_command=(
