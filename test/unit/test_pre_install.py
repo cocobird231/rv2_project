@@ -119,7 +119,7 @@ def calls():
 
 def consume_apt_install(recorded, position=0):
     """Check the exact sudo/apt pair at its expected position before consuming it."""
-    arguments = ["install", "nlohmann-json3-dev", "-y"]
+    arguments = ["install", "nlohmann-json3-dev", "python3-pyqt5", "-y"]
     assert recorded[position : position + 2] == [
         ["sudo", ["apt", *arguments]],
         ["apt", arguments],
@@ -280,11 +280,12 @@ def test_dry_run_does_not_run_tools_or_write_output(project, monkeypatch, state)
     assert result.returncode == 0, result.stderr
     assert calls() == []
     assert not (project / "pre_install").exists()
-    assert "sudo apt install nlohmann-json3-dev -y" in result.stdout
+    apt_command = "sudo apt install nlohmann-json3-dev python3-pyqt5 -y"
+    assert apt_command in result.stdout
     assert "rosdep install" in result.stdout
     assert "colcon --log-base" in result.stdout
     assert (
-        result.stdout.index("sudo apt install nlohmann-json3-dev -y")
+        result.stdout.index(apt_command)
         < result.stdout.index("rosdep install")
         < result.stdout.index("colcon --log-base")
     )

@@ -99,6 +99,7 @@ import importlib
 import sys
 from pathlib import Path
 
+from PyQt5 import QtCore, QtWidgets
 from ament_index_python.packages import get_package_prefix
 from rclpy.serialization import deserialize_message, serialize_message
 from unitree_api.msg import Request
@@ -124,6 +125,7 @@ for message in (request, go, hg):
     restored = deserialize_message(serialize_message(message), type(message))
     assert restored == message, type(message)
 print("All three installed Unitree packages discovered and serialized successfully")
+print(f"GUI dependencies imported: Qt {QtCore.QT_VERSION_STR}, {QtWidgets.QApplication}")
 """
     run_logged(
         [
