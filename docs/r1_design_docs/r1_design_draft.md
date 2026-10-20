@@ -1,6 +1,6 @@
-# R1 Control Signal Transport 程式設計規劃書(v1.3.47)
+# R1 Control Signal Transport 程式設計規劃書(v1.3.48)
 
-> 狀態:正式版(v1.3.47)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
+> 狀態:正式版(v1.3.48)；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP。未決事項集中在第 12 章,將於實作階段逐項裁決。
 > 文件位置:`src/rv2_project/docs/r1_design_docs/`。Transport 仍實作於 `rv2_control_signal_transport` 的 `r1` namespace，後續 migrate 至獨立 package。
 > 版控:本文件以 git 管理,每次修訂一個 commit,版本號記於本節與 §0 版本歷史。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v1.3.48 | **更新 Agent:`coco-codex`**。Server thirdparty相對r1基線零差異，輸出紀錄已移回本包。e748b4e官方Docker完整流程通過69功能案例、112aggregate零errors/failures（cppcheck11 SKIP、sanitizers N/A），兩包lint PASS；附獨立a75845b／v0.2.1並更新原PR，保留v0.2.0。一般Move不由timer重送，回歸涵蓋同值保活、改值單次輸出、失聯單次Stop及恢復；interfaces已由使用者合併dc3e199，tree與測試34e5d1e相同。精確來源與證據見TODO T16.12，project pins/snapshots不變。 |
 | v1.3.47 | **更新 Agent:`coco-codex`**。依使用者同意，server輸出紀錄移回本包、撤回本PR所有thirdparty差異；正常運動輸出維持event-triggered值變更/按鍵PRESS，不由timer重送快取。Watchdog定時檢查只在失聯邊緣停止，status/heartbeat與robot輸出分開說明。補production事件/靜默驗證，結果追蹤TODO T16.12；原v0.2.0tag保留、原PR跟進，尚未完成本輪驗證。 |
 | v1.3.46 | **更新 Agent:`coco-codex`**。T16.12完成：interfaces v0.1.3/PR #3與server v0.2.0/PR #5已完成獨立版本commit/tag/push，未代使用者merge。Docker正式四步、interfaces17／server68功能案例及獨立lint通過；cppcheck11 SKIP、sanitizers N/A如實保留。全域單一owner為相容性變更，同priority沿channel→type決定；雙vendor真正build及產出載入成功，精確來源/失敗修正/logs見TODO。Project僅文件、pins/snapshots與0.1.2保持，實機驗收pending。 |
 | v1.3.45 | **更新 Agent:`coco-codex`**。新增 server 操作介面與 wireless interruption 合約（§2.1.3／TODO T16.12）：三 services、實際發布狀態、每封 wireless latch／單次停止／手動復歸、跨 Joy/Twist 唯一 owner 與嚴格 ACTIVE 手動切換；Unitree api/go 各自選來源。Docker 測試／發布尚待執行；project 保留已合併 pins、0.1.2 與 snapshots，不代使用者 merge。 |
@@ -439,7 +440,7 @@ Server build/runtime 新增 unitree_go；build helper 對 api/go 各自採 works
 
 使用者後續要求保留thirdparty內容：本PR的SDK與vendor README差異全部還原到r1基線，既有內附版本及先前package manifest修正保留。`SportClientCmd` 改回傳其成功發布的 `unitree_api::msg::Request`；Node在同一Core lock內於command返回後記錄metadata，SDK不加入observer。此C++ command回傳型別調整限本包，ROS介面保持；每個現有command只發布一份Request，不自行重建payload。
 
-一般Joy/Twist運動是event-triggered：收到新普通資料後，僅速度值變更或Joy按鍵PRESS才發布；相同輸入保活但不重送。換手/急停/reset清converter後仍須新的普通資料才可能同值恢復。Watchdog雖定時檢查，可在失聯/換手邊緣送一次StopMove，但不定時重播Move；Manager heartbeat/status是另一組定時管理流量。R2/sentinel仍每封急停訊息觸發Stop，wireless只於進入interrupted時Stop；不把這些事件誤述成全部只能發一次。既有83b82b7正式PASS作重構前證據，補production跨ticks/同值keepalive/新值/timeout回歸後再完成本輪定版。
+一般Joy/Twist運動是event-triggered：收到新普通資料後，僅速度值變更或Joy按鍵PRESS才發布；相同輸入保活但不重送。換手/急停/reset清converter後仍須新的普通資料才可能同值恢復。Watchdog雖定時檢查，可在失聯/換手邊緣送一次StopMove，但不定時重播Move；Manager heartbeat/status是另一組定時管理流量。R2/sentinel仍每封急停訊息觸發Stop，wireless只於進入interrupted時Stop；不把這些事件誤述成全部只能發一次。既有83b82b7正式PASS作重構前證據；本次e748b4e完整流程與lint已通過，新增production跨status ticks／同值keepalive／改值單次Move／沉默後單次Stop及恢復，精確證據見TODO T16.12。v0.2.1為獨立版本提交，原tag保留。
 
 T16.12 已完成自動驗證與推送：interfaces v0.1.3（34e5d1e／PR #3）、server v0.2.0（27df2dd／PR #5），PR 尚待使用者合併。Server CMake/manifest要求 interfaces≥0.1.3；精確候選、68功能案例、原失敗修正、Docker與lint證據見 TODO T16.12。v0.2.0反映per-type改為全域單一owner；既有priority100普通級別及R2/X語意保留。Project本輪無runtime/pin/snapshot變更，僅文件及lint，實機wireless/joystick驗收仍待使用者。
 
