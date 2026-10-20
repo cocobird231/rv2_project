@@ -1,6 +1,6 @@
-# R1 實作 TODO List(v0.8.58)
+# R1 實作 TODO List(v0.8.59)
 
-> 依據:`r1_design_draft.md` v1.3.48(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
+> 依據:`r1_design_draft.md` v1.3.49(正式版；project v0.1.2／PR #2 已合併，總驗收待使用者手動執行；T12.2 因環境限制暫時 SKIP)。本文件將設計規劃書轉為可逐步執行、可逐項查核的實作清單。
 > 正式位置：`src/rv2_project/docs/r1_design_docs/`；舊 transport 下路徑不再使用。
 > 文中「§x.y」一律指設計規劃書章節；「T*.n」指本文件的 TODO 項目。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 說明 |
 |---|---|
+| v0.8.59 | **更新 Agent:`coco-codex`**。使用者確認interfaces/server已merged並要求更新project submodules。遠端確認interfaces master dc3e199/v0.1.3與server r1 edc9ad1/v0.2.1，接續T16.12在原project PR #7導入：各nested checkout實際pull並比對原tag tree，以gitlink-only commit固定合併主線，補unitree_go測試來源與workspace metadata guards。歷史snapshots與project0.1.2保持，官方Docker own nested四步／lint待執行，不代使用者merge。 |
 | v0.8.58 | **更新 Agent:`coco-codex`**。T16.12 thirdparty／event-triggered跟進完成：thirdparty tree與r1基線9d6143b完全相同，Request紀錄移至server自有command/Node。乾淨來源e748b4e官方Docker四步PASS，69功能案例、112aggregate零errors/failures、cppcheck11原生SKIP，sanitizers N/A；server與project獨立lint PASS。附package.xml-only a75845b／v0.2.1，保留原v0.2.0tag，更新原server PR #5與project PR #7；interfaces PR #3已由使用者合併dc3e199，與測試來源34e5d1e tree相同。實機與merge留給使用者，不更新project pins/snapshots。 |
 | v0.8.57 | **更新 Agent:`coco-codex`**。使用者同意撤回本次thirdparty修改並要求確認event-triggered輸出。T16.12追加：將Request回傳與狀態紀錄移至本包command/Node，thirdparty相對r1基線差異歸零（含README），保留既有vendor版本。以既有83b82b7完整PASS作重構前證據，補production跨timer ticks不重送／同值keepalive／新值單次Move／失聯單次Stop測試，再跑own nested Docker四步及lint。延續尚未合併PR #5/#7，保留v0.2.0原tag，通過後另附版本commit/tag；不代使用者merge。 |
 | v0.8.56 | **更新 Agent:`coco-codex`**。補記本輪project文件PR #7已提出，與interfaces #3、server #5均由使用者合併；整理文件EOF空行。功能、測試證據、版本tags與所有pins/snapshots不變，不冒稱重跑runtime。 |
@@ -889,6 +890,8 @@ Transport `packages/run.kVgweS` 只建 interfaces feaecc6 與 transport14754fb�
 - [x] T16.12 驗證／發布：增加 interfaces 真實序列化、core 單一 owner／嚴格 switch／latch／reset／併發，以及 production services／wireless／實際 Unitree output 整合；保留既有回歸。unitree_api/go 各自 workspace source→underlay→vendor，測試混合來源及重複拒絕。所有依賴／build／tests 在官方 Docker；兩包 own nested 四步及獨立 lint 後才附 package.xml-only 版本 commits、annotated tags、push/PR（interfaces master、server r1）。Server 使用 interfaces 精確候選 SHA 驗證並在 PR 明示相依；不把候選標成已 merge、不修改 project 正式 pins/snapshots。實機 wireless/joystick 驗收保留給使用者。
 
 - [x] T16.12 thirdparty／event-triggered跟進：本PR所有thirdparty檔案還原至r1基線9d6143b，於本包SportClientCmd回傳成功發布的Request，Node於同一Core lock記錄output metadata；不改wire protocol、仲裁、鎖存或去重。明確驗證watchdog/status ticks不週期重發Move、持續相同新輸入只保活、值變更單次輸出、timeout只發一次StopMove，以及reset/switch不重播。R2/sentinel每封急停仍可Stop，wireless僅鎖存邊緣Stop；R1狀態/heartbeat仍定時。官方Docker完整四步與獨立lint後更新原PR及新版本tag，原已推tag不移動。
+
+- [ ] T16.12 合併後project導入：實際pull／核對interfaces master dc3e199與server r1 edc9ad1及原release tree，更新兩個gitlinks；補新版server的unitree_go測試依賴，讓目前workspace來源guard與歷史snapshot驗證分別核對其固定版本。同步README與設計來源說明，官方Docker own nested完整四步及獨立lint後更新原PR #7。此為workspace pins更新，不新增project snapshot/release，不改component內容或代使用者merge。
 
 ### T16 完成紀錄（2026-10-03）
 
